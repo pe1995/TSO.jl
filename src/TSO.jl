@@ -1,5 +1,10 @@
 module TSO
 
-# Write your package code here.
+using BSplineKit
+using Interpolations
+
+include("_tables.jl")
+include("_eos.jl")
+include("_opacities.jl")
 
 end
