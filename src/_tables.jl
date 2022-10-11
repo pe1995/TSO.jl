@@ -1,7 +1,3 @@
-abstract type AbstractTable end
-abstract type AbstractRegularTable <:AbstractTable end
-abstract type AbstractIrregularTable <:AbstractTable end
-
 """Table containing binned Opacities + Source functions on a regular grid."""
 struct RegularOpacityTable{T<:AbstractFloat, 
                             NOp, NRoss, NSrc} <: AbstractRegularTable
@@ -33,10 +29,20 @@ struct IrregularEoSTable <: AbstractIrregularTable
 end
 
 OpacityTable = Union{RegularOpacityTable, IrregularOpacityTable} 
-EoSTable     = Union{RegularOpacityTable, IrregularEoSTable} 
+EoSTable     = Union{RegularEoSTable, IrregularEoSTable} 
 
 ### Convenience Constructor functions
 Opacity(args...; regular=true, kwargs...) = regular ? RegularOpacityTable(args...; kwargs...) : IrregularOpacityTable(args...; kwargs...)
 EoS(args...; regular=true, kwargs...)     = regular ? RegularEoSTable(args...; kwargs...)     : IrregularEoSTable(args...; kwargs...)
 
 RegularOpacityTable(κ::Array, κ_ross::Array, src::Array; optical_depth=false) = RegularOpacityTable(κ, κ_ross, src, optical_depth) 
+
+### General functions
+limits(eos::EoSTable) = begin
+    eaxis = ndims(eos.lnT)>1
+
+    var_min = eaxis ? minimum(eos.lnEi) : minimum(eos.lnT)
+    var_max = eaxis ? maximum(eos.lnEi) : maximum(eos.lnT)
+    
+    var_min, var_max, minimum(eos.lnRho), maximum(eos.lnRho)
+end

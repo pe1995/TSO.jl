@@ -33,19 +33,6 @@ _in_ts(relative_path)      = TS[] == ""        ? abspath(joinpath(load_TS(), rel
 
 ### Importing Python scripts
 
-function _get_help_py(mod, dir)
-	sys   = pyimport("sys")
-	dir in sys."path" ? nothing : append!(sys."path",[dir])
-    pyimport(String(mod))
-end
-
-macro get_help(mod, dir=dirname(@inWrapper("source")))
-    mod_e    = esc(mod)
-    path_esc = esc(dir)
-    mod_s = :($mod)
-    :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
-end
-
 macro fromWrapper(mod, dir=dirname(@inWrapper("source")))
     mod_e    = esc(mod)
     path_esc = esc(dir)
@@ -88,3 +75,35 @@ write_as_stagger(name::String, T::Vector, rho::Vector) = write_as_stagger(name, 
 
 
 ### Communication with the TS wrapper
+
+
+
+### Output handling
+
+function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd(), ts_path=TSO.@inTS(""))
+    if !isdir(move_to)
+        mkdir(move_to)
+    else
+        rm(move_to, recursive=true)
+        mkdir(move_to)
+    end
+    @assert isdir(move_to)
+
+    # Clean the models from the wrapper
+    @info "Moving files from $(wrapper_path) to $(move_to)"
+
+    paths = glob("_TSOeos*", wrapper_path)
+    for path in paths
+        goal = joinpath(move_to, basename(path))
+        mv(path, goal)
+    end
+
+    # Clean the models from the wrapper
+    @info "Moving files from $(ts_path) to $(move_to)"
+
+    paths = glob("TSOeos*.multi", ts_path)
+    for path in paths
+        goal = joinpath(move_to, basename(path))
+        mv(path, goal)
+    end
+end

@@ -51,11 +51,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
     lnEi2  = Base.convert.(T, range(lnEi2min, lnEi2max, length=nEiBin))
     dlnEi2 = lnEi2[2] - lnEi2[1]
 
-    @show lnEi2min lnEi2max
-
     lnT   = t.lnT
     lnRho = t.lnRho
 
+    mask        = zeros(Int, nEiBin)
     lneo        = zeros(T, nEiBin)
     lnT2        = zeros(T, nEiBin)
     dThdEi2     = zeros(T, nEiBin)
@@ -88,16 +87,13 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         (isnothing(esi) | isnothing(eei)) && error("empty ei bin at given rho") 
 
         # first do the ln Tg -> ln(ei) swap ###################################
-        lneo .= t.lnEi[:, i, 1]         # ln ei on lnT grid
-        f    .= lnT                     # lnT grid values
-        d    .= 1.0 ./ t.lnEi[:, i, 3]  # d lnT / d ln(ei) | rho on lnT grid
-        g    .= t.lnEi[:, i, 2]         # d ln ei / d ln(rho)| Tg on lnT grid
+        mask .= sortperm(t.lnEi[:, i, 1])
+        lneo .= t.lnEi[mask, i, 1]         # ln ei on lnT grid
+        f    .= lnT[mask]                  # lnT grid values
+        d    .= 1.0 ./ t.lnEi[mask, i, 3]  # d lnT / d ln(ei) | rho on lnT grid
+        g    .= t.lnEi[mask, i, 2]         # d ln ei / d ln(rho)| Tg on lnT grid
        
         # get h = d/d ln ei ( d ln ei / d ln rho) on lnT grid
-        @show i
-        if i == 16
-            @show lneo g typeof(lneo)
-        end
         s   = spline(interpolate(lneo, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lneo)
         
@@ -108,8 +104,8 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         #hh .= linear_interpolation(lneo, h, extrapolation_bc=Line()).(lnEi2)
 
         # Tabgen interpolates the above using the spline derivative, dont know why though
-        interpolate_f_df!(view(ff, esi:eei), view(dd, esi:eei), lnEi2, lneo, f, d)
-        interpolate_f_df!(view(gg, esi:eei), view(hh, esi:eei), lnEi2, lneo, g, h)
+        interpolate_f_df!(ff, dd, lnEi2, lneo, f, d)
+        interpolate_f_df!(gg, hh, lnEi2, lneo, g, h)
 
         lnT2        .= ff    # lnT on ln(ei) grid
         dThdEi2     .= dd    # d lnT /d ln (ei) on ln(ei) grid
@@ -145,8 +141,8 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         #gg .= linear_interpolation(lnT, g, extrapolation_bc=Line()).(lnT2)
         #hh .= linear_interpolation(lnT, h, extrapolation_bc=Line()).(lnT2)
         
-        interpolate_f_df!(view(ff, esi:eei), view(dd, esi:eei), lnT2, lnT, f, d)
-        interpolate_f_df!(view(gg, esi:eei), view(hh, esi:eei), lnT2, lnT, g, h)
+        interpolate_f_df!(ff, dd, lnT2, lnT, f, d)
+        interpolate_f_df!(gg, hh, lnT2, lnT, g, h)
 
         lnPg2[:, i] .= ff 
 
@@ -169,9 +165,9 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         # get h= d/d ln ei ( d f / d ln rho) on lnT grid
         s   = spline(interpolate(lnT, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lnT)
-        
-        interpolate_f_df!(view(ff, esi:eei), view(dd, esi:eei), lnT2, lnT, f, d)
-        interpolate_f_df!(view(gg, esi:eei), view(hh, esi:eei), lnT2, lnT, g, h)
+ 
+        interpolate_f_df!(ff, dd, lnT2, lnT, f, d)
+        interpolate_f_df!(gg, hh, lnT2, lnT, g, h)
 
         lnNe2[:, i] .= ff 
 
@@ -186,6 +182,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
             add_outside!(view(lnNe2, :, i), esi, eei)
         end
 
+        if any(isnan.(view(lnNe2, :, i)))
+            @show i  "after" view(lnNe2, :, i)
+        end
+
         # the rosseland opacity ###############################################
         f .= t.lnRoss[:, i, 1] # f on lnT grid
         d .= t.lnRoss[:, i, 3] # d f / d ln tg on lnT grid
@@ -195,8 +195,8 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         s   = spline(interpolate(lnT, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lnT)
         
-        interpolate_f_df!(view(ff, esi:eei), view(dd, esi:eei), lnT2, lnT, f, d)
-        interpolate_f_df!(view(gg, esi:eei), view(hh, esi:eei), lnT2, lnT, g, h)
+        interpolate_f_df!(ff, dd, lnT2, lnT, f, d)
+        interpolate_f_df!(gg, hh, lnT2, lnT, g, h)
 
         lnRoss2[:, i] .= ff 
 
@@ -213,6 +213,66 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
     end
 
     RegularEoSTable(lnRho, log.(Tg2), lnEi2, lnPg2, lnRoss2, lnNe2)
+end
+
+"""A simple method to interpolate the EoS to new Energy grid."""
+function energy_grid(t::RegularEoSTable)
+    T = eltype(t.lnEi)
+
+    # new axis range
+    lnEi2min = minimum(view(t.lnEi, :, :, 1))
+    lnEi2max = maximum(view(t.lnEi, :, :, 1))
+    lnEi2r   = lnEi2max - lnEi2min
+
+    # new regular axis
+    nEiBin  = size(t.lnEi, 1)
+    nRhoBin = length(t.lnRho)
+
+    lnEi2  = Base.convert.(T, range(lnEi2min, lnEi2max, length=nEiBin))
+    dlnEi2 = lnEi2[2] - lnEi2[1]
+
+    # New arrays
+    lnTg2   = zeros(T, nEiBin, nRhoBin)
+    lnNe2   = zeros(T, nEiBin, nRhoBin)
+    lnRoss2 = zeros(T, nEiBin, nRhoBin)
+    lnPg2   = zeros(T, nEiBin, nRhoBin)
+
+    # old T axis as range for cubic interpolation
+    old_t = range(minimum(t.lnT), maximum(t.lnT), length=length(t.lnT))
+
+    x = zeros(nEiBin)
+    y = zeros(nEiBin)
+    t_axis = zeros(nEiBin)
+    mask = zeros(Int, nEiBin)
+
+    for i in eachindex(t.lnRho)
+        # This is a column of the table, interpolate it and evaluate at the right position
+
+        # It is listed as a function of temperature -> get the new T axis for the new E axis
+        mask .= sortperm(t.lnEi[:, i])
+        x    .= t.lnEi[mask, i]
+        y    .= t.lnT[mask]
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        t_axis      .= ip.(lnEi2)
+        lnTg2[:, i] .= t_axis
+
+        # Pg
+        y    .= t.lnPg[:, i]
+        ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
+        lnPg2[:, i] .= ip.(t_axis)
+
+        # Ne
+        y    .= t.lnNe[:, i]
+        ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
+        lnNe2[:, i] .= ip.(t_axis)
+
+        # Ross
+        y    .= t.lnRoss[:, i]
+        ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
+        lnRoss2[:, i] .= ip.(t_axis)
+    end
+
+    return RegularEoSTable(deepcopy(t.lnRho), lnTg2, lnEi2, lnPg2, lnRoss2, lnNe2)
 end
 
 lnT_to_lnEi(t) = error("No transformation from T to Ei implemented for this table.")
@@ -270,13 +330,14 @@ First: value, Second: df/dρ, third: df/dE (or dT)
 """
 function derivative(t::RegularEoSTable)
     e_axis = ndims(t.lnT) == 1 ? false : true
-    
+    T = eltype(t.lnT)
+
     if e_axis
-        lnDependent = zeros(size(t.lnPg)..., 3)
+        lnDependent = zeros(T, size(t.lnPg)..., 3)
         lnAxis      = t.lnEi
         lnDependent[:, :, 1] .= t.lnT
     else
-        lnDependent = zeros(size(t.lnPg)..., 3)
+        lnDependent = zeros(T, size(t.lnPg)..., 3)
         lnAxis      = t.lnT
         lnDependent[:, :, 1] .= t.lnEi
     end
@@ -284,13 +345,13 @@ function derivative(t::RegularEoSTable)
     nRhoBin  = length(t.lnRho)
     nAxisBin = length(lnAxis)
 
-    lnPg = zeros(size(t.lnPg)..., 3)
+    lnPg = zeros(T, size(t.lnPg)..., 3)
     lnPg[:, :, 1] .= t.lnPg
 
-    lnNe = zeros(size(t.lnPg)..., 3)
+    lnNe = zeros(T, size(t.lnPg)..., 3)
     lnNe[:, :, 1] .= t.lnNe
 
-    lnRoss = zeros(size(t.lnPg)..., 3)
+    lnRoss = zeros(T, size(t.lnPg)..., 3)
     lnRoss[:, :, 1] .= t.lnRoss
 
     for i=1:nAxisBin
@@ -330,6 +391,97 @@ function derivative(t::RegularEoSTable)
     tab_new
 end
 
+########################################################################################################################
+
+"""Interpolate tables to common, equidistant lnEi grid."""
+function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTable}
+    nEiBin  = length(lnEi_new)
+    nRhoBin = length(eos.lnRho)
+
+    T = eltype(eos.lnRho)
+
+    # New arrays
+    lnTg2    = zeros(T, nEiBin, nRhoBin)
+    lnNe2    = zeros(T, nEiBin, nRhoBin)
+    lnRoss2  = zeros(T, nEiBin, nRhoBin)
+    lnPg2    = zeros(T, nEiBin, nRhoBin)
+    lnKross2 = zeros(T, nEiBin, nRhoBin)
+    lnkappa2 = zeros(T, nEiBin, nRhoBin, length(opacities.λ))
+    lnSrc2   = zeros(T, nEiBin, nRhoBin, length(opacities.λ))
+
+    x = zeros(size(eos.lnEi, 1))
+    y = zeros(size(eos.lnEi, 1))
+    mask = zeros(Int, size(eos.lnEi, 1))
+
+    for i in 1:nRhoBin
+        # This is a column of the table, interpolate it and evaluate at the right position
+
+        # It is listed as a function of temperature -> get the new T axis for the new E axis
+        mask .= sortperm(eos.lnEi[:, i])
+        x    .= eos.lnEi[mask, i]
+        y    .= eos.lnT[mask, i]
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        lnTg2[:, i] .= ip.(lnEi_new)
+
+        # Pg
+        y    .= eos.lnPg[mask, i]
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        lnPg2[:, i] .= ip.(lnEi_new)
+
+        # Ne
+        y    .= eos.lnNe[mask, i]
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        lnNe2[:, i] .= ip.(lnEi_new)
+
+        # Ross
+        y    .= eos.lnRoss[mask, i]
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        lnRoss2[:, i] .= ip.(lnEi_new)
+
+
+        # kappa ross
+        y    .= log.(opacities.κ_ross[mask, i])
+        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+        lnKross2[:, i] .= ip.(lnEi_new)
+
+        for j in eachindex(opacities.λ)
+            # kappa
+            y    .= log.(opacities.κ[mask, i, j])
+            ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+            lnkappa2[:, i, j] .= ip.(lnEi_new)
+
+            # src
+            y    .= log.(opacities.src[mask, i, j])
+            ip    = linear_interpolation(x, y, extrapolation_bc=Line())
+            lnSrc2[:, i, j] .= ip.(lnEi_new)
+        end
+    end
+
+    return (RegularEoSTable(deepcopy(eos.lnRho), lnTg2, lnEi_new, lnPg2, lnRoss2, lnNe2), 
+            RegularOpacityTable(exp.(lnkappa2), exp.(lnKross2),exp.(lnSrc2),deepcopy(opacities.λ), false))
+end
+
+"""Interpolate tables to common, equidistant lnEi grid. Add a 'add_pad' padding to the left and right lnEi."""
+function unify(eos::E, opacities::O; add_pad=0.05) where {E<:EoSTable, O<:OpacityTable}
+    emin = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
+    emax = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
+    for i in axes(eos.lnEi, 2)
+        emin, emax = minimum(eos.lnEi[:, i]), maximum(eos.lnEi[:, i])
+    end
+
+    emin_pad = Base.convert(eltype(eos.lnRho), maximum(emin))
+    emax_pad = Base.convert(eltype(eos.lnRho), minimum(emax))
+    erange   = emax_pad - emin_pad
+    emin_pad = Base.convert(eltype(eos.lnRho), emin_pad + abs(add_pad*erange))
+    emax_pad = Base.convert(eltype(eos.lnRho), emax_pad - abs(add_pad*erange))
+
+    new_axis = collect(range(emin_pad, emax_pad, length=size(eos.lnEi, 1)))
+    
+    unify(eos, opacities, new_axis)
+end
+
+########################################################################################################################
+
 function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
     sT = length(lnT)
     names_cols = String[]
@@ -339,6 +491,26 @@ function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example
         name = joinpath(folder, "TSOeos_$(column).dat")
         write_as_stagger(name; teff=teff, logg=logg, FeH=FeH, 
                                 T=exp.(lnT), rho=zeros(sT) .+ exp(lnRho[column]), id="TSOeos_$(column)")
+
+        append!(names_cols, ["TSOeos_$(column).dat"])
+    end
+
+    open(joinpath(folder, "TSO_list.in"), "w") do f
+        for name in names_cols
+            write(f, name*"\n")
+        end
+    end
+end
+
+function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
+    sT = length(lnT)
+    names_cols = String[]
+
+    # write columns to file
+    for column in axes(lnRho, 2)
+        name = joinpath(folder, "TSOeos_$(column).dat")
+        write_as_stagger(name; teff=teff, logg=logg, FeH=FeH, 
+                                T=exp.(lnT[:, column]), rho=exp.(lnRho[:, column]), id="TSOeos_$(column)")
 
         append!(names_cols, ["TSOeos_$(column).dat"])
     end
@@ -414,7 +586,7 @@ function read_opacity_column(path)
     (opacity, κ_ross, λ, abund)
 end
 
-function read_tables(list_of_eos_tables)
+function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""))
     # Get the dimensions
     eos_col = read_eos_column(list_of_eos_tables[1])
     T = eltype(eos_col)
@@ -423,15 +595,21 @@ function read_tables(list_of_eos_tables)
     ntables         = length(list_of_eos_tables)
     @assert ntables == nrows_per_table
 
-    _,_,λ,abund = read_opacity_column(@inTS("TSOeos_$(get_TSO_index(list_of_eos_tables[1])).multi"))
+    opacity_path = joinpath(opacity_folder, "TSOeos_$(get_TSO_index(list_of_eos_tables[1])).multi") 
+  
+    eaxis = false
+    lnT  = eos_col[:, 1]
+    lnEi = eos_col[:, 5]
+    
+    _,_,λ,abund = read_opacity_column(opacity_path)
+    B = Base.convert.(T, Bν(λ, exp.(lnT))) # Planck function (i.e. source function)
 
-    lnT = eos_col[:, 1]
-    B   = Base.convert.(T, Bν(λ, exp.(lnT))) # Planck function (i.e. source function)
 
     # Read the data
     lnρ    = zeros(T, ntables)
+    lnT2   = zeros(T, nrows_per_table, ntables)
     lnPg   = zeros(T, nrows_per_table, ntables)
-    lnEi   = zeros(T, nrows_per_table, ntables)
+    lnEi2  = zeros(T, nrows_per_table, ntables)
     lnNe   = zeros(T, nrows_per_table, ntables)
     ross   = zeros(T, nrows_per_table, ntables)
     lnκ500 = zeros(T, nrows_per_table, ntables)
@@ -439,14 +617,16 @@ function read_tables(list_of_eos_tables)
     Sν     = similar(κ)
 
     for (i,table) in enumerate(list_of_eos_tables)
-        eos = read_eos_column(table)          # The columns are ln(T), ln(pe), ln(ρ), ln(Pg), ln(E), ln(κ500)
-        lnρ[i]        = eos[1, 3]
-        lnPg[:, i]   .= eos[:, 4]
-        lnEi[:, i]   .= eos[:, 5]
-        lnNe[:, i]   .= log.(exp.(eos[:, 2]) ./ (1.38065e-16 .* exp.(eos[:, 1]))) # p = nkT
-        lnκ500[:, i] .= eos[:, 6] # This is not the rosseland opacity! This is the 500nm for now
+        column = get_TSO_index(table)
+        eos = read_eos_column(table)                                                   # The columns are ln(T), ln(pe), ln(ρ), ln(Pg), ln(E), ln(κ500)
+        lnρ[column]        = eos[1, 3]
+        lnT2[:, column]   .= eos[:, 1]
+        lnPg[:, column]   .= eos[:, 4]
+        lnEi2[:, column]  .= eos[:, 5]
+        lnNe[:, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1]))) # p = nkT
+        lnκ500[:, column] .= eos[:, 6]                                                 # This is not the rosseland opacity! This is the 500nm for now
 
-        opacity, κ_ross, _, _ = read_opacity_column(@inTS("TSOeos_$(get_TSO_index(table)).multi"))
+        opacity, κ_ross, _, _ = read_opacity_column(@inTS("TSOeos_$(column).multi"))
         for j in 1:nrows_per_table
             opc = view(opacity, j, :, 1)
             opl = view(opacity, j, :, 2)
@@ -457,21 +637,114 @@ function read_tables(list_of_eos_tables)
             ops[isnan.(ops)] .= 0.0
         end
 
-        κ[:, i, :]  .= opacity[:, :, 1] .+ opacity[:, :, 2] .+ opacity[:, :, 3]
-        ross[:, i]  .= κ_ross
-        Sν[:, i, :] .= B
+        κ[:, column, :]  .= opacity[:, :, 1] .+ opacity[:, :, 2] .+ opacity[:, :, 3]
+        ross[:, column]  .= κ_ross
+        Sν[:, column, :] .= B
     end
 
-    mask    = sortperm(lnρ)
+    # check which of T/E is the axis and which is lnDependent
+    for i in axes(lnT, 2)
+        if lnT2[:, i] != lnT
+            @info "Non-equal T columns detected. Assuming energy axis."
+            eaxis = true
+            break
+        end
+    end
+
+    #=mask    = sortperm(lnρ)
     lnρ    .= lnρ[mask]
     lnPg   .= lnPg[:, mask]
     lnEi   .= lnEi[:, mask]
     lnNe   .= lnNe[:, mask]
     ross   .= ross[:, mask]
     κ      .= κ[:, mask, :] 
-    lnκ500 .= lnκ500[:, mask]
+    lnκ500 .= lnκ500[:, mask]=#
 
-    (RegularEoSTable(lnρ, lnT, lnEi, lnPg, log.(ross), lnNe), RegularOpacityTable(κ, ross, Sν, λ, false))
+    if eaxis
+        (RegularEoSTable(lnρ, lnT2, lnEi2, lnPg, log.(ross), lnNe), RegularOpacityTable(κ, ross, Sν, λ, false))
+    else
+        (RegularEoSTable(lnρ, lnT, lnEi2, lnPg, log.(ross), lnNe), RegularOpacityTable(κ, ross, Sν, λ, false))
+    end
+end
+
+function _read_tables_eos(list_of_eos_tables)
+    # Get the dimensions
+    eos_col = read_eos_column(list_of_eos_tables[1])
+    T = eltype(eos_col)
+
+    nrows_per_table = size(eos_col, 1)
+    ntables         = length(list_of_eos_tables)
+    @assert ntables == nrows_per_table
+
+    eaxis = false
+    lnT  = eos_col[:, 1]
+    lnEi = eos_col[:, 5]
+    
+    # Read the data
+    lnρ    = zeros(T, ntables)
+    lnT2   = zeros(T, nrows_per_table, ntables)
+    lnPg   = zeros(T, nrows_per_table, ntables)
+    lnEi2  = zeros(T, nrows_per_table, ntables)
+    lnNe   = zeros(T, nrows_per_table, ntables)
+    lnκ500 = zeros(T, nrows_per_table, ntables) 
+
+    for (i,table) in enumerate(list_of_eos_tables)
+        column = get_TSO_index(table)
+        eos = read_eos_column(table)                                                   # The columns are ln(T), ln(pe), ln(ρ), ln(Pg), ln(E), ln(κ500)
+        lnρ[column]        = eos[1, 3]
+        lnT2[:, column]   .= eos[:, 1]
+        lnPg[:, column]   .= eos[:, 4]
+        lnEi2[:, column]  .= eos[:, 5]
+        lnNe[:, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1]))) # p = nkT
+        lnκ500[:, column] .= eos[:, 6]                                                 # This is not the rosseland opacity! This is the 500nm for now
+    end
+
+    # check which of T/E is the axis and which is lnDependent
+    for i in axes(lnT, 2)
+        if lnT2[:, i] != lnT
+            @info "Non-equal T columns detected. Assuming energy axis."
+            eaxis = true
+            break
+        end
+    end
+
+    #=mask    = sortperm(lnρ)
+    lnρ    .= lnρ[mask]
+    lnPg   .= lnPg[:, mask]
+    lnEi   .= lnEi[:, mask]
+    lnNe   .= lnNe[:, mask]
+    ross   .= ross[:, mask]
+    κ      .= κ[:, mask, :] 
+    lnκ500 .= lnκ500[:, mask]=#
+
+    if eaxis
+        RegularEoSTable(lnρ, lnT2, lnEi2, lnPg, lnκ500, lnNe)
+    else
+        RegularEoSTable(lnρ, lnT, lnEi2, lnPg, lnκ500, lnNe)
+    end
+end
+
+function read_tables(list_of_eos_tables::AbstractVector)
+    opacity_path = @inTS "TSOeos_$(get_TSO_index(list_of_eos_tables[1])).multi"
+    return if ispath(opacity_path)
+        _read_tables_eos_op(list_of_eos_tables)
+    else
+        _read_tables_eos(list_of_eos_tables)
+    end
+end
+
+read_tables(::Type{<:EoSTable}, ::Type{<:OpacityTable}, list_of_eos_tables::AbstractVector, opacity_folder=@inTS("")) = _read_tables_eos_op(list_of_eos_tables, opacity_folder)
+read_tables(::Type{<:EoSTable},                         list_of_eos_tables::AbstractVector)                           = _read_tables_eos(list_of_eos_tables)
+
+read_tables(t::Type{<:EoSTable},                           folder::String=".", args...) = read_tables(t,     glob("_TSOeos_*_TSO.eos", folder), args...)
+read_tables(t::Type{<:EoSTable}, t2::Type{<:OpacityTable}, folder::String=".", args...) = read_tables(t, t2, glob("_TSOeos_*_TSO.eos", folder), args...)
+
+# User interface function
+load(e::Type{<:EoSTable}, o::Type{<:OpacityTable}, args...; kwargs...) = read_tables(e, o, args...; kwargs...)
+load(e::Type{<:EoSTable},                          args...; kwargs...) = read_tables(e,    args...; kwargs...)
+load(o::Type{<:OpacityTable}, e::Type{<:EoSTable}, args...; kwargs...) = begin
+    e, o = read_tables(e, o, args...; kwargs...)
+    o, e
 end
 
 get_TSO_index(name) = begin
@@ -479,6 +752,8 @@ get_TSO_index(name) = begin
     rest = name[mask:end]
     parse(Int, split(rest, "_")[2])
 end
+
+########################v################################################################################################
 
 function Bν(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
