@@ -45,6 +45,7 @@ end
     TSO.load_wrapper()
 end
 
+##################################################################################################
 
 # Creating initial set of tables
 lnT = range(log(1e3), log(5e5); length=100)
@@ -61,24 +62,26 @@ end
 
 # Basic setup
 begin
-    # config file used to setup TurboSpectrum (TS) run
+    ## config file used to setup TurboSpectrum (TS) run
     debug = 1
 
-    # TS root directory
+    ## TS root directory
     ts_root = "/u/peitner/Turbospectrum/Turbospectrum_NLTE"
-    # list of model atmospheres to use
-
-    # path to model atmospheres (in MARCS .mod format only for now)
-    atmos_path = "/u/peitner/Turbospectrum/TurboSpectrum-Wrapper/example/models/"
-
-    # 'm1d' or 'marcs'
-    atmos_format = "stagger"
+   
+    ## list of model atmospheres to use
     atmos_list   = "/u/peitner/Turbospectrum/TurboSpectrum-Wrapper/example/models/TSO_list.in"
 
-    # path to the linelist(s)
+    ## path to model atmospheres 
+    atmos_path = "/u/peitner/Turbospectrum/TurboSpectrum-Wrapper/example/models/"
+
+    ## 'm1d' or 'marcs' -> always Stagger for opacity tables
+    atmos_format = "stagger"
+
+    ## path to the linelist(s)
     #linelist = ['/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt', '/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata', '/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn']
     linelist = ["/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt", "/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata"]
 
+    ## Dont use this for opacity tables
     #inputParams_file = 'input_param.txt'
     #nlte_grids_path = './nlteGrids/'
     #nlte_config = [ ]
@@ -86,13 +89,13 @@ begin
     #nlte_config += [ Fe : [ 'Fe/NLTEgrid4TS_Fe_MARCS_May-07-2021.bin','Fe/auxData_Fe_MARCS_May-07-2021.dat', 'Fe/atom.fe607a'] ]
     #nlte_config += [ Ba : [ 'Ba/NLTEgrid_Ba_MARCS_May-10-2021.bin', 'Ba/auxData_Ba_MARCS_May-10-2021.txt', 'Ba/atom.ba111' ] ]
 
-    # starting wavelenght, AA
-    lam_start = 3000
+    ## starting wavelenght, AA
+    lam_start = 1000
 
-    # last wavelenght, AA
-    lam_end = 10000
+    ## last wavelenght, AA
+    lam_end = 100000
 
-    # resolution per wavelenght (R capital)
+    ## resolution per wavelenght (R capital)
     resolution = 1300
 
     setup_input = Dict("debug"         =>debug, 
@@ -105,34 +108,59 @@ begin
                         "lam_end"      =>lam_end, 
                         "resolution"   =>resolution)
 
-    # Create the setup object
+    ## Create the setup object
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
 end
 
-# Execute the code in parallel over all nodes/tasks
+# Execute the code in parallel over all nodes/tasks #################################################
 # specified in the slurm environment
 # args: setup, atmos number, skip bsyn?
-args = [(setup, [i-1], false) for i in 1:length(setup.atmos_list)]
+args = [(setup, [i-1], true) for i in 1:length(setup.atmos_list)]
 Distributed.pmap(compute_opac.runTSforOpac, args)
 
-#=
 # Now the table can be read, inverted and run again with opacities
-lot = glob("_TSOeos_*_TSO.eos")               # List of EoS tables
-#lot = lot[TSO.get_TSO_index.(lot) .<= 100]    # Not needed if you cleaned before
-eos = TSO.read_tables(TSO.EoSTable, list_of_eos_tables)
+lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
+eos = TSO.load(TSO.EoSTable, lot)                                                        # Read from file and combine
+
+# Apply smoothing if needed
+TSO.smooth!(eos)                                                                         # Interpolate where NaN
 
 # Invert the EoS and get new grid
-new_eos = TSO.lnT_to_lnEi(d_eos)
+new_eos = TSO.energy_grid(eos)                                                           # Switch from T to E grid
+                                                                                         # Could also use energy_grid(), which is simpler
+# Save the eos
+TSO.save(new_eos, "eos_step1.hdf5")
 
-# TODO: Apply smoothing if needed
-# smooth!(new_eos)
+##################################################################################################
 
 # create the new TS input tables with this eos
 ee, rr = TSO.meshgrid(new_eos.lnEi, new_eos.lnRho);
-TSO.write_as_stagger(new_eos.lnT, rr)
+TSO.write_as_stagger(new_eos.lnT, rr)                                                    # Save the models column wise again
 
 # Run the code again
 args = [(setup, [i-1], false) for i in 1:length(setup.atmos_list)]
 Distributed.pmap(compute_opac.runTSforOpac, args)
-=#
+
+# Now the table can be read, inverted to save
+lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
+eos, opacities = TSO.load(TSO.EoSTable, TSO.OpacityTable, lot, get_individual=true)
+
+# Apply smoothing if needed
+TSO.smooth!(eos, opacities)
+TSO.save(eos, "eos_step2.hdf5")
+TSO.save(opacities[1], "opacities_step2.hdf5")
+
+# Cut off the edges and make one uniform Ei grid 
+new_eos, new_opacities = TSO.unify(eos, opacities)
+
+# Save the end result
+TSO.save(new_eos, "unified_eos_step2.hdf5")
+TSO.save(new_opacities[1], "unified_opacities_step2.hdf5")
+TSO.save(new_opacities[2], "unified_Copacities_step2.hdf5")
+TSO.save(new_opacities[3], "unified_Lopacities_step2.hdf5")
+TSO.save(new_opacities[4], "unified_Sopacities_step2.hdf5")
+
+##################################################################################################
+# You can filter the models with this if you did not clean before
+#lot = lot[TSO.get_TSO_index.(lot) .<= 100]    # Not needed if you cleaned before

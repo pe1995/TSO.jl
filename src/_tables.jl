@@ -46,3 +46,50 @@ limits(eos::EoSTable) = begin
     
     var_min, var_max, minimum(eos.lnRho), maximum(eos.lnRho)
 end
+
+### Writing in Dispatch format
+function tabparam(EOSTableFile, RhoEiRadTableFile, nEiBin, nRhoBin, nRadBins, EiMin, EiMax, RhoMin, RhoMax)
+    content="&TABPAR\n"*
+            "EOSTableFile = '$(EOSTableFile)'\n"*
+            "RhoEiRadTableFile = '$(RhoEiRadTableFile)'\n"*
+            "NeTgRadTableFile = 'netg_radtab.dat'\n"*
+            "nRhoBin = $(nRhoBin)\n"*
+            @sprintf("RhoMin = %.7E\n", RhoMin)*
+            @sprintf("RhoMax = %.7E\n", RhoMax)*
+            "nEiBin = $(nEiBin)\n"*
+            @sprintf("EiMin =  %.7E\n", EiMin)*
+            @sprintf("EiMax =  %.7E\n", EiMax)*
+            "nRadBins = $(nRadBins)\n"*
+            "/"
+
+    open("tabparam.in", "w") do f
+        write(f, content)
+    end
+
+    nothing
+end
+
+tabparam(eos::EoSTable, nradbins; eos_file="eostable.dat", opacity_file="rhoei_radtab.dat") = tabparam(eos_file, opacity_file, size(eos.lnPg)..., nradbins, exp.(TSO.limits(eos))...)
+
+"""
+Write the EoS + binned opacities in the same format as in Tabgen, so that it can be read by dispatch.
+"""
+function for_dispatch(eos::EoSTable, χ, S, ϵ)
+    f = FortranFile("rhoei_radtab.dat", "w", access="direct", recl=prod(size(S))*4)
+    FortranFiles.write(f, rec=1, ϵ)
+    FortranFiles.write(f, rec=2, S)
+    FortranFiles.write(f, rec=3, χ)
+    close(f)
+
+    eos_table = zeros(eltype(eos.lnT), size(eos.lnT)..., 4)
+    eos_table[:, :, 1] = eos.lnPg
+    eos_table[:, :, 2] = exp.(eos.lnT)
+    eos_table[:, :, 3] = eos.lnNe
+    eos_table[:, :, 4] = eos.lnRoss
+
+    f = FortranFile("eostable.dat", "w", access="direct", recl=prod(size(eos.lnT))*4*4)
+    FortranFiles.write(f, rec=1, eos_table)
+    close(f)
+
+    tabparam(eos, size(χ, 3))
+end

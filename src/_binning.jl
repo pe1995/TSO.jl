@@ -14,8 +14,17 @@ struct UniformTabgenBins{F<:AbstractFloat} <:OpacityBins
     bin_edges::Vector{F}
 end
 
+struct ExactTabgenBins <:OpacityBins
+    dbox  ::Float64
+    Nbins ::Int
+end
+
 struct CustomTabgenBins{F<:AbstractFloat} <:OpacityBins
     bin_edges::Vector{F}
+end
+
+struct StaggerBins{F<:AbstractFloat} <:OpacityBins
+    bin_edges ::Array{F,2}
 end
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -23,21 +32,79 @@ UniformTabgenBins() = UniformTabgenBins(Float64[])
 
 ## Alias
 TabgenBins = Union{<:EqualTabgenBins, <:UniformTabgenBins, <:CustomTabgenBins}
-TabgenBinning(t::Type{<:TabgenBins}, args...; kwargs...) = fill(t, args...; kwargs...)
+TabgenBinning(t::Type{<:OpacityBins}, args...; kwargs...)  = fill(t, args...; kwargs...)
+StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 
 ## Functions for filling the bins
 fill(::Type{<:OpacityBins}; kwargs...) = error("Please use specific binning methods.")
 fill(::Type{<:CustomTabgenBins}; bin_edges, kwargs...) = CustomTabgenBins(bin_edges)
 
+function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, kwargs...) 
+    # L shaped bins of equal size in log λ and log κ
+    nbins = Nbins-1
+    n_κ_bins = ceil(Int, 3/12 * (nbins))
+    n_λ_bins = Int(nbins - n_κ_bins)
+
+    λ_edges = zeros(n_λ_bins+2)
+    l = maximum(log10.(opacities.λ)[(formation_opacity .>κ_low ) .& (log10.(opacities.λ) .<λ_high)])
+    m = maximum(log10.(opacities.λ))
+    r = abs(m - l)
+    l -= 0.01*r
+    m += 0.01*r
+    λ_edges[2:end] .= collect(range(l, m, length=n_λ_bins+1))
+    λ_edges[1] = minimum(log10.(opacities.λ))
+
+    # mask of left lambda edge
+    mask   = log10.(opacities.λ) .< λ_edges[2]
+    k_mask = formation_opacity[mask]
+    
+    k_edges = zeros(n_κ_bins+1)
+    l = minimum(formation_opacity[mask])
+    m = maximum(formation_opacity[mask])
+    r = abs(m - l)
+    l -= 0.01*r
+    m += 0.01*r
+    k_edges .= collect(range(l, m, length=n_κ_bins+1))
+
+    # Last bin is the one in the top right corner
+    bins = zeros(nbins+1 , 4)
+    for i in 1:n_λ_bins
+        bins[i, 1] = λ_edges[i+1]
+        bins[i, 2] = λ_edges[i+2]
+        bins[i, 3] = k_edges[1]
+        bins[i, 4] = k_edges[2]
+    end
+    for i in 1:n_κ_bins
+        bins[n_λ_bins+i, 1] = λ_edges[1]
+        bins[n_λ_bins+i, 2] = λ_edges[2]
+        bins[n_λ_bins+i, 3] = k_edges[i]
+        bins[n_λ_bins+i, 4] = k_edges[i+1]
+    end
+
+    bins[end, 1] = λ_edges[2]
+    bins[end, 2] = λ_edges[end]
+    bins[end, 3] = k_edges[2]
+    bins[end, 4] = k_edges[end]
+
+    StaggerBins(bins)
+end
+
 """
 Equal Tabgen bins based on opacities.
 """
-function fill(::Type{<:EqualTabgenBins}; opacities, formation_opacity, Nbins=4, kwargs...)
+function fill(::Type{<:EqualTabgenBins}; opacities, formation_opacity, Nbins=4, binsize=0.0, kwargs...)
     # Get the minimum and maximum opacity and decide on a step
     min_opacity  = minimum(formation_opacity)
     max_opacity  = maximum(formation_opacity)
 
-    EqualTabgenBins(collect(range(min_opacity, max_opacity, length=Nbins+1)))
+    return if binsize==0.0
+        EqualTabgenBins(collect(range(min_opacity, max_opacity, length=Nbins+1)))
+    else
+        # Make the last bin bigger
+        bins = [min_opacity+binsize*(i-1) for i in 1:Nbins]
+        append!(bins, [max_opacity])
+        EqualTabgenBins(bins)
+    end
 end
 
 """
@@ -53,6 +120,8 @@ function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4
 
     UniformTabgenBins(edges)
 end
+
+fill(::Type{<:ExactTabgenBins}; Nbins=4, dbox=0.5, kwargs...) = ExactTabgenBins(dbox, Nbins)
 
 ## Functions for computing the binned opacities
 """
@@ -73,7 +142,7 @@ function binning(bins::TabgenBins, opacities, formation_opacity, kwargs...)
 
     # the binning (i_bin for every wavelenght)
     binning = zeros(Int, length(λ))
-    i_bin ::Union{Nothing,Int}
+    i_bin ::Union{Nothing,Int} = nothing
 
     for i in eachindex(λ)
         i_bin = findlast(x->(formation_opacity[i]>=x), edges)
@@ -86,6 +155,56 @@ function binning(bins::TabgenBins, opacities, formation_opacity, kwargs...)
     end
 
     return binning
+end
+
+function binning(bins::ExactTabgenBins, opacities, formation_opacity, kwargs...)
+    λ = opacities.λ
+
+    # the binning (i_bin for every wavelenght)
+    binning = zeros(Int, length(λ))
+    i_bin ::Union{Nothing,Int} = nothing
+
+    for i in eachindex(λ)
+        i_bin = floor(Int, 1.5+(formation_opacity[i])/bins.dbox)
+        i_bin = min(bins.Nbins, max(1, i_bin))
+
+        binning[i] = i_bin
+    end
+
+    return binning
+end
+
+function binning(b::StaggerBins, opacities, formation_opacity, kwargs...)
+    bins = b.bin_edges
+    binning = zeros(Int, size(opacities.λ)...)
+    for i in eachindex(opacities.λ)
+        for j in axes(bins, 1)
+            bin = bins[j, :]
+            if (log10(opacities.λ[i]) >= bin[1]) & (log10(opacities.λ[i]) < bin[2])
+                if (formation_opacity[i] >= bin[3]) & (formation_opacity[i] < bin[4])
+                    binning[i] = j 
+                end
+            end
+        end
+    end
+
+    @assert all(binning .!= 0)
+    binning
+end
+
+"""Compute midpoint-weights from wavelenght array."""
+function ω_midpoint(λ) 
+    Δλ = zeros(eltype(λ), length(λ)+1)
+    Δλ[2:end-1] = (λ[2:end] .- λ[1:end-1]) ./ 2
+    Δλ[1]   = Δλ[2]
+    Δλ[end] = Δλ[end-1]
+
+    w  = similar(λ)
+    for i in eachindex(λ)
+        w[i] = Δλ[i] + Δλ[i+1]
+    end
+
+    w
 end
 
 ###########################################################################
@@ -245,6 +364,62 @@ end
 
 ### Computation of binned properties ######################################
 
- 
+"""Loop through eos and integrate quantities in the opacity table according to the chosen binning."""
+function box_integrated(binning, weights, eos, opacities, scattering)
+    radBins = length(unique(binning))
+    rhoBins = length(eos.lnRho)
+    EiBins  = length(eos.lnEi)
+    λ       = opacities.λ
+    T       = eltype(eos.lnRho)
+
+    χBox  = zeros(T, EiBins, rhoBins, radBins)    
+    χRBox = zeros(T, EiBins, rhoBins, radBins)
+    κBox  = zeros(T, EiBins, rhoBins, radBins)
+    SBox  = zeros(T, EiBins, rhoBins, radBins)
+
+    BBox = zeros(T, EiBins, radBins)
+    δBBox = zeros(T, EiBins, radBins)
+
+    B  = zeros(T, EiBins, length(λ))
+    δB = zeros(T, EiBins, length(λ))
+
+    ρ = exp.(eos.lnRho)
+
+    for i in eachindex(eos.lnRho)
+
+        BBox  .= 0.0
+        δBBox .= 0.0
+
+        # compute the Planck function at this density
+        B  .= Bν( λ, exp.(eos.lnT[:, i]))
+        δB .= δBν(λ, exp.(eos.lnT[:, i]))
+
+        # Integrate the Planck Box
+        @inbounds for j in eachindex(λ)
+            BBox[:, binning[j]]  .+= weights[j] .*  B[:, j]
+            δBBox[:, binning[j]] .+= weights[j] .* δB[:, j]
+        end
+
+        # Integrate the other Box quantities
+        @inbounds for j in eachindex(λ)
+            χBox[:, i, binning[j]]  .+= weights[j] .* opacities.κ[:, i, j]                            .*  B[:, j] ./  BBox[:, binning[j]]
+            χRBox[:, i, binning[j]] .+= weights[j] .* 1.0 ./ opacities.κ[:, i, j]                     .* δB[:, j] ./ δBBox[:, binning[j]]
+            κBox[:, i, binning[j]]  .+= weights[j] .* (opacities.κ[:, i, j] .- scattering.κ[:, i, j]) .*  B[:, j] ./  BBox[:, binning[j]]
+            SBox[:, i, binning[j]]  .+= weights[j] .* B[:, j]
+        end
+
+        χBox[:, i, :]  .*= ρ[i]
+        κBox[:, i, :]  .*= ρ[i]
+        χRBox[:, i, :] ./= ρ[i]
+    end
+
+    wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
+    wthick = T(1.0) .- wthin
+
+    # Use rosseland average where optically thick, Planck average where optically thin
+    return log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(SBox), log.(κBox ./ χBox)
+    #return log.(χBox), log.(SBox), log.(κBox ./ χBox)
+
+end
 
 ###########################################################################
