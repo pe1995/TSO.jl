@@ -25,17 +25,18 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
                 nmask .= .!m[:, i]
                 Taxis .= eaxis ? eos.lnT[:, i] : eos.lnT
 
-                nodes = (view(Taxis, nmask),)
+                sortmask = sortperm(view(Taxis, nmask))
+                nodes = (Taxis[nmask][sortmask],)
 
                 val .= log.(opacities.κ_ross[:, i])
-                opacities.κ_ross[mask, i] .= exp.(extrapolate(interpolate(nodes, view(val, nmask), Gridded(Linear())), Line()).(view(Taxis, mask)))
+                opacities.κ_ross[mask, i] .= exp.(extrapolate(interpolate(nodes, val[nmask][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask)))
 
                 for j in eachindex(opacities.λ)
                     val .= log.(opacities.κ[:, i, j])
-                    opacities.κ[  mask, i, j] .= exp.(extrapolate(interpolate(nodes, view(val, nmask), Gridded(Linear())), Line()).(view(Taxis, mask)))
+                    opacities.κ[  mask, i, j] .= exp.(extrapolate(interpolate(nodes, val[nmask][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask)))
 
                     val .= log.(opacities.src[:, i, j])
-                    opacities.src[mask, i, j] .= exp.(extrapolate(interpolate(nodes, view(val, nmask), Gridded(Linear())), Line()).(view(Taxis, mask)))
+                    opacities.src[mask, i, j] .= exp.(extrapolate(interpolate(nodes, val[nmask][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask)))
                 end
 
             end
@@ -99,11 +100,13 @@ function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
             nmask .= .!m[:, i]
             Taxis .= eaxis ? eos.lnT[:, i] : eos.lnT
 
-            nodes = (view(Taxis, nmask),)
-            eos.lnEi[  mask, i] .= extrapolate(interpolate(nodes, view(eos.lnEi,   nmask, i), Gridded(Linear())), Line()).(view(Taxis, mask))
-            eos.lnPg[  mask, i] .= extrapolate(interpolate(nodes, view(eos.lnPg,   nmask, i), Gridded(Linear())), Line()).(view(Taxis, mask)) 
-            eos.lnNe[  mask, i] .= extrapolate(interpolate(nodes, view(eos.lnNe,   nmask, i), Gridded(Linear())), Line()).(view(Taxis, mask)) 
-            eos.lnRoss[mask, i] .= extrapolate(interpolate(nodes, view(eos.lnRoss, nmask, i), Gridded(Linear())), Line()).(view(Taxis, mask))  
+            sortmask = sortperm(view(Taxis, nmask))
+            nodes = (Taxis[nmask][sortmask],)
+
+            eos.lnEi[  mask, i] .= extrapolate(interpolate(nodes, eos.lnEi[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask))
+            eos.lnPg[  mask, i] .= extrapolate(interpolate(nodes, eos.lnPg[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask)) 
+            eos.lnNe[  mask, i] .= extrapolate(interpolate(nodes, eos.lnNe[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask)) 
+            eos.lnRoss[mask, i] .= extrapolate(interpolate(nodes, eos.lnRoss[nmask, i][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask))  
         end
     elseif (along==:Rho) | (along==:rho) | (along==:ρ) 
         eaxis && error("You can only integrate along Rho if T is the other axis (because we have to integrate along T anyways, which then may be unstructured). Choose :T.")

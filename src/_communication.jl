@@ -230,7 +230,7 @@ function srun_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qu
     end
 
     ddir = @inTS("")
-    command = `srun -N 1 -n 1 -c 1 --mem=$(memMB)mb --time=$(timeout) --exclusive -D $(ddir) ./exec/babsma_lu`
+    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/babsma_lu`
     
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "babsma_$(id).log"), 
@@ -317,7 +317,7 @@ function srun_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResu
     end
 
     ddir    = @inTS("")
-    command = `srun -N 1 -n 1 -c 1 --mem=$(memMB)mb --time=$(timeout) --exclusive -D $(ddir) ./exec/bsyn_lu`
+    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/bsyn_lu`
     
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "bsyn_$(id).log"), 
