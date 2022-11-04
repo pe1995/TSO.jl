@@ -15,49 +15,31 @@ using Glob
 using Interpolations
 
 
-TSO.load_TS()       # Set the TS path
-TSO.load_wrapper()  # Set the Wrapper path
-TSO.move_output()   # move previous output to garbage folder in wrapper
+TSO.load_TS()        # Set the TS path
+TSO.load_wrapper()   # Set the Wrapper path
+TSO.move_output()    # move previous output to garbage folder in wrapper
+TSO.import_wrapper() # import the python modules of the wrapper, make them avail. to TSO.jl
 
 
-if "SLURM_NTASKS" in keys(ENV)
-    addprocs(SlurmManager())
-    for i in workers()
-        host,pid = fetch(@spawnat i (gethostname(), getpid()))
-        @info "Worker $(i) is running on $(host) with ID $(pid)" 
-    end
+time = if length(ARGS) >= 1
+    ARGS[1]
 else
-    @warn "No Slurm environment detected. Using default addprocs."
-    addprocs(3)
+    nothing
 end
 
-
-@everywhere begin
-    using Pkg; Pkg.activate("."); 
-    using Distributed
-    using StatsBase
-    using TSO
-    using DelimitedFiles
-    using Glob
-    using Interpolations
-
-    TSO.load_TS()
-    TSO.load_wrapper()
-end
+@show time
 
 ##################################################################################################
 
 # Creating initial set of tables
-lnT = range(log(1e3), log(5e5); length=100)
-lnρ = range(log(1e-15), log(1e-3); length=100)
+lnT = range(log(1.1e3), log(5e5); length=200)
+lnρ = range(log(1e-15), log(1e-3); length=200)
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
 
 
-# Import the wrapper everywhere
-@everywhere begin 
-    source_folder = TSO.@inWrapper "source"
-    TSO.@pythonHelp compute_opac source_folder 
-end
+# Import the setup class from the wrapper
+source_folder = TSO.@inWrapper "source"
+TSO.@pythonHelp compute_opac source_folder 
 
 
 # Basic setup
@@ -66,20 +48,23 @@ begin
     debug = 1
 
     ## TS root directory
-    ts_root = "/u/peitner/Turbospectrum/Turbospectrum_NLTE"
+    ts_root = TSO.@inTS ""
    
     ## list of model atmospheres to use
-    atmos_list   = "/u/peitner/Turbospectrum/TurboSpectrum-Wrapper/example/models/TSO_list.in"
+    atmos_list   = TSO.@inWrapper "example/models/TSO_list.in"
 
     ## path to model atmospheres 
-    atmos_path = "/u/peitner/Turbospectrum/TurboSpectrum-Wrapper/example/models/"
+    atmos_path = TSO.@inWrapper "example/models/"
 
     ## 'm1d' or 'marcs' -> always Stagger for opacity tables
     atmos_format = "stagger"
 
     ## path to the linelist(s)
     #linelist = ['/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt', '/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata', '/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn']
-    linelist = ["/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt", "/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata"]
+    #linelist = [ TSO.@inTS("../TSwrapperOpac/nlte_ges_linelist.txt"), TSO.@inTS("../TSwrapperOpac/Hlinedata")]
+    linelist = abspath.(["LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
+                         "LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list"])
+                #"/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn"]
 
     ## Dont use this for opacity tables
     #inputParams_file = 'input_param.txt'
@@ -91,12 +76,15 @@ begin
 
     ## starting wavelenght, AA
     lam_start = 1000
+    #lam_start = 26000
 
     ## last wavelenght, AA
-    lam_end = 100000
+    lam_end =  26000
+    #lam_end = 200000
 
     ## resolution per wavelenght (R capital)
-    resolution = 1300
+    resolution = 25000
+    #resolution = 2500
 
     setup_input = Dict("debug"         =>debug, 
                         "ts_root"      =>ts_root, 
@@ -112,16 +100,20 @@ begin
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
 end
+@show linelist atmos_path atmos_list ts_root
 
 # Execute the code in parallel over all nodes/tasks #################################################
 # specified in the slurm environment
-# args: setup, atmos number, skip bsyn?
-args = [(setup, [i-1], true) for i in 1:length(setup.atmos_list)]
-Distributed.pmap(compute_opac.runTSforOpac, args)
+# NEW: Directly run the TS as job steps of the current slurm installation
+TSO.babsma!(setup, [], timeout=time) 
+#TSO.bsyn!(  setup, [], timeout=time)
 
 # Now the table can be read, inverted and run again with opacities
 lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
 eos = TSO.load(TSO.EoSTable, lot)                                                        # Read from file and combine
+
+
+TSO.save(eos, "eos_uv_raw_step1.hdf5")
 
 # Apply smoothing if needed
 TSO.smooth!(eos)                                                                         # Interpolate where NaN
@@ -130,36 +122,45 @@ TSO.smooth!(eos)                                                                
 new_eos = TSO.energy_grid(eos)                                                           # Switch from T to E grid
                                                                                          # Could also use energy_grid(), which is simpler
 # Save the eos
-TSO.save(new_eos, "eos_step1.hdf5")
+TSO.save(new_eos, "eos_uv_step1.hdf5")
 
+#exit()
 ##################################################################################################
 
 # create the new TS input tables with this eos
-ee, rr = TSO.meshgrid(new_eos.lnEi, new_eos.lnRho);
-TSO.write_as_stagger(new_eos.lnT, rr)                                                    # Save the models column wise again
+ee, rr = TSO.meshgrid(new_eos.lnEi, new_eos.lnRho)
+TSO.write_as_stagger(new_eos.lnT, rr)   
 
-# Run the code again
-args = [(setup, [i-1], false) for i in 1:length(setup.atmos_list)]
-Distributed.pmap(compute_opac.runTSforOpac, args)
+# NEW: Directly run the TS as job steps of the current slurm installation
+TSO.babsma!(setup, [], timeout=time) 
+TSO.bsyn!(  setup, [], timeout=time)
 
 # Now the table can be read, inverted to save
-lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
-eos, opacities = TSO.load(TSO.EoSTable, TSO.OpacityTable, lot, get_individual=true)
+lot = glob("_TSOeos_*_TSO.eos")                                                              # List of EoS tables
+opacitieseos, opacities = TSO.load(TSO.EoSTable, TSO.OpacityTable, lot, get_individual=true) # Return cont/line/scat tables separate
+
+
+TSO.save(eos, "eos_uv_raw_step2.hdf5")
+TSO.save(opacities[1],  "opacities_uv_raw_step2.hdf5")
+TSO.save(opacities[2], "Copacities_uv_raw_step2.hdf5")
+TSO.save(opacities[3], "Lopacities_uv_raw_step2.hdf5")
+TSO.save(opacities[4], "Sopacities_uv_raw_step2.hdf5")
+
 
 # Apply smoothing if needed
 TSO.smooth!(eos, opacities)
-TSO.save(eos, "eos_step2.hdf5")
-TSO.save(opacities[1], "opacities_step2.hdf5")
+TSO.save(eos,          "eos_uv_step2.hdf5")
+TSO.save(opacities[1], "opacities_uv_step2.hdf5")
 
 # Cut off the edges and make one uniform Ei grid 
 new_eos, new_opacities = TSO.unify(eos, opacities)
 
 # Save the end result
-TSO.save(new_eos, "unified_eos_step2.hdf5")
-TSO.save(new_opacities[1], "unified_opacities_step2.hdf5")
-TSO.save(new_opacities[2], "unified_Copacities_step2.hdf5")
-TSO.save(new_opacities[3], "unified_Lopacities_step2.hdf5")
-TSO.save(new_opacities[4], "unified_Sopacities_step2.hdf5")
+TSO.save(new_eos,          "unified_eos_uv_step2.hdf5")
+TSO.save(new_opacities[1],  "unified_opacities_uv_step2.hdf5")
+TSO.save(new_opacities[2], "unified_Copacities_uv_step2.hdf5")
+TSO.save(new_opacities[3], "unified_Lopacities_uv_step2.hdf5")
+TSO.save(new_opacities[4], "unified_Sopacities_uv_step2.hdf5")
 
 ##################################################################################################
 # You can filter the models with this if you did not clean before

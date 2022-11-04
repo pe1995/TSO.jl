@@ -364,7 +364,10 @@ end
 
 ### Computation of binned properties ######################################
 
-"""Loop through eos and integrate quantities in the opacity table according to the chosen binning."""
+"""
+Loop through eos and integrate quantities in the opacity table according to the chosen binning.
+Return ϵ in the κ_ross field of the opacity table.
+"""
 function box_integrated(binning, weights, eos, opacities, scattering)
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
@@ -417,9 +420,10 @@ function box_integrated(binning, weights, eos, opacities, scattering)
     wthick = T(1.0) .- wthin
 
     # Use rosseland average where optically thick, Planck average where optically thin
-    return log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(SBox), log.(κBox ./ χBox)
+    #return log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(SBox), log.(κBox ./ χBox)
     #return log.(χBox), log.(SBox), log.(κBox ./ χBox)
 
+    RegularOpacityTable(log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(κBox ./ χBox), log.(SBox), collect(T, 1:radBins), false)
 end
 
 ###########################################################################

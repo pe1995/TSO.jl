@@ -1,8 +1,10 @@
 #!/bin/sh
 #SBATCH --job-name='TSO'
-#SBATCH --nodes=3
-#SBATCH --ntasks=100
-#SBATCH --time=05:00:00
-#SBATCH --mem=92G
+#SBATCH --nodes=4
+#SBATCH --ntasks=128
+#SBATCH --ntasks-per-node=32
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=100G
+#SBATCH --partition=debug
     
 julia create_table.jl

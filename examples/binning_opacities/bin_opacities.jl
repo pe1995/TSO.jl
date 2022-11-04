@@ -25,4 +25,4 @@ binned_opacities = TSO.box_integrated(binning, weights, eos, opacities, opacitie
 
 
 # Save everything in the dispatch format
-TSO.for_dispatch(eos, binned_opacities...)
+TSO.for_dispatch(eos, binned_opacities)

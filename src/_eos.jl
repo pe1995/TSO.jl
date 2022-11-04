@@ -391,6 +391,8 @@ function derivative(t::RegularEoSTable)
     tab_new
 end
 
+
+
 ########################################################################################################################
 
 """Interpolate tables to common, equidistant lnEi grid."""
@@ -491,13 +493,85 @@ function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.01) where {N, E<:E
     end
 end
 
+
+
+
+########################################################################################################################
+
+"""Combine the opacities from two opacity tables on a common EoS grid."""
+function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) where {E1<:EoSTable, O1<:OpacityTable, E2<:EoSTable, O2<:OpacityTable}
+    eaxis = ndims(eos.lnT)==1 ? false : true
+
+    # decide on new grids
+    lnVar_new = eaxis ? common_grid(eos1.lnEi,  eos2.lnEi) : common_grid(eos1.lnT,  eos2.lnT)
+    lnRho_new = common_grid(eos1.lnRho, eos2.lnRho)
+
+    # interpolate both tables to new grid
+    eos1_new, opacities1_new = regrid(eos1, opacities1, lnRho_new, lnVar_new)
+    eos2_new, opacities2_new = regrid(eos2, opacities2, lnRho_new, lnVar_new)
+
+    # Add the wavelength arrays together
+    λ_new = vact(opacities1_new.λ, opacities2_new.λ)
+    umask = unique(i->λ_new[i], eachindex(λ_new))
+
+    κ_new = cat(opacities1_new.κ,   opacities2_new.κ,   dims=3)[:,:,umask]
+    s_new = cat(opacities1_new.src, opacities2_new.src, dims=3)[:,:,umask]
+
+    combined_opacities = RegularOpacityTable(κ_new, opacities2_new.κ_ross, s_new, λ_new, opacities2_new.optical_depth)
+
+    eos2_new, combined_opacities
+end
+
+"""Get grid from 2 grids by picking the union."""
+common_grid(a1, a2) = begin
+    aMax = min(a1[end], a2[end])
+    aMin = min(a1[1],   a2[1])
+    aLen = min(length(a1), length(a2))
+    collect(range(aMin, aMax,length=aLen))
+end
+
+"""Interpolate eos+opacites to the new grid."""
+function regrid(eos::E, opacities::O, new_rho, new_var) where {E<:EoSTable, O<:OpacityTable}
+    eaxis = ndims(eos.lnT)==1 ? false : true
+    var2  = eaxis ? :lnT : :lnEi
+
+    lnVar2_new = eaxis ? similar(eos.lnT) : similar(eos.lnEi)
+    lnPg_new   = similar(eos.lnPg)
+    lnRoss_new = similar(eos.lnRoss)
+    lnNe_new   = similar(eos.lnNe)
+    
+    k_new     = similar(opacities.κ)
+    kRoss_new = similar(opacities.κ_ross)
+    S_new     = similar(opacities.src)
+    
+    rho_input  = similar(new_var)
+
+    for i in eachindex(new_rho)
+        rho_input .= new_rho[i]
+        lnVar2_new[:, i] = lookup(eos, var2,    rho_input, new_var)
+        lnPg_new[  :, i] = lookup(eos, :lnPg,   rho_input, new_var)
+        lnRoss_new[:, i] = lookup(eos, :lnRoss, rho_input, new_var)
+        lnNe_new[  :, i] = lookup(eos, :lnNe,   rho_input, new_var)
+
+        kRoss_new[ :, i] = lookup(eos, opacities, :κ_ross, rho_input, new_var)
+        for j in eachindex(opacities.λ)
+            k_new[:, i, j] = lookup(eos, :κ,   rho_input, new_var, j)
+            S_new[:, i, j] = lookup(eos, :src, rho_input, new_var, j)
+        end
+    end
+ 
+    return eaxis ? 
+        (RegularEoSTable(new_rho, lnVar2_new, new_var,    lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, opacities.λ, opacities.optical_depth)) :
+        (RegularEoSTable(new_rho, new_var,    lnVar2_new, lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, opacities.λ, opacities.optical_depth))
+end
+
 ########################################################################################################################
 
 function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
     sT = length(lnT)
     names_cols = String[]
 
-    nbins = ceil(Int, length(lnT) / 100)
+    nbins = 1#ceil(Int, length(lnT) / 100)
     ibins = TSO.split_similar(lnT, nbins, mask=true)
 
     # write columns to file
@@ -522,7 +596,7 @@ function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example
     sT = length(lnT)
     names_cols = String[]
 
-    nbins = ceil(Int, size(lnT, 1) / 100)
+    nbins = 1#ceil(Int, size(lnT, 1) / 100)
     ibins = TSO.split_similar(lnT[:, 1], nbins, mask=true)
 
     # write columns to file
@@ -799,6 +873,8 @@ get_TSO_index(name) = begin
     d_col, e_r
 end
 
+
+
 ########################################################################################################################
 
 function Bν(λ::AbstractFloat, T::AbstractArray)
@@ -851,4 +927,22 @@ end
     end
 
     B
+end
+
+
+
+########################################################################################################################
+
+"""Convert z,T,ρ to z,E,ρ model based on EoS."""
+function lnT_to_lnEi(model::AbstractArray, eos::EoSTable)
+    z, lnρ, lnT   = model[:, 1], log.(model[:, 3]), log.(model[:, 2]) 
+
+    lnEi = similar(lnT)
+    emin,emax,_,_ = limits(eos)
+
+    for i in eachindex(z)
+        lnEi[i] = bisect(eos, lnRho=lnρ[i], lnT=lnT[i], lnEi=[emin, emax])
+    end
+    
+    hcat(z, exp.(lnEi), exp.(lnρ))
 end

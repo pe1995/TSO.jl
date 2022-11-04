@@ -11,8 +11,8 @@ load(ts_help::Ref{String}, path::String) = begin
     ts_help[]
 end
 
-load_wrapper(path=joinpath(@__FILE__, "../../../../TurboSpectrum-Wrapper") ) = load(TSwrapper, path)
-load_TS(path=joinpath(@__FILE__, "../../../../Turbospectrum_NLTE") )         = load(TS, path)
+load_wrapper(path=joinpath(dirname(@__FILE__), "../../TurboSpectrum-Wrapper/") ) = load(TSwrapper, path)
+load_TS(     path=joinpath(dirname(@__FILE__), "../../Turbospectrum_NLTE/") )    = load(TS, path)
 
 
 ### General Convenience #######################################################
@@ -229,8 +229,9 @@ function srun_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qu
         babsma_conf = babsma_conf * " $(zs) $(abunds) \n"
     end
 
-    ddir = @inTS("")
-    command = `srun -N 1 -n 1 -c 1 --mem=$(memMB)mb --time=$(timeout) --exclusive -D $(ddir) ./exec/babsma_lu`
+    ddir    = @inTS("")
+    t       = !isnothing(timeout) ? "--time=$(timeout) " : ""
+    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M $(t)--exclusive -D $(ddir) ./exec/babsma_lu`
     
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "babsma_$(id).log"), 
@@ -317,7 +318,8 @@ function srun_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResu
     end
 
     ddir    = @inTS("")
-    command = `srun -N 1 -n 1 -c 1 --mem=$(memMB)mb --time=$(timeout) --exclusive -D $(ddir) ./exec/bsyn_lu`
+    t       = !isnothing(timeout) ? "--time=$(timeout) " : ""
+    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M $(t)--exclusive -D $(ddir) ./exec/bsyn_lu`
     
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "bsyn_$(id).log"), 
@@ -396,13 +398,20 @@ end
 ### Read slurm setup ##########################################################
 
 slurm_setup() = begin
-    @assert "SLURM_NTASKS_PER_NODE" in keys(ENV)
-    @assert "SLURM_MEM_PER_NODE" in keys(ENV)
+    mem = if !("SLURM_NTASKS_PER_NODE" in keys(ENV))
+        1000
+    else
+        @assert "SLURM_NTASKS_PER_NODE" in keys(ENV)
+        @assert "SLURM_MEM_PER_NODE" in keys(ENV)
 
-    tasks, mem = parse.(Int, [ENV["SLURM_NTASKS_PER_NODE"], ENV["SLURM_MEM_PER_NODE"]])
-    mem = floor(Int, mem / tasks)
+        tasks, mem = parse.(Int, [ENV["SLURM_NTASKS_PER_NODE"], ENV["SLURM_MEM_PER_NODE"]])
+        mem = floor(Int, mem / tasks)
 
-    @info "Slurm setup: \n  tasks per note=$(tasks)\n  mem per note (MB)=$(mem)"
+        @info "Slurm setup: \n  tasks per note=$(tasks)\n  mem per task (MB)=$(mem)"
+
+        floor(Int, mem / tasks)
+    end
+
     mem
 end
 

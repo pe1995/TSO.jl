@@ -31,11 +31,13 @@ end
 OpacityTable = Union{RegularOpacityTable, IrregularOpacityTable} 
 EoSTable     = Union{RegularEoSTable, IrregularEoSTable} 
 
+
 ### Convenience Constructor functions
 Opacity(args...; regular=true, kwargs...) = regular ? RegularOpacityTable(args...; kwargs...) : IrregularOpacityTable(args...; kwargs...)
 EoS(args...; regular=true, kwargs...)     = regular ? RegularEoSTable(args...; kwargs...)     : IrregularEoSTable(args...; kwargs...)
 
 RegularOpacityTable(κ::Array, κ_ross::Array, src::Array; optical_depth=false) = RegularOpacityTable(κ, κ_ross, src, optical_depth) 
+
 
 ### General functions
 limits(eos::EoSTable) = begin
@@ -46,6 +48,7 @@ limits(eos::EoSTable) = begin
     
     var_min, var_max, minimum(eos.lnRho), maximum(eos.lnRho)
 end
+
 
 ### Writing in Dispatch format
 function tabparam(EOSTableFile, RhoEiRadTableFile, nEiBin, nRhoBin, nRadBins, EiMin, EiMax, RhoMin, RhoMax)
@@ -93,3 +96,6 @@ function for_dispatch(eos::EoSTable, χ, S, ϵ)
 
     tabparam(eos, size(χ, 3))
 end
+
+for_dispatch(eos::EoSTable, opacities::OpacityTable) = for_dispatch(eos, opacities.κ, opacities.src, opacities.κ_ross)
+
