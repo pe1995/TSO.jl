@@ -215,14 +215,24 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
     RegularEoSTable(lnRho, log.(Tg2), lnEi2, lnPg2, lnRoss2, lnNe2)
 end
 
+nanmin(x) = isnan(x) ? Inf  : x
+nanmax(x) = isnan(x) ? -Inf : x
+
 """A simple method to interpolate the EoS to new Energy grid."""
 function energy_grid(t::RegularEoSTable)
     T = eltype(t.lnEi)
 
     # new axis range
-    lnEi2min = minimum(view(t.lnEi, :, :, 1))
-    lnEi2max = maximum(view(t.lnEi, :, :, 1))
-    lnEi2r   = lnEi2max - lnEi2min
+    @show size(t.lnEi)
+    lnEi2min = minimum(nanmin, t.lnEi)
+    lnEi2max = maximum(nanmax, t.lnEi)
+
+    #@show maximum(nanabs, minimum(t.lnEi, dims=2)) minimum(nanabs, maximum(t.lnEi, dims=2))
+    #@show minimum(nanmin, t.lnEi, dims=2) maximum(nanmax, t.lnEi, dims=2)
+
+    # The upper limit should not correspond to a temperature larger than 500,000K (total upper limit)
+    #e_5 = first(lookup(t, :lnEi, [t.lnRho[end]], [log(500000)]))
+    #lnEi2max = min(lnEi2max, e_5)
 
     # new regular axis
     nEiBin  = size(t.lnEi, 1)
