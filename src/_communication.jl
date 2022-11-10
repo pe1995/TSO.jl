@@ -4,6 +4,7 @@ const TSwrapper   = Ref("")
 const TS          = Ref("")
 const WrapperPy   = PyNULL()
 const computeOpac = PyNULL()
+const SlurmEnv    = Ref(false)
 
 """Load the path of the TS codes."""
 load(ts_help::Ref{String}, path::String) = begin
@@ -119,7 +120,7 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00")
         atmos, modelOpacFile = prepare_TS!(setup, atmFile)
         
         id  = "$(atmos.id)_$(setup.jobID)"
-        job = srun_babsma(setup.ts_input, elementalAbundances, atmos, modelOpacFile, id, 
+        job = run_babsma(setup.ts_input, elementalAbundances, atmos, modelOpacFile, id, 
                             quite=setup.debug,
                             memMB=mem, timeout=timeout)
         
@@ -150,7 +151,7 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
         specResultFile = "./$(atmos.ID)"
 
         id  = "$(atmos.id)_$(setup.jobID)"
-        job = srun_bsyn(setup.ts_input, elementalAbundances, atmos, modelOpacFile,
+        job = run_bsyn(setup.ts_input, elementalAbundances, atmos, modelOpacFile,
                         specResultFile, id, 
                         quite=setup.debug, memMB=mem, timeout=timeout)
         
@@ -197,7 +198,7 @@ end
     quite : boolean
         controls details printout of the progress info
 """
-function srun_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; quite=true,
+function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; quite=true,
                         memMB=70000/40, timeout="5:00:00")
     lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
     lmax  = @sprintf "%.3f" ts_input["LAMBDA_MAX"]
@@ -230,15 +231,24 @@ function srun_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qu
     end
 
     ddir    = @inTS("")
-    t       = !isnothing(timeout) ? "--time=$(timeout) " : ""
-    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M $(t)--exclusive -D $(ddir) ./exec/babsma_lu`
-    
+    cdir    = pwd()
+    command = if SlurmEnv[] 
+        !isnothing(timeout) ?
+            Cmd(`srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/babsma_lu`) :
+            Cmd(`srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --exclusive -D $(ddir) ./exec/babsma_lu`)
+    else
+        cd(ddir)
+        `./exec/babsma_lu`
+    end
+
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "babsma_$(id).log"), 
                               stderr=joinpath(ddir, "babsma_$(id).err"), 
                               stdin =p), wait=false)
     write(p, babsma_conf)
     close(p)
+
+    !SlurmEnv[] && cd(cdir)
 
     return r
 end
@@ -277,7 +287,7 @@ end
     quite : boolean
         controls details printout of the progress info
 """
-function srun_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResultFile, id; quite = true,
+function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResultFile, id; quite = true,
                                                 memMB=70000/40, timeout="5:00:00")
     lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
     lmax  = @sprintf "%.3f" ts_input["LAMBDA_MAX"]
@@ -318,8 +328,15 @@ function srun_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResu
     end
 
     ddir    = @inTS("")
-    t       = !isnothing(timeout) ? "--time=$(timeout) " : ""
-    command = `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M $(t)--exclusive -D $(ddir) ./exec/bsyn_lu`
+    cdir    = pwd()
+    command = if SlurmEnv[] 
+        !isnothing(timeout) ?
+            `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/bsyn_lu` :
+            `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --exclusive -D $(ddir) ./exec/bsyn_lu`
+    else
+        cd(ddir)
+        `./exec/bsyn_lu`
+    end
     
     p = Pipe()
     r = run(pipeline(command, stdout=joinpath(ddir, "bsyn_$(id).log"), 
@@ -327,6 +344,8 @@ function srun_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResu
                               stdin =p), wait=false)
     write(p, bsyn_config)
     close(p)
+
+    !SlurmEnv[] && cd(cdir)
 
     return r
 end
@@ -398,6 +417,13 @@ end
 ### Read slurm setup ##########################################################
 
 slurm_setup() = begin
+    SlurmEnv[] = if "SLURM_NTASKS" in keys(ENV)
+        true
+    else
+        @warn "No slurm environment detected. Jobs will be submitted without resource management!"
+        false
+    end
+
     mem = if !("SLURM_NTASKS_PER_NODE" in keys(ENV))
         1500
     else

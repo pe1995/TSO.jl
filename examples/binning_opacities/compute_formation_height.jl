@@ -14,7 +14,7 @@ eos = TSO.reload(TSO.RegularEoSTable, "unified_eos_step2.hdf5")
 # For any model, compute the internal energy given T, rho by bisecting using the EoS
 solar_model   = readdlm("staggertest.dat", skipstart=2)
 z, lnρ, lnT   = solar_model[:, 1], log.(solar_model[:, 3]), log.(solar_model[:, 2]) 
-model         = TSO.lnT_to_lnEi(model, eos)
+model         = TSO.lnT_to_lnEi(solar_model, eos)
 
 
 # Compute the optical depth scale + the formation height
