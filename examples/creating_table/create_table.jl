@@ -15,10 +15,10 @@ using Glob
 using Interpolations
 
 
-TSO.load_TS()        # Set the TS path
-TSO.load_wrapper()   # Set the Wrapper path
-TSO.move_output()    # move previous output to garbage folder in wrapper
-TSO.import_wrapper() # import the python modules of the wrapper, make them avail. to TSO.jl
+TSO.load_TS()                            # Set the TS path
+TSO.load_wrapper()                       # Set the Wrapper path
+TSO.move_output("backup/UV_opacities")   # move previous output to garbage folder in wrapper
+TSO.import_wrapper()                     # import the python modules of the wrapper, make them avail. to TSO.jl
 
 
 time = if length(ARGS) >= 1
@@ -32,8 +32,8 @@ end
 ##################################################################################################
 
 # Creating initial set of tables
-lnT = range(log(1.1e3), log(5e5); length=200)
-lnρ = range(log(1e-15), log(1e-3); length=200)
+lnT = range(log(1.1e3), log(5e5); length=191)
+lnρ = range(log(1e-15), log(1e-3); length=191)
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
 
 
@@ -51,7 +51,7 @@ begin
     ts_root = TSO.@inTS ""
    
     ## list of model atmospheres to use
-    atmos_list   = TSO.@inWrapper "example/models/TSO_list.in"
+    atmos_list = TSO.@inWrapper "example/models/TSO_list.in"
 
     ## path to model atmospheres 
     atmos_path = TSO.@inWrapper "example/models/"

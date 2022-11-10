@@ -399,17 +399,16 @@ end
 
 slurm_setup() = begin
     mem = if !("SLURM_NTASKS_PER_NODE" in keys(ENV))
-        1000
+        1500
     else
         @assert "SLURM_NTASKS_PER_NODE" in keys(ENV)
         @assert "SLURM_MEM_PER_NODE" in keys(ENV)
 
-        tasks, mem = parse.(Int, [ENV["SLURM_NTASKS_PER_NODE"], ENV["SLURM_MEM_PER_NODE"]])
-        mem = floor(Int, mem / tasks)
+        tasks, m = parse.(Int, [ENV["SLURM_NTASKS_PER_NODE"], ENV["SLURM_MEM_PER_NODE"]])
 
-        @info "Slurm setup: \n  tasks per note=$(tasks)\n  mem per task (MB)=$(mem)"
+        @info "Slurm setup: \n  tasks per note=$(tasks)\n  mem per task (MB)=$(floor(Int, m / tasks))"
 
-        floor(Int, mem / tasks)
+        floor(Int, m / tasks)
     end
 
     mem
