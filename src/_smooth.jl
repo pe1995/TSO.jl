@@ -5,7 +5,8 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
     m = smooth!(eos, return_missing=true, along=along)
 
     # return if they are all present, nothing to smooth here
-    all(.!m) && return
+    isnothing(m) && return
+    all(.!m)     && return
 
     # check if we have an energy axis
     eaxis = ndims(eos.lnT) > 1

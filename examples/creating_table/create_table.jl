@@ -15,10 +15,10 @@ using Glob
 using Interpolations
 
 
-TSO.load_TS()                            # Set the TS path
-TSO.load_wrapper()                       # Set the Wrapper path
-TSO.move_output("backup/UV_opacities")   # move previous output to garbage folder in wrapper
-TSO.import_wrapper()                     # import the python modules of the wrapper, make them avail. to TSO.jl
+TSO.load_TS()           # Set the TS path
+TSO.load_wrapper()      # Set the Wrapper path
+TSO.move_output()       # move previous output to garbage folder in wrapper
+TSO.import_wrapper()    # import the python modules of the wrapper, make them avail. to TSO.jl
 
 
 time = if length(ARGS) >= 1
@@ -99,68 +99,80 @@ begin
     ## Create the setup object
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
+    
+    wvl_set = "UV_dense"
 end
-@show linelist atmos_path atmos_list ts_root
 
 # Execute the code in parallel over all nodes/tasks #################################################
 # specified in the slurm environment
 # NEW: Directly run the TS as job steps of the current slurm installation
 TSO.babsma!(setup, [], timeout=time) 
-#TSO.bsyn!(  setup, [], timeout=time)
 
 # Now the table can be read, inverted and run again with opacities
 lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
 eos = TSO.load(TSO.EoSTable, lot)                                                        # Read from file and combine
 
 
-TSO.save(eos, "eos_uv_raw_step1.hdf5")
+# Save an intermediate step EoS
+TSO.save(eos, "eos_$(wvl_set)_raw_step1.hdf5")
+
 
 # Apply smoothing if needed
 TSO.smooth!(eos)                                                                         # Interpolate where NaN
 
+
 # Invert the EoS and get new grid
 new_eos = TSO.energy_grid(eos)                                                           # Switch from T to E grid
                                                                                          # Could also use energy_grid(), which is simpler
+
 # Save the eos
-TSO.save(new_eos, "eos_uv_step1.hdf5")
+TSO.save(new_eos, "eos_$(wvl_set)_step1.hdf5")
 
-#exit()
 ##################################################################################################
-
 # create the new TS input tables with this eos
 ee, rr = TSO.meshgrid(new_eos.lnEi, new_eos.lnRho)
 TSO.write_as_stagger(new_eos.lnT, rr)   
+
+
+# Clean the old variables
+eos     = nothing
+new_eos = nothing
+lot     = nothing
+
 
 # NEW: Directly run the TS as job steps of the current slurm installation
 TSO.babsma!(setup, [], timeout=time) 
 TSO.bsyn!(  setup, [], timeout=time)
 
+
 # Now the table can be read, inverted to save
-lot = glob("_TSOeos_*_TSO.eos")                                                              # List of EoS tables
-opacitieseos, opacities = TSO.load(TSO.EoSTable, TSO.OpacityTable, lot, get_individual=true) # Return cont/line/scat tables separate
+lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
+eos, opacities = TSO.load(TSO.EoSTable, TSO.OpacityTable, lot, get_individual=true)      # Return cont/line/scat tables separate
 
 
-TSO.save(eos, "eos_uv_raw_step2.hdf5")
-TSO.save(opacities[1],  "opacities_uv_raw_step2.hdf5")
-TSO.save(opacities[2], "Copacities_uv_raw_step2.hdf5")
-TSO.save(opacities[3], "Lopacities_uv_raw_step2.hdf5")
-TSO.save(opacities[4], "Sopacities_uv_raw_step2.hdf5")
+TSO.save(eos, "eos_$(wvl_set)_raw_step2.hdf5")
+TSO.save(opacities[1],  "opacities_$(wvl_set)_raw_step2.hdf5")
+TSO.save(opacities[2], "Copacities_$(wvl_set)_raw_step2.hdf5")
+TSO.save(opacities[3], "Lopacities_$(wvl_set)_raw_step2.hdf5")
+TSO.save(opacities[4], "Sopacities_$(wvl_set)_raw_step2.hdf5")
 
 
 # Apply smoothing if needed
 TSO.smooth!(eos, opacities)
-TSO.save(eos,          "eos_uv_step2.hdf5")
-TSO.save(opacities[1], "opacities_uv_step2.hdf5")
+TSO.save(eos,          "eos_$(wvl_set)_step2.hdf5")
+TSO.save(opacities[1], "opacities_$(wvl_set)_step2.hdf5")
+
 
 # Cut off the edges and make one uniform Ei grid 
 new_eos, new_opacities = TSO.unify(eos, opacities)
 
+
 # Save the end result
-TSO.save(new_eos,          "unified_eos_uv_step2.hdf5")
-TSO.save(new_opacities[1],  "unified_opacities_uv_step2.hdf5")
-TSO.save(new_opacities[2], "unified_Copacities_uv_step2.hdf5")
-TSO.save(new_opacities[3], "unified_Lopacities_uv_step2.hdf5")
-TSO.save(new_opacities[4], "unified_Sopacities_uv_step2.hdf5")
+TSO.save(new_eos,          "unified_eos_$(wvl_set)_step2.hdf5")
+TSO.save(new_opacities[1], "unified_opacities_$(wvl_set)_step2.hdf5")
+TSO.save(new_opacities[2], "unified_Copacities_$(wvl_set)_step2.hdf5")
+TSO.save(new_opacities[3], "unified_Lopacities_$(wvl_set)_step2.hdf5")
+TSO.save(new_opacities[4], "unified_Sopacities_$(wvl_set)_step2.hdf5")
 
 ##################################################################################################
 # You can filter the models with this if you did not clean before
