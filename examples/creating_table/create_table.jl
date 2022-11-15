@@ -62,8 +62,10 @@ begin
     ## path to the linelist(s)
     #linelist = ['/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt', '/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata', '/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn']
     #linelist = [ TSO.@inTS("../TSwrapperOpac/nlte_ges_linelist.txt"), TSO.@inTS("../TSwrapperOpac/Hlinedata")]
-    linelist = abspath.(["LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
-                         "LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list"])
+    linelist = abspath.([#"LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
+                         #"LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list",
+                         "LINE-LISTS/25500-200000_cut-4/atom_25500-200000.list",
+                         "LINE-LISTS/ADDITIONAL-LISTS/Hlinedata"])
                 #"/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn"]
 
     ## Dont use this for opacity tables
@@ -75,12 +77,12 @@ begin
     #nlte_config += [ Ba : [ 'Ba/NLTEgrid_Ba_MARCS_May-10-2021.bin', 'Ba/auxData_Ba_MARCS_May-10-2021.txt', 'Ba/atom.ba111' ] ]
 
     ## starting wavelenght, AA
-    lam_start = 1000
-    #lam_start = 26000
+    #lam_start = 1000
+    lam_start = 26000
 
     ## last wavelenght, AA
-    lam_end =  26000
-    #lam_end = 200000
+    #lam_end =  26000
+    lam_end = 200000
 
     ## resolution per wavelenght (R capital)
     resolution = 25000
@@ -100,13 +102,44 @@ begin
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
     
-    wvl_set = "UV_dense"
-end
+    wvl_set = "IR_Magg"
 
+    magg_2022 = [(TSO.atom_id(:H ), 12.0),
+                 (TSO.atom_id(:C ), 8.56),
+                 (TSO.atom_id(:N ), 7.98),
+                 (TSO.atom_id(:O ), 8.77),
+                 (TSO.atom_id(:F ), 4.40),
+                 (TSO.atom_id(:Ne), 8.15),
+                 (TSO.atom_id(:Na), 6.29),
+                 (TSO.atom_id(:Mg), 7.55),
+                 (TSO.atom_id(:Al), 6.43),
+                 (TSO.atom_id(:Si), 7.59),
+                 (TSO.atom_id(:P ), 5.41),
+                 (TSO.atom_id(:S ), 7.16),
+                 (TSO.atom_id(:Cl), 5.25),
+                 (TSO.atom_id(:Ar), 6.50),
+                 (TSO.atom_id(:K ), 5.14),
+                 (TSO.atom_id(:Ca), 6.37),
+                 (TSO.atom_id(:Sc), 3.07),
+                 (TSO.atom_id(:Ti), 4.94),
+                 (TSO.atom_id(:V ), 3.89),
+                 (TSO.atom_id(:Cr), 5.74),
+                 (TSO.atom_id(:Mn), 5.52),
+                 (TSO.atom_id(:Fe), 7.50),
+                 (TSO.atom_id(:Co), 4.95),
+                 (TSO.atom_id(:Ni), 6.24)]
+    
+    # Pick the abundances
+    abundances = magg_2022
+    @info "Modify the following abundances: (Species, ID, Abundance)"
+    for a in abundances
+        @info "$(TSO.id_atom(a[1])) - $(a[1]) - $(a[2])"
+    end
+end
 # Execute the code in parallel over all nodes/tasks #################################################
 # specified in the slurm environment
 # NEW: Directly run the TS as job steps of the current slurm installation
-TSO.babsma!(setup, [], timeout=time) 
+TSO.babsma!(setup, abundances, timeout=time) 
 
 # Now the table can be read, inverted and run again with opacities
 lot = glob("_TSOeos_*_TSO.eos")                                                          # List of EoS tables
@@ -141,8 +174,8 @@ lot     = nothing
 
 
 # NEW: Directly run the TS as job steps of the current slurm installation
-TSO.babsma!(setup, [], timeout=time) 
-TSO.bsyn!(  setup, [], timeout=time)
+TSO.babsma!(setup, abundances, timeout=time) 
+TSO.bsyn!(  setup, abundances, timeout=time)
 
 
 # Now the table can be read, inverted to save

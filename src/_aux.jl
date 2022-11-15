@@ -101,15 +101,30 @@ get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fna
     
 
 ## Constants (In agreement with Tabgen)
-const EiExtra    = 5.0                         # extra eV per H atom to add
-const KBoltzmann = 1.380658E-16                # Boltzman's cst. [erg/K]
-const CLight     = 2.99792458E+10              # Speed of light [cm/s]
-const HPlanck    = 6.6260755E-27               # Planck's constant [erg s]
-const ev_to_erg  = 1.60218e-12                 # conversion
-const HIonPot    = 13.595                      # hydrogen ioniz. potential [eV]
-const twohc2     = 2.0e0 *HPlanck*CLight^2
-const hc_k       = HPlanck*CLight/KBoltzmann
-const aa_to_cm   = 1.0e-8
+const EiExtra       = 5.0                         # extra eV per H atom to add
+const KBoltzmann    = 1.380658E-16                # Boltzman's cst. [erg/K]
+const CLight        = 2.99792458E+10              # Speed of light [cm/s]
+const HPlanck       = 6.6260755E-27               # Planck's constant [erg s]
+const ev_to_erg     = 1.60218e-12                 # conversion
+const HIonPot       = 13.595                      # hydrogen ioniz. potential [eV]
+const twohc2        = 2.0e0 *HPlanck*CLight^2
+const hc_k          = HPlanck*CLight/KBoltzmann
+const aa_to_cm      = 1.0e-8
+const atomic_number = Symbol.(strip(i, ' ') for i in [
+        "H ","He","Li","Be","B ","C ","N ","O ","F ",         # |  1 -  9
+        "Ne","Na","Mg","Al","Si","P ","S ","Cl","Ar",         # | 10 - 18
+        "K ","Ca","Sc","Ti","V ","Cr","Mn","Fe","Co",         # | 19 - 27
+        "Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",         # | 28 - 36
+        "Rb","Sr","Y ","Zr","Nb","Mo","Tc","Ru","Rh",         # | 37 - 45
+        "Pd","Ag","Cd","In","Sn","Sb","Te","I ","Xe",         # | 46 - 54
+        "Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu",         # | 55 - 63
+        "Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf",         # | 64 - 72
+        "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",         # | 73 - 81
+        "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",         # | 82 - 90
+        "Pa","U "]) 
+
+atom_id(name)   = findfirst(atomic_number.==name)
+id_atom(number) = atomic_number[number]
 
 ## Plot default setup that kind-of works
 #=
