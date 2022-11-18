@@ -113,6 +113,21 @@ const twohc2     = 2.0e0 *HPlanck*CLight^2
 const hc_k       = HPlanck*CLight/KBoltzmann
 const aa_to_cm   = 1.0e-8
 const σ_S        = 5.6704e-5
+const atomic_number = Symbol.(strip(i, ' ') for i in [
+        "H ","He","Li","Be","B ","C ","N ","O ","F ",         # |  1 -  9
+        "Ne","Na","Mg","Al","Si","P ","S ","Cl","Ar",         # | 10 - 18
+        "K ","Ca","Sc","Ti","V ","Cr","Mn","Fe","Co",         # | 19 - 27
+        "Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",         # | 28 - 36
+        "Rb","Sr","Y ","Zr","Nb","Mo","Tc","Ru","Rh",         # | 37 - 45
+        "Pd","Ag","Cd","In","Sn","Sb","Te","I ","Xe",         # | 46 - 54
+        "Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu",         # | 55 - 63
+        "Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf",         # | 64 - 72
+        "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",         # | 73 - 81
+        "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",         # | 82 - 90
+        "Pa","U "]) 
+
+atom_id(name)   = findfirst(atomic_number.==name)
+id_atom(number) = atomic_number[number]
 
 ## Plot default setup that kind-of works
 #=

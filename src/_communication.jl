@@ -429,7 +429,7 @@ slurm_setup() = begin
     end
 
     mem = if !("SLURM_NTASKS_PER_NODE" in keys(ENV))
-        1000
+        1500
     else
         @assert "SLURM_NTASKS_PER_NODE" in keys(ENV)
         @assert "SLURM_MEM_PER_NODE" in keys(ENV)
