@@ -9,6 +9,7 @@ using FortranFiles
 using PyCall
 using Glob
 using HDF5
+using Statistics
 
 # Interface
 abstract type AbstractTable end
@@ -24,5 +25,6 @@ include("_eos.jl")
 include("_opacities.jl")
 include("_smooth.jl")
 include("_binning.jl")
+include("_transfer.jl")
 
 end

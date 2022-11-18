@@ -505,35 +505,84 @@ end
 
 
 
-
 ########################################################################################################################
 
 """Combine the opacities from two opacity tables on a common EoS grid."""
 function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) where {E1<:EoSTable, O1<:OpacityTable, E2<:EoSTable, O2<:OpacityTable}
-    eaxis = ndims(eos.lnT)==1 ? false : true
+    eaxis = ndims(eos1.lnT)==1 ? false : true
+    eaxis && @assert ndims(eos2.lnT)>1
 
     # decide on new grids
     lnVar_new = eaxis ? common_grid(eos1.lnEi,  eos2.lnEi) : common_grid(eos1.lnT,  eos2.lnT)
     lnRho_new = common_grid(eos1.lnRho, eos2.lnRho)
 
-    # interpolate both tables to new grid
-    eos1_new, opacities1_new = regrid(eos1, opacities1, lnRho_new, lnVar_new)
-    eos2_new, opacities2_new = regrid(eos2, opacities2, lnRho_new, lnVar_new)
+    do_regrid = if length(eos1.lnRho) == length(eos2.lnRho)
+        if eaxis 
+            (!all(eos1.lnEi .≈ eos2.lnEi)) | (!all(eos1.lnRho .≈ eos2.lnRho))
+        else
+            (!all(eos1.lnT .≈ eos2.lnT)) | (!all(eos1.lnRho .≈ eos2.lnRho))
+        end
+    else
+        true
+    end
+
+    @info "Interpolation of tables to new, common grid needed: $(do_regrid)"
+
+    # interpolate both tables to new grid 
+    eos1_new, opacities1_new = do_regrid ? regrid(eos1, opacities1, lnRho_new, lnVar_new) : (eos1, opacities1)
+    eos2_new, opacities2_new = do_regrid ? regrid(eos2, opacities2, lnRho_new, lnVar_new) : (eos2, opacities2)
 
     # Add the wavelength arrays together
-    λ_new = vact(opacities1_new.λ, opacities2_new.λ)
+    λ_new = vcat(opacities1_new.λ, opacities2_new.λ)
     umask = unique(i->λ_new[i], eachindex(λ_new))
 
-    κ_new = cat(opacities1_new.κ,   opacities2_new.κ,   dims=3)[:,:,umask]
-    s_new = cat(opacities1_new.src, opacities2_new.src, dims=3)[:,:,umask]
+    κ_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.κ,   opacities2_new.κ,   dims=3)[:,:,umask]
+    s_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.src, opacities2_new.src, dims=3)[:,:,umask]
 
-    combined_opacities = RegularOpacityTable(κ_new, opacities2_new.κ_ross, s_new, λ_new, opacities2_new.optical_depth)
+    #@inbounds for i in eachindex(opacities1_new.λ)
+    #    κ_new[:, :, i] .= opacities1_new.κ[:, :, i]
+    #    s_new[:, :, i] .= opacities1_new.src[:, :, i]
+    #end
+
+    #r = 1:length(opacities1_new.λ)
+    ll = length(opacities1_new.λ) 
+    κ_new[:, :, 1:ll] .= opacities1_new.κ[  :, :, 1:ll]
+    s_new[:, :, 1:ll] .= opacities1_new.src[:, :, 1:ll]
+
+
+    #ll = length(opacities1_new.λ)
+    #@inbounds for i in eachindex(opacities2_new.λ)
+    #    j = ll + i
+    #    κ_new[:, :, j] .= opacities2_new.κ[:, :, i]
+    #    s_new[:, :, j] .= opacities2_new.src[:, :, i]
+    #end
+   
+    κ_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= opacities2_new.κ[  :, :, 1:length(opacities2_new.λ)]
+    s_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= opacities2_new.src[:, :, 1:length(opacities2_new.λ)]
+
+    κ_new   = κ_new[:, :, umask]
+    s_new   = s_new[:, :, umask]
+    λ_final = λ_new[umask]
+
+    # sort
+    smask   = sortperm(λ_final)
+    κ_new   = κ_new[:, :, smask]
+    s_new   = s_new[:, :, smask]
+    λ_final = λ_final[smask]
+
+    combined_opacities = RegularOpacityTable(κ_new, deepcopy(opacities2_new.κ_ross), s_new, λ_final, opacities2_new.optical_depth)
 
     eos2_new, combined_opacities
 end
 
 """Get grid from 2 grids by picking the union."""
-common_grid(a1, a2) = begin
+common_grid(a1, a2) = begin    
+    if length(a1) == length(a2)
+        if all(a1 .≈ a2)
+            return deepcopy(a1)
+        end
+    end
+
     aMax = min(a1[end], a2[end])
     aMin = min(a1[1],   a2[1])
     aLen = min(length(a1), length(a2))
@@ -556,24 +605,31 @@ function regrid(eos::E, opacities::O, new_rho, new_var) where {E<:EoSTable, O<:O
     
     rho_input  = similar(new_var)
 
-    for i in eachindex(new_rho)
+    @inbounds for i in eachindex(new_rho)
         rho_input .= new_rho[i]
-        lnVar2_new[:, i] = lookup(eos, var2,    rho_input, new_var)
-        lnPg_new[  :, i] = lookup(eos, :lnPg,   rho_input, new_var)
-        lnRoss_new[:, i] = lookup(eos, :lnRoss, rho_input, new_var)
-        lnNe_new[  :, i] = lookup(eos, :lnNe,   rho_input, new_var)
+        lnVar2_new[:, i] .= lookup(eos, var2,    rho_input, new_var)
+        lnPg_new[  :, i] .= lookup(eos, :lnPg,   rho_input, new_var)
+        lnRoss_new[:, i] .= lookup(eos, :lnRoss, rho_input, new_var)
+        lnNe_new[  :, i] .= lookup(eos, :lnNe,   rho_input, new_var)
 
-        kRoss_new[ :, i] = lookup(eos, opacities, :κ_ross, rho_input, new_var)
-        for j in eachindex(opacities.λ)
-            k_new[:, i, j] = lookup(eos, :κ,   rho_input, new_var, j)
-            S_new[:, i, j] = lookup(eos, :src, rho_input, new_var, j)
+#        kRoss_new[ :, i] .= lookup(eos, opacities, :κ_ross, rho_input, new_var)
+        @inbounds for j in eachindex(opacities.λ)
+            k_new[:, i, j] .= lookup(eos, opacities, :κ,   rho_input, new_var, j)
+            S_new[:, i, j] .= lookup(eos, opacities, :src, rho_input, new_var, j)
         end
     end
  
     return eaxis ? 
-        (RegularEoSTable(new_rho, lnVar2_new, new_var,    lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, opacities.λ, opacities.optical_depth)) :
-        (RegularEoSTable(new_rho, new_var,    lnVar2_new, lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, opacities.λ, opacities.optical_depth))
+        (RegularEoSTable(new_rho, lnVar2_new, new_var,    lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, deepcopy(opacities.λ), opacities.optical_depth)) :
+        (RegularEoSTable(new_rho, new_var,    lnVar2_new, lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, deepcopy(opacities.λ), opacities.optical_depth))
 end
+
+function cut(opacities::O, λ_lo, λ_hi) where {O<:OpacityTable}
+    mask = (opacities.λ .>= λ_lo ) .& (opacities.λ .< λ_hi)
+    RegularOpacityTable(opacities.κ[:, :, mask], deepcopy(opacities.κ_ross), opacities.src[:, :, mask], opacities.λ[mask], copy(opacities.optical_depth)) 
+end
+
+
 
 ########################################################################################################################
 

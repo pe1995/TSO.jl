@@ -203,6 +203,7 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
     lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
     lmax  = @sprintf "%.3f" ts_input["LAMBDA_MAX"]
     lstep = @sprintf "%.3f" ts_input["LAMBDA_STEP"]
+    tm    = @sprintf "%.1f" ts_input["TMOLIM"]
     feh   = @sprintf "%.3f" atmos.feh
 
     babsma_conf = """
@@ -210,6 +211,7 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
     'LAMBDA_MIN:'    '$(lmin)'
     'LAMBDA_MAX:'    '$(lmax)'
     'LAMBDA_STEP:'   '$(lstep)'
+    'TMOLIM:'        '$(tm)'
     'MARCS-FILE:' '$(ts_input["MARCS-FILE"])'
     'MODELOPAC:' '$(modelOpacFile)'
     'METALLICITY:'    '$(feh)'
@@ -292,12 +294,14 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
     lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
     lmax  = @sprintf "%.3f" ts_input["LAMBDA_MAX"]
     lstep = @sprintf "%.3f" ts_input["LAMBDA_STEP"]
+    tm    = @sprintf "%.1f" ts_input["TMOLIM"]
 
     bsyn_config = """
     'NLTE :'          '$(ts_input["NLTE"])'
     'LAMBDA_MIN:'    '$(lmin)'
     'LAMBDA_MAX:'    '$(lmax)'
     'LAMBDA_STEP:'   '$(lstep)'
+    'TMOLIM:'        '$(tm)'
     'INTENSITY/FLUX:' 'Flux'
     'MARCS-FILE:' '$(ts_input["MARCS-FILE"])'
     'MODELOPAC:'        '$(modelOpacFile)'

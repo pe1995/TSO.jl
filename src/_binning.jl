@@ -27,6 +27,10 @@ struct StaggerBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
+struct Co5boldBins{F<:AbstractFloat} <:OpacityBins
+    bin_edges ::Array{F,2}
+end
+
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
 UniformTabgenBins() = UniformTabgenBins(Float64[])
 
@@ -34,23 +38,45 @@ UniformTabgenBins() = UniformTabgenBins(Float64[])
 TabgenBins = Union{<:EqualTabgenBins, <:UniformTabgenBins, <:CustomTabgenBins}
 TabgenBinning(t::Type{<:OpacityBins}, args...; kwargs...)  = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
+Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 
 ## Functions for filling the bins
 fill(::Type{<:OpacityBins}; kwargs...) = error("Please use specific binning methods.")
 fill(::Type{<:CustomTabgenBins}; bin_edges, kwargs...) = CustomTabgenBins(bin_edges)
 
-function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, kwargs...) 
+fill(::Type{Co5boldBins}; kwargs...) = begin
+    bin_edges = zeros(12, 4)
+
+    bin_edges[1,  3] = 0.15;  bin_edges[1,  4] = 99.0;  bin_edges[1,  1] = 0.0;    bin_edges[1,  2] = 5500.0
+    bin_edges[2,  3] = 0.15;  bin_edges[2,  4] = 99.0;  bin_edges[2,  1] = 5500.0; bin_edges[2,  2] = 1000000.0
+    bin_edges[3,  3] = 0.00;  bin_edges[3,  4] = 0.15;  bin_edges[3,  1] = 0.0;    bin_edges[3,  2] = 6000.0
+    bin_edges[4,  3] = 0.00;  bin_edges[4,  4] = 0.15;  bin_edges[4,  1] = 6000.0; bin_edges[4,  2] = 1000000.0
+    bin_edges[5,  3] = -0.75; bin_edges[5,  4] = 0.00;  bin_edges[5,  1] = 0.0;    bin_edges[5,  2] = 6500.0
+    bin_edges[6,  3] = -0.75; bin_edges[6,  4] = 0.00;  bin_edges[6,  1] = 6500.0; bin_edges[6,  2] = 1000000.0
+    bin_edges[7,  3] = -1.50; bin_edges[7,  4] = -0.75; bin_edges[7,  1] = 0.0;    bin_edges[7,  2] = 1000000.0
+    bin_edges[8,  3] = -2.25; bin_edges[8,  4] = -1.50; bin_edges[8,  1] = 0.0;    bin_edges[8,  2] = 1000000.0
+    bin_edges[9,  3] = -3.00; bin_edges[9,  4] = -2.25; bin_edges[9,  1] = 0.0;    bin_edges[9,  2] = 1000000.0
+    bin_edges[10, 3] = -3.75; bin_edges[10, 4] = -3.00; bin_edges[10, 1] = 0.0;    bin_edges[10, 2] = 1000000.0
+    bin_edges[11, 3] = -4.50; bin_edges[11, 4] = -3.75; bin_edges[11, 1] = 0.0;    bin_edges[11, 2] = 1000000.0
+    bin_edges[12, 3] = -99.0; bin_edges[12, 4] = -4.50; bin_edges[12, 1] = 0.0;    bin_edges[12, 2] = 1000000.0
+
+    Co5boldBins(bin_edges)
+end
+
+function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, λ_low=nothing, kwargs...) 
     # L shaped bins of equal size in log λ and log κ
     nbins = Nbins-1
     n_κ_bins = ceil(Int, 3/12 * (nbins))
     n_λ_bins = Int(nbins - n_κ_bins)
 
     λ_edges = zeros(n_λ_bins+2)
-    l = maximum(log10.(opacities.λ)[(formation_opacity .>κ_low ) .& (log10.(opacities.λ) .<λ_high)])
+    l = isnothing(λ_low) ? 
+            maximum(log10.(opacities.λ)[(formation_opacity .>κ_low ) .& (log10.(opacities.λ) .<λ_high)]) :
+            λ_low
     m = maximum(log10.(opacities.λ))
     r = abs(m - l)
-    l -= 0.01*r
-    m += 0.01*r
+    l = l - 0.01*r
+    m = m + 0.01*r
     λ_edges[2:end] .= collect(range(l, m, length=n_λ_bins+1))
     λ_edges[1] = minimum(log10.(opacities.λ))
 
@@ -59,20 +85,31 @@ function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_l
     k_mask = formation_opacity[mask]
     
     k_edges = zeros(n_κ_bins+1)
-    l = minimum(formation_opacity[mask])
-    m = maximum(formation_opacity[mask])
+    l = minimum(formation_opacity)
+    m = maximum(formation_opacity)
     r = abs(m - l)
-    l -= 0.01*r
-    m += 0.01*r
-    k_edges .= collect(range(l, m, length=n_κ_bins+1))
+    l = l - 0.01*r
+    m = m + 0.01*r
+    l_bin_k_edge = mean(formation_opacity[log10.(opacities.λ) .>= λ_edges[end-1]])
 
+    # Split the part above the first bin equally
+    k_splitted  = split_similar(sort(formation_opacity[mask .& (formation_opacity.>l_bin_k_edge)]), n_κ_bins-1)
+
+    k_edges[1]  = l
+    k_edges[2]  = l_bin_k_edge
+    for b in 2:n_κ_bins
+        k_edges[b+1] = last(k_splitted[b-1])
+    end
+    #k_edges .= collect(range(l, m, length=n_κ_bins+1))
+    k_edges[end] = m
+    
     # Last bin is the one in the top right corner
     bins = zeros(nbins+1 , 4)
     for i in 1:n_λ_bins
         bins[i, 1] = λ_edges[i+1]
         bins[i, 2] = λ_edges[i+2]
         bins[i, 3] = k_edges[1]
-        bins[i, 4] = k_edges[2]
+        bins[i, 4] = l_bin_k_edge
     end
     for i in 1:n_κ_bins
         bins[n_λ_bins+i, 1] = λ_edges[1]
@@ -83,7 +120,7 @@ function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_l
 
     bins[end, 1] = λ_edges[2]
     bins[end, 2] = λ_edges[end]
-    bins[end, 3] = k_edges[2]
+    bins[end, 3] = l_bin_k_edge
     bins[end, 4] = k_edges[end]
 
     StaggerBins(bins)
@@ -122,6 +159,8 @@ function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4
 end
 
 fill(::Type{<:ExactTabgenBins}; Nbins=4, dbox=0.5, kwargs...) = ExactTabgenBins(dbox, Nbins)
+
+
 
 ## Functions for computing the binned opacities
 """
@@ -174,7 +213,7 @@ function binning(bins::ExactTabgenBins, opacities, formation_opacity, kwargs...)
     return binning
 end
 
-function binning(b::StaggerBins, opacities, formation_opacity, kwargs...)
+function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{<:StaggerBins, <:Co5boldBins}}
     bins = b.bin_edges
     binning = zeros(Int, size(opacities.λ)...)
     for i in eachindex(opacities.λ)
@@ -192,6 +231,7 @@ function binning(b::StaggerBins, opacities, formation_opacity, kwargs...)
     binning
 end
 
+
 """Compute midpoint-weights from wavelenght array."""
 function ω_midpoint(λ) 
     Δλ = zeros(eltype(λ), length(λ)+1)
@@ -206,6 +246,8 @@ function ω_midpoint(λ)
 
     w
 end
+
+
 
 ###########################################################################
 
@@ -362,7 +404,31 @@ function bisect(lnρ::AbstractVector, lnT::AbstractVector, eos::EoSTable)
     hcat(z, exp.(lnEi), exp.(lnρ));
 end
 
+"""Convert a monochromatic EoS into a binned EoS format"""
+toKappaLog(opacities) = begin
+    opacities.src .= log.(opacities.src)
+
+    for i in eachindex(eos.lnRho)
+        opacities.κ[:, i, :] .*= exp(eos.lnRho[i])
+    end
+    opacities.κ .= log.(opacities.κ) 
+end
+
+
 ### Computation of binned properties ######################################
+
+"""Compute the intensity for all the density value in the table."""
+function extrapolate_intensity(model, J, eos)
+    lnRho = log.(model[:, 3])
+    ip    = linear_interpolation(lnRho, J, extrapolation_bc=Line())
+    
+    J_new = similar(eos.lnPg)
+    for i in eachindex(eos.lnRho)
+        J_new[:, i] .= exp(ip(eos.lnRho))
+    end
+
+    J_new
+end
 
 """
 Loop through eos and integrate quantities in the opacity table according to the chosen binning.
@@ -387,6 +453,9 @@ function box_integrated(binning, weights, eos, opacities, scattering)
     δB = zeros(T, EiBins, length(λ))
 
     ρ = exp.(eos.lnRho)
+
+    # None of the bins is allowed to be empty as this stage
+    @assert all(binning .!= 0)
 
     for i in eachindex(eos.lnRho)
 
@@ -417,13 +486,26 @@ function box_integrated(binning, weights, eos, opacities, scattering)
     end
 
     wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
+    #wthin  = exp.(T(-2) .* T(1.0) ./χRBox)
     wthick = T(1.0) .- wthin
 
     # Use rosseland average where optically thick, Planck average where optically thin
     #return log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(SBox), log.(κBox ./ χBox)
     #return log.(χBox), log.(SBox), log.(κBox ./ χBox)
 
-    RegularOpacityTable(log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(κBox ./ χBox), log.(SBox), collect(T, 1:radBins), false)
+    # Opacity
+    opacity_table = log.(wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox))
+
+    # ϵ table
+    ϵ_table = log.(κBox ./ χBox)
+
+    # Source function table --> S                = x/x+s * B + s/x+s * J 
+    #                       --> thermal emission = x/x+s * B
+    S_table = log.(SBox)
+    #S_table = log.(κBox ./ χBox .* SBox)
+
+    RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
 end
+
 
 ###########################################################################

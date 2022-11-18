@@ -99,6 +99,8 @@ add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
+ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
+N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
 
 ## Constants (In agreement with Tabgen)
 const EiExtra    = 5.0                         # extra eV per H atom to add
@@ -110,6 +112,7 @@ const HIonPot    = 13.595                      # hydrogen ioniz. potential [eV]
 const twohc2     = 2.0e0 *HPlanck*CLight^2
 const hc_k       = HPlanck*CLight/KBoltzmann
 const aa_to_cm   = 1.0e-8
+const σ_S        = 5.6704e-5
 
 ## Plot default setup that kind-of works
 #=
