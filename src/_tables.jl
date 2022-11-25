@@ -31,6 +31,9 @@ end
 OpacityTable = Union{RegularOpacityTable, IrregularOpacityTable} 
 EoSTable     = Union{RegularEoSTable, IrregularEoSTable} 
 
+SqOpacity = RegularOpacityTable
+SqEoS     = RegularEoSTable
+
 
 ### Convenience Constructor functions
 Opacity(args...; regular=true, kwargs...) = regular ? RegularOpacityTable(args...; kwargs...) : IrregularOpacityTable(args...; kwargs...)

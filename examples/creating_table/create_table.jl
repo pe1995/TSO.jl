@@ -32,8 +32,8 @@ end
 ##################################################################################################
 
 # Creating initial set of tables
-lnT = range(log(1.1e3), log(5e5); length=191)
-lnρ = range(log(1e-15), log(1e-3); length=191)
+lnT = range(log(1.1e3), log(5.5e5); length=200)
+lnρ = range(log(1e-15), log(1e-3); length=200)
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
 
 
@@ -85,8 +85,12 @@ begin
     lam_end = 200000
 
     ## resolution per wavelenght (R capital)
-    resolution = 25000
+    resolution = 35000
     #resolution = 2500
+
+    tmolim = 20000.0
+
+    @info "Chosen λ step + Number of points: $(TSO.ΔΛ(lam_start,lam_end,resolution)), $(TSO.N_Λ(lam_start,lam_end,resolution))"
 
     setup_input = Dict("debug"         =>debug, 
                         "ts_root"      =>ts_root, 
@@ -96,13 +100,14 @@ begin
                         "linelist"     =>linelist,  
                         "lam_start"    =>lam_start, 
                         "lam_end"      =>lam_end, 
-                        "resolution"   =>resolution)
+                        "resolution"   =>resolution,
+                        "TMOLIM"       =>tmolim)
 
     ## Create the setup object
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
     
-    wvl_set = "IR_Magg"
+    wvl_set = "IR_Magg_v1.1"
 
     magg_2022 = [(TSO.atom_id(:H ), 12.0),
                  (TSO.atom_id(:C ), 8.56),

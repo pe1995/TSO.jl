@@ -405,7 +405,7 @@ function bisect(lnρ::AbstractVector, lnT::AbstractVector, eos::EoSTable)
 end
 
 """Convert a monochromatic EoS into a binned EoS format"""
-toKappaLog(opacities) = begin
+toKappaLog!(opacities, eos) = begin
     opacities.src .= log.(opacities.src)
 
     for i in eachindex(eos.lnRho)
