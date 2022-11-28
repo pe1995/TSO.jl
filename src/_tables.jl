@@ -28,6 +28,8 @@ end
 struct IrregularEoSTable <: AbstractIrregularTable
 end
 
+
+### Aliases
 OpacityTable = Union{RegularOpacityTable, IrregularOpacityTable} 
 EoSTable     = Union{RegularEoSTable, IrregularEoSTable} 
 
@@ -35,11 +37,13 @@ SqOpacity = RegularOpacityTable
 SqEoS     = RegularEoSTable
 
 
+
 ### Convenience Constructor functions
 Opacity(args...; regular=true, kwargs...) = regular ? RegularOpacityTable(args...; kwargs...) : IrregularOpacityTable(args...; kwargs...)
 EoS(args...; regular=true, kwargs...)     = regular ? RegularEoSTable(args...; kwargs...)     : IrregularEoSTable(args...; kwargs...)
 
 RegularOpacityTable(κ::Array, κ_ross::Array, src::Array; optical_depth=false) = RegularOpacityTable(κ, κ_ross, src, optical_depth) 
+
 
 
 ### General functions
@@ -51,6 +55,7 @@ limits(eos::EoSTable) = begin
     
     var_min, var_max, minimum(eos.lnRho), maximum(eos.lnRho)
 end
+
 
 
 ### Writing in Dispatch format

@@ -9,7 +9,7 @@ TSO.load_wrapper()
 
 
 # The EoS has already been smoothed in the running process
-table_folder = joinpath("tables/sun_Magg")
+table_folder = joinpath("tables/sun_Magg_v1.1")
 opacities    = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_opacities.hdf5"))
 eos          = TSO.reload(TSO.RegularEoSTable,     joinpath(table_folder, "combined_eos.hdf5"))
 

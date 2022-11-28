@@ -31,14 +31,20 @@ struct Co5boldBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
+
+
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
 UniformTabgenBins() = UniformTabgenBins(Float64[])
+
+
 
 ## Alias
 TabgenBins = Union{<:EqualTabgenBins, <:UniformTabgenBins, <:CustomTabgenBins}
 TabgenBinning(t::Type{<:OpacityBins}, args...; kwargs...)  = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...) = fill(t, args...; kwargs...)
+
+
 
 ## Functions for filling the bins
 fill(::Type{<:OpacityBins}; kwargs...) = error("Please use specific binning methods.")
@@ -63,10 +69,10 @@ fill(::Type{Co5boldBins}; kwargs...) = begin
     Co5boldBins(bin_edges)
 end
 
-function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, λ_low=nothing, kwargs...) 
+function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, λ_low=nothing, κ_bins=nothing, kwargs...) 
     # L shaped bins of equal size in log λ and log κ
     nbins = Nbins-1
-    n_κ_bins = ceil(Int, 3/12 * (nbins))
+    n_κ_bins = isnothing(κ_bins) ? ceil(Int, 3/12 * (nbins)) : κ_bins
     n_λ_bins = Int(nbins - n_κ_bins)
 
     λ_edges = zeros(n_λ_bins+2)
@@ -415,6 +421,7 @@ toKappaLog!(opacities, eos) = begin
 end
 
 
+
 ### Computation of binned properties ######################################
 
 """Compute the intensity for all the density value in the table."""
@@ -434,7 +441,7 @@ end
 Loop through eos and integrate quantities in the opacity table according to the chosen binning.
 Return ϵ in the κ_ross field of the opacity table.
 """
-function box_integrated(binning, weights, eos, opacities, scattering)
+function box_integrated(binning, weights, eos, opacities, scattering; remove_from_thin=false)
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
     EiBins  = length(eos.lnEi)
@@ -494,7 +501,9 @@ function box_integrated(binning, weights, eos, opacities, scattering)
     #return log.(χBox), log.(SBox), log.(κBox ./ χBox)
 
     # Opacity
-    opacity_table = log.(wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox))
+    opacity_table = remove_from_thin ? 
+                    log.(wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox)) : 
+                    log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox))
 
     # ϵ table
     ϵ_table = log.(κBox ./ χBox)

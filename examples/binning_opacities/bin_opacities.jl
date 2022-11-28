@@ -6,7 +6,7 @@ TSO.load_TS()
 TSO.load_wrapper()
 
 
-table_folder = joinpath("tables/sun_Magg")
+table_folder = joinpath("tables/sun_Magg_v1.1")
 
 
 # TS quantities after post-processing
@@ -31,7 +31,16 @@ bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                              
 bins_co = TSO.Co5boldBinning(TSO.Co5boldBins)                                                              # Fixed Co5bold binning
 
 
+#= Modifications of the binning =#
+## TSO_sun_Magg_v3.1: Use only 8 bins for speed reasons. Also shift the edge a bit lower 
+bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                                                         
+                                    opacities=opacities, 
+                                    formation_opacity=-log10.(formOpacities.κ_ross),  
+                                    Nbins=8, κ_bins=3, ### This sets the number of vertical bins to 3
+                                    λ_low=3.6)    
+#= End modifications =#
   
+
 # Sort the wavelength points into the bins based on the chosen bin type
 binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
 #binning = TSO.binning(bins_co, opacities, log10.(formOpacities.κ_ross)) 
@@ -39,7 +48,7 @@ binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross))
 
 
 # Compute binned quantities
-binned_opacities = TSO.box_integrated(binning, weights, eos, opacities, opacitiesS)
+binned_opacities = TSO.box_integrated(binning, weights, eos, opacities, opacitiesS, remove_from_thin=false)
 
 
 # Save everything in the dispatch format
@@ -48,7 +57,7 @@ TSO.save(binned_opacities, "binned_opacities.hdf5")
 
 
 # Move files to the final folder for dispatch
-eos_table_name = "TSO_sun_Magg_v2"
+eos_table_name = "TSO_sun_Magg_v3.1"
 !isdir(eos_table_name) && mkdir(eos_table_name) 
 mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
 mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
