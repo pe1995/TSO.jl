@@ -1,8 +1,8 @@
 #!/bin/sh
 #SBATCH --job-name='TSO'
-#SBATCH --nodes=5
-#SBATCH --ntasks=159
-#SBATCH --ntasks-per-node=32
+#SBATCH --nodes=7
+#SBATCH --ntasks=202
+##SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=100G
 #SBATCH --partition=debug

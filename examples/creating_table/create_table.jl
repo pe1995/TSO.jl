@@ -63,8 +63,8 @@ begin
     #linelist = ['/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt', '/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata', '/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn']
     #linelist = [ TSO.@inTS("../TSwrapperOpac/nlte_ges_linelist.txt"), TSO.@inTS("../TSwrapperOpac/Hlinedata")]
     linelist = abspath.([#"LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
-                         #"LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list",
-                         "LINE-LISTS/25500-200000_cut-4/atom_25500-200000.list",
+                         "LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list",
+                         #"LINE-LISTS/25500-200000_cut-4/atom_25500-200000.list",
                          "LINE-LISTS/ADDITIONAL-LISTS/Hlinedata"])
                 #"/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn"]
 
@@ -78,14 +78,14 @@ begin
 
     ## starting wavelenght, AA
     #lam_start = 1000
-    lam_start = 26000
+    lam_start = 2500
 
     ## last wavelenght, AA
     #lam_end =  26000
-    lam_end = 200000
+    lam_end = 4000
 
     ## resolution per wavelenght (R capital)
-    resolution = 35000
+    resolution = 325000
     #resolution = 2500
 
     tmolim = 20000.0
@@ -107,7 +107,7 @@ begin
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
     
-    wvl_set = "IR_Magg_v1.1"
+    wvl_set = "UVD_Magg_v1.1"
 
     magg_2022 = [(TSO.atom_id(:H ), 12.0),
                  (TSO.atom_id(:C ), 8.56),

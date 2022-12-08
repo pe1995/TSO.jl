@@ -24,7 +24,7 @@ weights = TSO.ω_midpoint(opacities.λ)
 # The binning() function then sorts the wavelength points from the opacity table into the correct bins, so that 
 # the integrated source function and average opacities can be computed in the box_integrated() function accordingly.
 bins_tabgen = TSO.TabgenBinning(TSO.EqualTabgenBins, 
-                                    opacities=opacities, formation_opacity=log10.(formOpacities.κ))        # A Tabgen styled binning
+                                    opacities=opacities, formation_opacity=log10.(formOpacities.κ_ross))   # A Tabgen styled binning
 bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                                                         #
                                     opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross),  #
                                     Nbins=12, λ_low=3.7)                                                   # A Stagger styled, L-shaped binning
@@ -43,7 +43,7 @@ bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,
 
 # Sort the wavelength points into the bins based on the chosen bin type
 binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
-#binning = TSO.binning(bins_co, opacities, log10.(formOpacities.κ_ross)) 
+#binning = TSO.binning(bins_tabgen, opacities, log10.(formOpacities.κ_ross)) 
 
 
 

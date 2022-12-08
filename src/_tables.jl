@@ -106,4 +106,19 @@ function for_dispatch(eos::EoSTable, χ, S, ϵ)
 end
 
 for_dispatch(eos::EoSTable, opacities::OpacityTable) = for_dispatch(eos, opacities.κ, opacities.src, opacities.κ_ross)
+for_dispatch(eos::EoSTable, opacities::OpacityTable, folder::String) = begin
+    for_dispatch(eos, opacities)
 
+    save(opacities, "binned_opacities.hdf5")
+    save(eos, "binned_eos.hdf5")
+
+    # Move files to the final folder for dispatch
+    eos_table_name = folder
+    !isdir(eos_table_name) && mkdir(eos_table_name) 
+
+    mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
+    mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
+    mv("rhoei_radtab.dat",      joinpath(eos_table_name, "rhoei_radtab.dat"),      force=true)
+    mv("binned_opacities.hdf5", joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
+    mv("binned_eos.hdf5",       joinpath(eos_table_name, "eos.hdf5"),              force=true);
+end
