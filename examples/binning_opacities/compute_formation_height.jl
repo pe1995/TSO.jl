@@ -9,7 +9,7 @@ TSO.load_wrapper()
 
 
 # The EoS has already been smoothed in the running process
-table_folder = joinpath("tables/sun_Magg_v1.1")
+table_folder = joinpath("tables/sun_Magg_v1.2")
 opacities    = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_opacities.hdf5"))
 eos          = TSO.reload(TSO.RegularEoSTable,     joinpath(table_folder, "combined_eos.hdf5"))
 
@@ -20,6 +20,12 @@ solar_model = readdlm("staggertest.dat", skipstart=2)
 z, lnρ, lnT = solar_model[:, 1], log.(solar_model[:, 3]), log.(solar_model[:, 2]) 
 model       = TSO.lnT_to_lnEi(solar_model, eos)
 
+
+# Recompute the rosseland optical depth scale based on the combined opacities
+# This should be more accurate, because the rosseland optical depth requires 
+# integration over frequency, which is not available in the individual runs
+TSO.rosseland_opacity!(eos.lnRoss, eos, opacities; weights=TSO.ω_midpoint(opacities.λ))
+TSO.save(eos, joinpath(table_folder, "combined_ross_eos.hdf5"))
 
 
 # Compute the optical depth scale + the formation height

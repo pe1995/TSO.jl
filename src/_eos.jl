@@ -995,6 +995,15 @@ end
     B
 end
 
+@inline function δBν(λ::A, T::A) where {A<:AbstractFloat}
+    Λ = λ * aa_to_cm
+    twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 * aa_to_cm
+end
+
+@inline function Bν(λ::A, T::A) where {A<:AbstractFloat}
+    Λ = λ * aa_to_cm
+    twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) *aa_to_cm
+end
 
 
 ########################################################################################################################
@@ -1011,4 +1020,43 @@ function lnT_to_lnEi(model::AbstractArray, eos::EoSTable)
     end
     
     hcat(z, exp.(lnEi), exp.(lnρ))
+end
+
+
+
+## Rosseland opacity
+
+"""
+    new_rosseland_opacity(eos, opacities)
+
+Integrate the rosseland opacity from the given monochromatic opacity table.
+"""
+function rosseland_opacity(eos, opacities; weights=ω_midpoint(opacities.λ))
+    lnRoss  = similar(eos.lnRoss)
+    rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
+    lnRoss
+end
+
+
+"""
+    new_rosseland_opacity(eos, opacities)
+
+Integrate the rosseland opacity from the given monochromatic opacity table.
+"""
+function rosseland_opacity!(lnRoss, eos, opacities; weights=ω_midpoint(opacities.λ))
+    lnRoss .= 0.0
+    T       = exp.(eos.lnT)
+    B::Float32 = 0.0
+
+    @inbounds for j in eachindex(eos.lnRho)
+        @inbounds for i in eachindex(eos.lnEi)
+            B  = Float32(0.0)
+            @inbounds for k in eachindex(opacities.λ)
+                lnRoss[i, j] += weights[k] * 1 / opacities.κ[i, j, k] * δBν(opacities.λ[k], T[i, j])
+                B += weights[k] * δBν(opacities.λ[k], T[i, j])
+            end
+            lnRoss[i, j] /= B
+            lnRoss[i, j] = log(1.0 / lnRoss[i, j])
+        end
+    end
 end

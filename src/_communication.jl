@@ -135,6 +135,7 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00")
         s = success(jobs[id])
         
         @info "   --> Babsma Job $id finished. Success: $s"
+        @assert s
     end
 end
 
@@ -168,13 +169,14 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
         s = success(jobs[id])
         
         @info "   --> Bsyn Job $id finished. Success: $s"
-        if !s
-            @warn "One of the jobs failed. Try re-submitting..."
-            job = srun_bsyn(job_input[job]..., quite=setup.debug, memMB=mem, timeout=timeout)
-            s   = success(job)
-
-            @info "   --> RE: Bsyn Job $id finished. Success: $s"
-        end
+        @assert s
+        #if !s
+        #    @warn "One of the jobs failed. Try re-submitting..."
+        #    job = srun_bsyn(job_input[job]..., quite=setup.debug, memMB=mem, timeout=timeout)
+        #    s   = success(job)
+        #
+        #    @info "   --> RE: Bsyn Job $id finished. Success: $s"
+        #end
         #!s && error("Job $id failed. Please check the log file in the TS folder. Exiting.")
     end
 end

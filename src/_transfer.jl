@@ -117,7 +117,7 @@ function transfer1d!(solver)
 
     # intensity at center point
     solver.I_temp   .= similar(S)
-    solver.I_temp[1] = down ? 0.0 : first(S) 
+    solver.I_temp[1] = first(S)#down ? 0.0 : first(S) 
     lI   = length(solver.I_temp)
 
     # now solve
@@ -247,6 +247,52 @@ heating(solver, I; weights=ones(solver.bins)) = begin
 
     Q .* 4 .*π 
 end
+
+
+
+## Source function integration for testing
+
+S(solver::BinnedTransferSolver) = begin
+    S_b = zeros(eltype(solver.S), length(solver.S))
+    source_function(solver, S_b)
+end
+
+S(solver::BinnedTransferSolver, weights) = begin
+    S_b = zeros(eltype(solver.S), length(solver.S))
+    source_function(solver, S_b, weights=weights)
+end
+
+source_function(solver::BinnedTransferSolver, S_b; weights=ones(solver.bins)) = begin
+    for i in 1:solver.bins
+        # set the source function and opacities in this bin
+        optics!(solver, i)
+
+        S_b .+= weights[i] .* solver.S
+    end
+
+    S_b
+end
+
+
+
+## Opacity integration for testing
+
+κ(solver::BinnedTransferSolver) = begin
+    S_b = zeros(eltype(solver.S), length(solver.S))
+    opacity(solver, S_b)
+end
+
+opacity(solver::BinnedTransferSolver, S_b) = begin
+    for i in 1:solver.bins
+        # set the source function and opacities in this bin
+        optics!(solver, i)
+
+        S_b .+= solver.χ
+    end
+
+    S_b / solver.bins
+end
+
 
 
 ## General methods
