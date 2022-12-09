@@ -41,6 +41,7 @@ function combine(path1, extension1, path2, extension2, parent_folder=dirname(pat
     ;
 end
 
+
 IR = "IR_Magg_v1.1_opacities"
 UV = "UV_Magg_v1.1_opacities"
 parent_folder="tables"

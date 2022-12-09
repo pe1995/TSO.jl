@@ -536,6 +536,8 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
     λ_new = vcat(opacities1_new.λ, opacities2_new.λ)
     umask = unique(i->λ_new[i], eachindex(λ_new))
 
+    @info size(opacities1_new.λ) size(opacities2_new.λ)
+
     κ_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.κ,   opacities2_new.κ,   dims=3)[:,:,umask]
     s_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.src, opacities2_new.src, dims=3)[:,:,umask]
 
@@ -546,8 +548,8 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
 
     #r = 1:length(opacities1_new.λ)
     ll = length(opacities1_new.λ) 
-    κ_new[:, :, 1:ll] .= opacities1_new.κ[  :, :, 1:ll]
-    s_new[:, :, 1:ll] .= opacities1_new.src[:, :, 1:ll]
+    κ_new[:, :, 1:ll] .= view(opacities1_new.κ,   :, :, 1:ll)
+    s_new[:, :, 1:ll] .= view(opacities1_new.src, :, :, 1:ll)
 
 
     #ll = length(opacities1_new.λ)
@@ -557,20 +559,24 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
     #    s_new[:, :, j] .= opacities2_new.src[:, :, i]
     #end
    
-    κ_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= opacities2_new.κ[  :, :, 1:length(opacities2_new.λ)]
-    s_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= opacities2_new.src[:, :, 1:length(opacities2_new.λ)]
+    κ_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= view(opacities2_new.κ,  :, :, 1:length(opacities2_new.λ))
+    s_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= view(opacities2_new.src,:, :, 1:length(opacities2_new.λ))
 
+        
     κ_new   = κ_new[:, :, umask]
+    GC.gc()
     s_new   = s_new[:, :, umask]
-    λ_final = λ_new[umask]
+    GC.gc()
+    λ_new   = λ_new[umask]
+    GC.gc()
 
     # sort
-    smask   = sortperm(λ_final)
-    κ_new   = κ_new[:, :, smask]
-    s_new   = s_new[:, :, smask]
-    λ_final = λ_final[smask]
+    smask    = sortperm(λ_new)
+    κ_new   .= view(κ_new, :, :, smask)
+    s_new   .= view(s_new, :, :, smask)
+    λ_new   .= view(λ_new, smask)
 
-    combined_opacities = RegularOpacityTable(κ_new, deepcopy(opacities2_new.κ_ross), s_new, λ_final, opacities2_new.optical_depth)
+    combined_opacities = RegularOpacityTable(κ_new, deepcopy(opacities2_new.κ_ross), s_new, λ_new, opacities2_new.optical_depth)
 
     eos2_new, combined_opacities
 end
