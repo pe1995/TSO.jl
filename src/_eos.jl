@@ -223,7 +223,7 @@ function energy_grid(t::RegularEoSTable)
     T = eltype(t.lnEi)
 
     # new axis range
-    @show size(t.lnEi)
+    #@show size(t.lnEi)
     lnEi2min = minimum(nanmin, t.lnEi)
     lnEi2max = maximum(nanmax, t.lnEi)
 
@@ -618,7 +618,7 @@ function regrid(eos::E, opacities::O, new_rho, new_var) where {E<:EoSTable, O<:O
         lnRoss_new[:, i] .= lookup(eos, :lnRoss, rho_input, new_var)
         lnNe_new[  :, i] .= lookup(eos, :lnNe,   rho_input, new_var)
 
-#        kRoss_new[ :, i] .= lookup(eos, opacities, :κ_ross, rho_input, new_var)
+        # kRoss_new[ :, i] .= lookup(eos, opacities, :κ_ross, rho_input, new_var)
         @inbounds for j in eachindex(opacities.λ)
             k_new[:, i, j] .= lookup(eos, opacities, :κ,   rho_input, new_var, j)
             S_new[:, i, j] .= lookup(eos, opacities, :src, rho_input, new_var, j)
@@ -1066,3 +1066,25 @@ function rosseland_opacity!(lnRoss, eos, opacities; weights=ω_midpoint(opacitie
         end
     end
 end
+
+########################################################################################################################
+
+## Shift the Energy grid by a constant
+"""
+    shift_energy(eos, opacities, shift_amount)
+
+Shift the energy grid by a constant. Because the spacing 
+of the table has to be uniform in log, this requires 
+    A) shifting the Energy grid as log(exp(e) + c)
+    B) Interpolating to a new equidistant grid within the new limits.
+"""
+function shift_energy(eos, opacities, shift_amount)
+    eosNew = deepcopy(eos)
+    eosNew.lnEi .= e_shifted.(eosNew.lnEi, shift_amount)
+
+    new_Ei = range(first(eosNew.lnEi), last(eosNew.lnEi), length=length(eosNew.lnEi)) |> collect
+    
+    regrid(eosNew, opacities, eosNew.lnRho, new_Ei)
+end
+
+e_shifted(e, offset) = log(exp(e) + offset)
