@@ -1133,8 +1133,8 @@ function replaceEoS(eos_old::EoSTable, eos_new::EoSTable, opacities::OpacityTabl
     ## First we need to find the energy grid that corresponds to the new table energy "units"
     lnEi_newFromOld = similar(eos_new.lnT)
     emin,emax,_,_   = limits(eos_old)
-    for j in eachindex(eos_new.lnRho)
-        for i in eachindex(eos_new.lnEi)
+    @inbounds for j in eachindex(eos_new.lnRho)
+        @inbounds for i in eachindex(eos_new.lnEi)
             ## We search the Ei that will return, when called with rho, the temperature that is wanted
             lnEi_newFromOld[i, j] = bisect(eos_old, lnRho=eos_new.lnRho[j], lnT=eos_new.lnT[i, j], lnEi=[emin, emax])
         end
@@ -1145,29 +1145,33 @@ function replaceEoS(eos_old::EoSTable, eos_new::EoSTable, opacities::OpacityTabl
     ## the new energy-density values
     κ      = similar(opacities.κ, size(eos_new.lnPg)..., length(opacities.λ))
     S      = similar(κ)
-    κ_ross = simiar(opacities.κ_ross, size(eos_new.lnPg)...)
+    κ_ross = similar(opacities.κ_ross, size(eos_new.lnPg)..., length(opacities.λ))
     
-    fr = table_interpolation(eos_old.lnEi, eos_old.lnRho, opacities.κ_ross)
+    #fr = table_interpolation(eos_old.lnEi, eos_old.lnRho, opacities.κ_ross)
 
     for k in eachindex(opacities.λ)
-        fk = table_interpolation(eos_old.lnEi, eos_old.lnRho, view(opacities.κ,   :, :, k))
-        fs = table_interpolation(eos_old.lnEi, eos_old.lnRho, view(opacities.src, :, :, k))
+        fk = table_interpolation(eos_old.lnEi, eos_old.lnRho, view(opacities.κ,      :, :, k))
+        fs = table_interpolation(eos_old.lnEi, eos_old.lnRho, view(opacities.src,    :, :, k))
+        fr = table_interpolation(eos_old.lnEi, eos_old.lnRho, view(opacities.κ_ross, :, :, k))
 
         for j in eachindex(eos_new.lnRho)
             for i in eachindex(eos_new.lnEi)
-                κ[i, j, k] = fk(lnEi_newFromOld[i, j], os_new.lnRho[j])
-                S[i, j, k] = fs(lnEi_newFromOld[i, j], os_new.lnRho[j])
+                κ[i, j, k]      = fk(lnEi_newFromOld[i, j], eos_new.lnRho[j])
+                S[i, j, k]      = fs(lnEi_newFromOld[i, j], eos_new.lnRho[j])
+                κ_ross[i, j, k] = fr(lnEi_newFromOld[i, j], eos_new.lnRho[j])
             end
         end
     end
 
-    for j in eachindex(eos_new.lnRho)
-        for i in eachindex(eos_new.lnEi)
-            κ_ross[i, j] = fr(lnEi_newFromOld[i, j], os_new.lnRho[j])
-        end
-    end
+    #for j in eachindex(eos_new.lnRho)
+    #    for i in eachindex(eos_new.lnEi)
+    #        κ_ross[i, j] = fr(lnEi_newFromOld[i, j], os_new.lnRho[j])
+    #    end
+    #end
 
     RegularOpacityTable(κ, κ_ross, S, deepcopy(opacities.λ), opacities.optical_depth)
 end
 
-table_interpolation(x<:AbstractArray{T, 1}, y<:AbstractArray{T, 1}, z<:AbstractArray{T, 2}) where {T<:AbstractFloat} = extrapolate(interpolate((x, y), z, Gridded(Linear())), Line())
+@inline table_interpolation(x::A1, y::A2, z::A3) where {T<:AbstractFloat, A1<:AbstractArray{T, 1}, A2<:AbstractArray{T, 1}, A3<:AbstractArray{T, 2}} = begin
+    extrapolate(interpolate((x, y), z, Gridded(Linear())), Line())                                                                                     
+end
