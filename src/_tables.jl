@@ -86,6 +86,13 @@ tabparam(eos::EoSTable, nradbins; eos_file="eostable.dat", opacity_file="rhoei_r
 Write the EoS + binned opacities in the same format as in Tabgen, so that it can be read by dispatch.
 """
 function for_dispatch(eos::EoSTable, χ, S, ϵ)
+    ## Check that the grids really are equally spaced
+    d = eos.lnEi[2:end] .- eos.lnEi[1:end-1]
+    @assert all(d .≈ first(d)) 
+
+    d = eos.lnRho[2:end] .- eos.lnRho[1:end-1]
+    @assert all(d .≈ first(d)) 
+
     f = FortranFile("rhoei_radtab.dat", "w", access="direct", recl=prod(size(S))*4)
     FortranFiles.write(f, rec=1, ϵ)
     FortranFiles.write(f, rec=2, S)

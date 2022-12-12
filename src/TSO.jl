@@ -27,5 +27,6 @@ include("_smooth.jl")
 include("_binning.jl")
 include("_transfer.jl")
 include("_legacy_tables.jl")
+include("_aesopus.jl")
 
 end
