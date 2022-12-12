@@ -1,5 +1,7 @@
 
-"""Switch between different grids of the EoS table."""
+"""
+Switch between different grids of the EoS table.
+"""
 function transform(t::EoSTable, from_to::Pair{Symbol, Symbol})
     return if (first(from_to) == :lnT) & (last(from_to) == :lnEi)
         lnT_to_lnEi(t)
@@ -218,7 +220,9 @@ end
 nanmin(x) = isnan(x) ? Inf  : x
 nanmax(x) = isnan(x) ? -Inf : x
 
-"""A simple method to interpolate the EoS to new Energy grid."""
+"""
+A simple method to interpolate the EoS to new Energy grid.
+"""
 function energy_grid(t::RegularEoSTable)
     T = eltype(t.lnEi)
 
@@ -287,7 +291,9 @@ end
 
 lnT_to_lnEi(t) = error("No transformation from T to Ei implemented for this table.")
 
-"""Interpolate the function and first derivative of a cubic spline. (Taken from Tabgen)"""
+"""
+Interpolate the function and first derivative of a cubic spline. (Taken from Tabgen)
+    """
 function interpolate_f_df!(ff, dd, xx, x, f, d)
     @inbounds for i in eachindex(ff)
         n = length(x)
@@ -322,7 +328,9 @@ function interpolate_f_df!(ff, dd, xx, x, f, d)
     end
 end
 
-"""Add linear extrapolation outside of the given index."""
+"""
+Add linear extrapolation outside of the given index.
+"""
 function add_outside!(f::AbstractArray{K, 1}, esi, eei) where {K}
     nF = length(f)
     for k=1:esi-1
@@ -405,7 +413,9 @@ end
 
 ########################################################################################################################
 
-"""Interpolate tables to common, equidistant lnEi grid."""
+"""
+Interpolate tables to common, equidistant lnEi grid.
+"""
 function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTable}
     nEiBin  = length(lnEi_new)
     nRhoBin = length(eos.lnRho)
@@ -472,7 +482,9 @@ function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTab
             RegularOpacityTable(exp.(lnkappa2), exp.(lnKross2),exp.(lnSrc2),deepcopy(opacities.λ), false))
 end
 
-"""Interpolate tables to common, equidistant lnEi grid. Add a 'add_pad' padding to the left and right lnEi."""
+"""
+Interpolate tables to common, equidistant lnEi grid. Add a 'add_pad' padding to the left and right lnEi.
+"""
 function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.01) where {N, E<:EoSTable, O<:OpacityTable}
     emin = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
     emax = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
@@ -507,7 +519,9 @@ end
 
 ########################################################################################################################
 
-"""Combine the opacities from two opacity tables on a common EoS grid."""
+"""
+Combine the opacities from two opacity tables on a common EoS grid.
+"""
 function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) where {E1<:EoSTable, O1<:OpacityTable, E2<:EoSTable, O2<:OpacityTable}
     eaxis = ndims(eos1.lnT)==1 ? false : true
     eaxis && @assert ndims(eos2.lnT)>1
@@ -581,7 +595,9 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
     eos2_new, combined_opacities
 end
 
-"""Get grid from 2 grids by picking the union."""
+"""
+Get grid from 2 grids by picking the union.
+"""
 common_grid(a1, a2) = begin    
     if length(a1) == length(a2)
         if all(a1 .≈ a2)
@@ -595,7 +611,9 @@ common_grid(a1, a2) = begin
     collect(range(aMin, aMax,length=aLen))
 end
 
-"""Interpolate eos+opacites to the new grid."""
+"""
+Interpolate eos+opacites to the new grid.
+"""
 function regrid(eos::E, opacities::O, new_rho, new_var) where {E<:EoSTable, O<:OpacityTable}
     eaxis = ndims(eos.lnT)==1 ? false : true
     var2  = eaxis ? :lnT : :lnEi

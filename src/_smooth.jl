@@ -1,5 +1,7 @@
 
-"""Interpolate the EoS + Opacity tables based on missing values in lnEi."""
+"""
+Interpolate the EoS + Opacity tables based on missing values in lnEi.
+"""
 function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoSTable, O<:OpacityTable}
     # smooth the eos first
     m = smooth!(eos, return_missing=true, along=along)
@@ -77,7 +79,9 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
     nothing
 end
 
-"""Interpolate the EoS tables based on missing values in lnEi."""
+"""
+Interpolate the EoS tables based on missing values in lnEi.
+"""
 function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
     # missing spots in the eos
     m = missing_spots(eos)
@@ -140,7 +144,9 @@ end
 
 smooth!(eos::E, opacities::O, args...; kwargs...) where {E<:EoSTable, O<:OpacityTable} = smooth!(eos, (opacities,), args...; kwargs...)
 
-"""Get the missing spots in the EoS."""
+"""
+Get the missing spots in the EoS.
+"""
 function missing_spots(eos::E) where {E<:EoSTable}
     m = falses(size(eos.lnEi)...)
 

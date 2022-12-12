@@ -53,7 +53,7 @@ binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross))
 
 
 # Compute binned quantities
-binned_opacities = TSO.box_integrated_v3(binning, weights, eos, opacities, remove_from_thin=false)
+binned_opacities = TSO.tabulate(binning, weights, eos, opacities, remove_from_thin=false)
 
 function save(binned_opacities, version)
     # Save everything in the dispatch format
