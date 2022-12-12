@@ -597,7 +597,7 @@ end
 
 """
 Get grid from 2 grids by picking the union
-."""
+"""
 common_grid(a1, a2) = begin    
     if length(a1) == length(a2)
         if all(a1 .≈ a2)
