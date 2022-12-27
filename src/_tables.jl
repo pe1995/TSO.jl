@@ -1,4 +1,6 @@
-"""Table containing binned Opacities + Source functions on a regular grid."""
+"""
+Table containing binned Opacities + Source functions on a regular grid.
+"""
 struct RegularOpacityTable{T<:AbstractFloat, 
                             NOp, NRoss, NSrc} <: AbstractRegularTable
     κ             ::Array{T, NOp}
@@ -8,7 +10,9 @@ struct RegularOpacityTable{T<:AbstractFloat,
     optical_depth ::Bool
 end
 
-"""Table containing EoS properties on a regular grid."""
+"""
+Table containing EoS properties on a regular grid.
+"""
 struct RegularEoSTable{F<:AbstractFloat, 
                         NRho, NT, NEi, 
                         NPg, NRoss, NNe} <: AbstractRegularTable
@@ -20,11 +24,15 @@ struct RegularEoSTable{F<:AbstractFloat,
     lnNe   :: Array{F, NNe}
 end
 
-"""Table containing binned Opacities + Source functions on an irregular grid."""
+"""
+Table containing binned Opacities + Source functions on an irregular grid.
+"""
 struct IrregularOpacityTable <: AbstractIrregularTable
 end
 
-"""Table containing EoS properties on an irregular grid."""
+"""
+Table containing EoS properties on an irregular grid.
+"""
 struct IrregularEoSTable <: AbstractIrregularTable
 end
 
