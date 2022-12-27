@@ -67,7 +67,7 @@ function LegacyOpacities(path)
     ## Read the rest of the table
     tab = zeros(Float32, NTtab, Nrtab, 3, Nlam+1)
     for j=1:Nlam+1
-        tab[:, :, :, j] .= read(f, (Float32, NTtab, Nrtab, 3))
+        tab[:, :, :, j] .= read(f, (Float32, NTtab, Nrtab, 3)) #*log(10)
     end
 
     close(f)
@@ -97,6 +97,7 @@ function LegacyOpacities(path)
 
     t, r = grid(l)
 
+    #@show size(r) size(t) size(l.tab)
     for i in eachindex(r)
         l.tab[:, i, 1, :] .+= r[i]
     end

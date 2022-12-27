@@ -1,3 +1,5 @@
 /Manifest.toml
 
-examples/converting_tables/*.h5
+examples/converting_tables/*
+!examples/converting_tables/aesopus.ipynb
+!examples/converting_tables/Project.toml

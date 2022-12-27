@@ -76,7 +76,9 @@ end
 
 ## Solving routines
 
-"""Solve the 1D radiative transfer in a given direction μ=cos(θ)."""
+"""
+Solve the 1D radiative transfer in a given direction μ=cos(θ).
+"""
 function transfer1d!(solver)
 
     # Check in which direction we are going
@@ -128,7 +130,9 @@ function transfer1d!(solver)
     down ? reverse(solver.I_temp) : solver.I_temp
 end
 
-"""Integrate the angles of I."""
+"""
+Integrate the angles of I.
+"""
 flux_from_I(solver) = begin
     f = similar(solver.I, size(solver.I, 1))
     for i in axes(solver.I, 1)
@@ -147,13 +151,17 @@ J_from_I(solver) = begin
     f #./ sum(solver.weights)
 end
 
-"""Compute source funtion and opacity for the given model in the given bin."""
+"""
+Compute source funtion and opacity for the given model in the given bin.
+"""
 function optics!(solver, bin)
     solver.S .= exp.(lookup(solver.eos, solver.opacities, :src, view(solver.model, :, 3), view(solver.model, :, 2), bin))
     solver.χ .= exp.(lookup(solver.eos, solver.opacities, :κ,   view(solver.model, :, 3), view(solver.model, :, 2), bin));
 end
 
-"""Compute the radiation field from the given solver from Binned radiative transfer."""
+"""
+Compute the radiation field from the given solver from Binned radiative transfer.
+"""
 function binned_radiation(solver::BinnedTransferSolver; mean_intensity=false)
     F = zeros(eltype(solver.I), size(solver.I, 1), solver.bins)
 
@@ -182,7 +190,9 @@ function binned_radiation(solver::BinnedTransferSolver; mean_intensity=false)
     F
 end
 
-"""Compute the Flux using the given Solver."""
+"""
+Compute the Flux using the given Solver.
+"""
 flux() = error("Please provide a solver.")
 
 flux(solver::BinnedTransferSolver) = sum(binned_radiation(solver), dims=2)
@@ -201,7 +211,9 @@ end
 
 ## Commputation of mean intensity
 
-"""Compute the mean intensity using the given Solver."""
+"""
+Compute the mean intensity using the given Solver.
+"""
 Jν() = error("Please provide a solver.")
 
 Jν(solver::BinnedTransferSolver) = sum(binned_radiation(solver, mean_intensity=true), dims=2)

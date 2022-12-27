@@ -11,11 +11,14 @@ using Glob
 using HDF5
 using Statistics
 
-# Interface
+# Abstract Interface
 abstract type AbstractTable end
 abstract type AbstractRegularTable <:AbstractTable end
 abstract type AbstractIrregularTable <:AbstractTable end
 abstract type OpacityBins end
+
+# User Interface (TBD)
+
 
 # Source files
 include("_aux.jl")
@@ -28,5 +31,6 @@ include("_binning.jl")
 include("_transfer.jl")
 include("_legacy_tables.jl")
 include("_aesopus.jl")
+include("_marcs.jl")
 
 end

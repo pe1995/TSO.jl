@@ -37,7 +37,7 @@ bins_co = TSO.Co5boldBinning(TSO.Co5boldBins)                                   
 bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                                                         
                                     opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross),  
-                                    Nbins=12, κ_bins=4,
+                                    Nbins=12, #κ_bins=4,
                                     λ_low=3.6)                 
 
 bins_tabgen = TSO.TabgenBinning(TSO.EqualTabgenBins, 
@@ -86,7 +86,7 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save(binned_opacities, "10.1")
+save(binned_opacities, "10.2")
 #bo = deepcopy(binned_opacities)
 #scale!(bo, binned_opacities, "k", [1], 1/2.0)
 #scale!(bo, binned_opacities, "k", [4], 2.0)

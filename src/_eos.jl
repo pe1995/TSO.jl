@@ -485,15 +485,15 @@ end
 """
 Interpolate tables to common, equidistant lnEi grid. Add a 'add_pad' padding to the left and right lnEi.
 """
-function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.01) where {N, E<:EoSTable, O<:OpacityTable}
+function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.001) where {N, E<:EoSTable, O<:OpacityTable}
     emin = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
     emax = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
     for i in axes(eos.lnEi, 2)
         emin, emax = minimum(eos.lnEi[:, i]), maximum(eos.lnEi[:, i])
     end
 
-    emin_pad = Base.convert(eltype(eos.lnRho), maximum(emin))
-    emax_pad = Base.convert(eltype(eos.lnRho), minimum(emax))
+    emin_pad = Base.convert(eltype(eos.lnRho), minimum(emin))
+    emax_pad = Base.convert(eltype(eos.lnRho), maximum(emax))
     erange   = emax_pad - emin_pad
     emin_pad = Base.convert(eltype(eos.lnRho), emin_pad + abs(add_pad*erange))
     emax_pad = Base.convert(eltype(eos.lnRho), emax_pad - abs(add_pad*erange))

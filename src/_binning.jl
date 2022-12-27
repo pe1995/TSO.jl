@@ -46,6 +46,7 @@ Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...) = fill(t, args...; kw
 MURaMBinning(args...; kwargs...)                           = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
 
 
+
 ## Functions for filling the bins
 fill(::Type{<:OpacityBins}; kwargs...) = error("Please use specific binning methods.")
 fill(::Type{<:CustomTabgenBins}; bin_edges, kwargs...) = CustomTabgenBins(bin_edges)
@@ -165,6 +166,7 @@ function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4
 end
 
 fill(::Type{<:ExactTabgenBins}; Nbins=4, dbox=0.5, kwargs...) = ExactTabgenBins(dbox, Nbins)
+
 
 
 
@@ -413,10 +415,13 @@ function bisect(lnρ::AbstractVector, lnT::AbstractVector, eos::EoSTable)
         lnEi[i] = TSO.bisect(eos, lnRho=lnρ[i], lnT=lnT[i], lnEi=[emin, emax])
     end
 
-    hcat(z, exp.(lnEi), exp.(lnρ));
+    #hcat(z, exp.(lnEi), exp.(lnρ));
+    lnEi
 end
 
-"""Convert a monochromatic EoS into a binned EoS format"""
+"""
+Convert a monochromatic EoS into a binned EoS format
+"""
 toKappaLog!(opacities, eos) = begin
     opacities.src .= log.(opacities.src)
 
@@ -425,6 +430,7 @@ toKappaLog!(opacities, eos) = begin
     end
     opacities.κ .= log.(opacities.κ) 
 end
+
 
 
 
