@@ -1,3 +1,4 @@
+## functionality
 
 """
 Switch between different grids of the EoS table.
@@ -413,10 +414,7 @@ end
 
 ########################################################################################################################
 
-"""
-Interpolate tables to common, equidistant lnEi grid.
-"""
-function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTable}
+function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoSTable, O<:OpacityTable, T2<:AbstractFloat}
     nEiBin  = length(lnEi_new)
     nRhoBin = length(eos.lnRho)
 
@@ -435,7 +433,7 @@ function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTab
     y = zeros(size(eos.lnEi, 1))
     mask = zeros(Int, size(eos.lnEi, 1))
 
-    for i in 1:nRhoBin
+    @inbounds for i in 1:nRhoBin
         # This is a column of the table, interpolate it and evaluate at the right position
 
         # It is listed as a function of temperature -> get the new T axis for the new E axis
@@ -465,7 +463,7 @@ function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTab
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnKross2[:, i] .= ip.(lnEi_new)
 
-        for j in eachindex(opacities.λ)
+        @inbounds for j in eachindex(opacities.λ)
             # kappa
             y    .= log.(opacities.κ[mask, i, j])
             ip    = linear_interpolation(x, y, extrapolation_bc=Line())
@@ -482,10 +480,16 @@ function unify(eos::E, opacities::O, lnEi_new) where {E<:EoSTable, O<:OpacityTab
             RegularOpacityTable(exp.(lnkappa2), exp.(lnKross2),exp.(lnSrc2),deepcopy(opacities.λ), false))
 end
 
-"""
-Interpolate tables to common, equidistant lnEi grid. Add a 'add_pad' padding to the left and right lnEi.
-"""
-function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.001) where {N, E<:EoSTable, O<:OpacityTable}
+function unify(eos_in::E, opacities_list::NTuple{N,O}; add_pad=0.001) where {N, E<:EoSTable, O<:OpacityTable}
+    eos = if ndims(eos_in.lnT) == 1
+        @info "EoS passed that seems to be on the correct (lnT) grid. Puffing up..."
+        puff_up(eos_in)
+    else
+        eos_in
+    end
+
+    @show size(eos.lnT)
+
     emin = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
     emax = zeros(eltype(eos.lnRho), size(eos.lnEi, 2))
     for i in axes(eos.lnEi, 2)
@@ -515,6 +519,43 @@ function unify(eos::E, opacities_list::NTuple{N,O}; add_pad=0.001) where {N, E<:
     end
 end
 
+"""
+    unify(eos, opacities; padding=0.001)
+
+Interpolate EoS + opacities to a uniform internal energy grid. The tables must be on the same grid.
+Nothing is assumed about the temperature grid. It only assumes that the density grid is structured.
+Temperature can be unstructured. It will create the internal energy axis from the data and then will
+interpolate as:
+
+```jldoctest
+for i in eachindex(eos.lnRho)
+    ## Interpolate at constant rho
+    x = eos.lnEi[:, i]
+    y = eos.lnT[:, i]
+    T_new[:, i] = linear_interpolation(x, y).(lnEi_new)
+
+    ## and so on for the others...
+end
+```
+"""
+unify(eos::E, opa::O; kwargs...) where {E<:EoSTable, O<:OpacityTable} = unify(eos, (opa,); kwargs...)
+
+
+"""
+    puff_up(eos)
+
+Puff up the temperature axis to a 2D array.
+"""
+function puff_up(eos::RegularEoSTable)
+    T = similar(eos.lnPg)
+    for j in eachindex(eos.lnRho)
+        for i in eachindex(eos.lnT)
+            T[i, j] = eos.lnT[i]
+        end
+    end
+
+    RegularEoSTable(deepcopy(eos.lnRho), T, deepcopy(eos.lnEi), deepcopy(eos.lnPg), deepcopy(eos.lnRoss), deepcopy(eos.lnNe))
+end
 
 
 ########################################################################################################################
@@ -1170,7 +1211,7 @@ function replaceEoS(eos_old::EoSTable, eos_new::EoSTable, opacities::OpacityTabl
     #end
 
     RegularOpacityTable(κ, κ_ross, S, deepcopy(opacities.λ), opacities.optical_depth)
-end
+end 
 
 @inline table_interpolation(x::A1, y::A2, z::A3) where {T<:AbstractFloat, A1<:AbstractArray{T, 1}, A2<:AbstractArray{T, 1}, A3<:AbstractArray{T, 2}} = begin
     extrapolate(interpolate((x, y), z, Gridded(Linear())), Line())                                                                                     

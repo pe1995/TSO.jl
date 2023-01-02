@@ -6,7 +6,9 @@ const WrapperPy   = PyNULL()
 const computeOpac = PyNULL()
 const SlurmEnv    = Ref(false)
 
-"""Load the path of the TS codes."""
+"""
+Load the path of the TS codes.
+"""
 load(ts_help::Ref{String}, path::String) = begin
     ts_help[] = isdir(abspath(path)) ? abspath(path) : ""
     ts_help[]
@@ -18,13 +20,17 @@ load_TS(     path=joinpath(dirname(@__FILE__), "../../Turbospectrum_NLTE/") )   
 
 ### General Convenience #######################################################
 
-"""The given path is converted from relative to the wrapper to absolute."""
+"""
+The given path is converted from relative to the wrapper to absolute.
+"""
 macro inWrapper(relative_path)
 	relative_path_l = esc(relative_path)
 	:(_in_wrapper($(relative_path_l)))
 end
 
-"""The given path is converted from relative to the TS root dir to absolute."""
+"""
+The given path is converted from relative to the TS root dir to absolute.
+"""
 macro inTS(relative_path)
 	relative_path_l = esc(relative_path)
 	:(_in_ts($(relative_path_l)))
@@ -64,7 +70,9 @@ end
 
 ### Writing colunms in Stagger format #########################################
 
-"""Write a column to file using the Stagger format as specified in TS"""
+"""
+Write a column to file using the Stagger format as specified in TS
+"""
 function write_as_stagger(name::String; teff, logg, FeH, T, rho, z=zeros(length(T)), id="TSO.jl-column")
     teff = @sprintf "%.1f" teff
     logg = @sprintf "%.5f" logg
