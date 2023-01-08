@@ -141,6 +141,10 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
     reverse!(T)
     reverse!(κ, dims=1)
 
+    ## Sort lambda from low to high
+    reverse!(l)
+    reverse!(κ, dims=3)
+
     ## Convert to the requested type
     if eltype(T) != eltype(eos.lnT)
         tp   = eltype(eos.lnT)
@@ -185,108 +189,6 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
     RegularOpacityTable(exp.(κnew), exp.(eos.lnRoss), src, exp.(lnew), false)
 end
 
-
-
-
-#= EoS options =#
-
-"""
-    complement(opacities, eos_old, eos_new; lnRoss=:opacity)
-
-Complement a RegularOpacityTable with an Regular EoS Table. The Opacities will be interpolated
-to the EoS grid. Rosseland opacities can either be interpolated or recomputed (if lnRoss == :recompute).
-Idea:
-    New eos has rho_new + E_new axis (where E_new can be either T or Ei)
-    old eso has rho + E axis (see above)
-
-    1.) Old: T grid, New: E grid
-
-        We want to know the opacity, which is tablulated on rho,T
-        for a given rho_new,Ei_new. Since the old table is already 
-        on absolute physical quantities, we can look up directly using 
-        rho_new[j], lnT_new[i, j], lnT_new is always 2D.
-
-    2.) Old: E grid, New: E grid
-
-        Both are tabulated on E grid. Since E scales might be different. To use the 
-        lookup interface, we have to convert the new E axis to the old one, then lookup.
-        Because the old one is tablulated on E, this requires a bisect search using the 
-        rho_new and lnT_new, lnT_new is always 2D.
-
-    3.) Old: E grid, New: T grid
-        The same as 2.) needs to be done, however, the lnT_new will be 1D.
-
-    4.) Old: T grid, New: T grid
-        The same as 1.) needs to be done, however, the lnT_new will be 1D.
-
-"""
-function complement(opa::O, eos_old::E1, eos_new::E2; lnRoss=:opacity) where {O<:RegularOpacityTable, E1<:RegularEoSTable, E2<:RegularEoSTable}
-    eaxis_old = EnergyAxis(eos_old)
-    eaxis_new = EnergyAxis(eos_new)
-
-    κ  = zeros(eltype(opa.κ), size(eos_new.lnPg)..., length(opa.λ))
-    S  = zeros(eltype(opa.κ), size(eos_new.lnPg)..., length(opa.λ))
-    κR = zeros(eltype(opa.κ), size(eos_new.lnPg)...)
-
-    old_E    = eaxis_old.name == :lnEi   ## Is the axis of the old table Ei?
-    lnTNew2D = ndims(eos_new.lnT) == 2   ## Is the temperature_new 2D (e.g. Energy grid)
-
-    EOldForNewEOS  = zeros(eltype(eos_new.lnEi), size(eos_new.lnPg)...)
-    emin,emax,_,_  = limits(eos_old)
-
-    @info "Old Grid:", eaxis_old.name
-    @info "New Grid:", eaxis_new.name
-
-    # We get the lookup functions for the old table (ross)
-    κR_old = if lnRoss == :opacity
-        lookup_function(eos_old, opa, :κ_ross)
-    elseif lnRoss == :eos_old
-        lookup_function(eos_old, :lnRoss)
-    else
-        (args...) -> 0.0
-    end
-
-
-    for j in eachindex(eos_new.lnRho)
-        for i in eachindex(eaxis_new.values)
-            ## We need to know the energy or the temperature 
-            ## this point corresponds to on the old table
-            lnT = lnTNew2D ? eos_new.lnT[i, j] : eos_new.lnT[i]
-
-            EOldForNewEOS[i, j] = if old_E
-                bisect(eos_old, lnRho=eos_new.lnRho[j], lnT=lnT, lnEi=[emin, emax])
-            else
-                lnT
-            end
-
-            ## Next we need to lookup the stuff we want on this new grid
-            κR[i, j] = κR_old(EOldForNewEOS[i, j], eos_new.lnRho[j])
-        end
-    end
-
-    ## Now the wavelength dependent stuff
-    @inbounds for k in eachindex(opa.λ)
-        # We get the lookup functions for the old table
-        κ_old = lookup_function(eos_old, opa, :κ, k)
-        S_old = lookup_function(eos_old, opa, :src, k)
-
-        @inbounds for j in eachindex(eos_new.lnRho)
-            @inbounds for i in eachindex(eaxis_new.values)
-                κ[i, j, k] = κ_old(EOldForNewEOS[i, j], eos_new.lnRho[j])
-                S[i, j, k] = S_old(EOldForNewEOS[i, j], eos_new.lnRho[j])
-            end
-        end
-    end
-
-
-    if lnRoss == :eos_new
-        κR .= eos_new.lnRoss
-    elseif lnRoss == :eos_old
-        κR .= exp.(κR)
-    end
-
-    RegularOpacityTable(κ, κR, S, opa.λ, opa.optical_depth)
-end
 
 
 

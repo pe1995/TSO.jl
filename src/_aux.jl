@@ -45,6 +45,30 @@ randrange(a,b,args...) = begin
     rand(args...) .* (xmax-xmin) .+ xmin
 end
 
+function stretch(x, y, z)
+    npoints = prod(size(x))
+    ndims   = 2
+
+    pp = zeros(npoints, ndims)
+    zz = zeros(npoints)
+
+    c = 1
+    for j in axes(x, 2)
+        for i in axes(x, 1)
+            pp[c, 1] = x[i, j]
+            pp[c, 2] = y[i, j]
+
+            zz[c] = z[i, j]
+
+            c += 1
+        end
+    end
+
+    pp, zz
+end
+
+
+
 
 
 ## Importing of python modules
@@ -68,6 +92,12 @@ macro pythonHelp(mod, dir)
     mod_s = :($mod)
     :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
 end
+
+load_scipy_interpolate!(mod=scipy_interpolate) = begin
+    copy!(mod, pyimport("scipy.interpolate"))
+    scipy_loaded[] = true
+end
+
 
 
 
@@ -105,6 +135,7 @@ get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fna
     
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
+
 
 
 

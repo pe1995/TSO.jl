@@ -530,17 +530,26 @@ function box_integrated_v2(binning, weights, eos, opacities, scattering; remove_
     RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
 end
 
-function box_integrated_v3(binning, weights, eos, opacities, scattering; remove_from_thin=false)
+function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remove_from_thin=false) where {E<:AxedEoS}
+    eos = aos.eos
+    eaxis = is_internal_energy(aos)
+    
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
-    EiBins  = length(eos.lnEi)
+    AxBins  = length(aos.energy_axes.length)
     T       = eltype(eos.lnRho)
 
-    χBox   = zeros(T, EiBins, rhoBins, radBins)    
-    χRBox  = zeros(T, EiBins, rhoBins, radBins)
-    κBox   = zeros(T, EiBins, rhoBins, radBins)
-    SBox   = zeros(T, EiBins, rhoBins, radBins)
-    lnRoss = zeros(T, EiBins, rhoBins)
+    χBox   = zeros(T, AxBins, rhoBins, radBins)    
+    χRBox  = zeros(T, AxBins, rhoBins, radBins)
+    κBox   = zeros(T, AxBins, rhoBins, radBins)
+    SBox   = zeros(T, AxBins, rhoBins, radBins)
+    lnRoss = zeros(T, AxBins, rhoBins)
+    Temp   = zeros(T, AxBins, rhoBins)
+    if ndims(eos.lnT) == 2
+        Temp .= exp.(eos.lnT)
+    else
+        puff_up!(Temp, exp.(eos.lnT))
+    end
 
     B  = zeros(T, radBins)
     δB = zeros(T, radBins)
@@ -551,16 +560,15 @@ function box_integrated_v3(binning, weights, eos, opacities, scattering; remove_
     b::Int = 0
 
     ρ = exp.(eos.lnRho)
-    Temp = exp.(eos.lnT)
 
-    rtest = argmin(abs.(ρ .- test_r))
-    ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
+    #rtest = argmin(abs.(ρ .- test_r))
+    #ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
 
     # None of the bins is allowed to be empty as this stage
     @assert all(binning .!= 0)
 
-    @inbounds for j in eachindex(eos.lnRho)
-        @inbounds for i in eachindex(eos.lnEi)
+    @inbounds for j in 1:rhoBins
+        @inbounds for i in 1:AxBins
             B  .= 0.0
             δB .= 0.0
             #B_tot = 0.0
@@ -583,11 +591,11 @@ function box_integrated_v3(binning, weights, eos, opacities, scattering; remove_
             χRBox[i, j, :] ./= δB
         end
 
-        if j == rtest
-            @info "TestBin: $(test_bin), rho: $(ρ[j])"
-            @info "χ: $(log(χBox[ttest, j, test_bin])), χR: $(log(1. /χRBox[ttest, j, test_bin])), simple mean: $(log(mean(χBox[ttest, j, test_bin])))"
-            @info "wthin: $(exp(T(-1.5e7) .* T(1.0) ./χRBox[ttest, j, test_bin] *ρ[j]))"
-        end
+        #if j == rtest
+        #    @info "TestBin: $(test_bin), rho: $(ρ[j])"
+        #    @info "χ: $(log(χBox[ttest, j, test_bin])), χR: $(log(1. /χRBox[ttest, j, test_bin])), simple mean: $(log(mean(χBox[ttest, j, test_bin])))"
+        #    @info "wthin: $(exp(T(-1.5e7) .* T(1.0) ./χRBox[ttest, j, test_bin] *ρ[j]))"
+        #end
 
         χBox[:,  j, :] .*= ρ[j]
         κBox[:,  j, :] .*= ρ[j]
@@ -617,16 +625,25 @@ function box_integrated_v3(binning, weights, eos, opacities, scattering; remove_
     RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
 end
 
-function box_integrated_v3(binning, weights, eos, opacities; remove_from_thin=false)
+function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin=false) where {E<:AxedEoS}
+    eos = aos.eos
+    eaxis = is_internal_energy(aos)
+
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
-    EiBins  = length(eos.lnEi)
+    AxBins  = aos.energy_axes.length
     T       = eltype(eos.lnRho)
 
-    χBox   = zeros(T, EiBins, rhoBins, radBins)    
-    χRBox  = zeros(T, EiBins, rhoBins, radBins)
-    κBox   = zeros(T, EiBins, rhoBins, radBins)
-    SBox   = zeros(T, EiBins, rhoBins, radBins)
+    χBox   = zeros(T, AxBins, rhoBins, radBins)    
+    χRBox  = zeros(T, AxBins, rhoBins, radBins)
+    κBox   = zeros(T, AxBins, rhoBins, radBins)
+    SBox   = zeros(T, AxBins, rhoBins, radBins)
+    Temp   = zeros(T, AxBins, rhoBins)
+    if ndims(eos.lnT) == 2
+        Temp .= exp.(eos.lnT)
+    else
+        puff_up!(Temp, exp.(eos.lnT))
+    end
 
     B  = zeros(T, radBins)
     δB = zeros(T, radBins)
@@ -635,17 +652,24 @@ function box_integrated_v3(binning, weights, eos, opacities; remove_from_thin=fa
     dbnu ::Float32  = 0.0
     b    ::Int      = 0
 
-    ρ    = exp.(eos.lnRho)
-    Temp = exp.(eos.lnT)
+    ρ     = exp.(eos.lnRho)
+    #rtest = argmin(abs.(ρ .- test_r))
+    #ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
 
-    rtest = argmin(abs.(ρ .- test_r))
-    ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
+    @info minimum(Temp) maximum(Temp)
+    @info minimum(opacities.κ) maximum(opacities.κ)
+    @info minimum(opacities.λ) maximum(opacities.λ)
+    @info Bν(minimum(opacities.λ), minimum(Temp)) 
+    @info δBν(minimum(opacities.λ), minimum(Temp)) 
+    @info Bν(maximum(opacities.λ), maximum(Temp)) 
+    @info δBν(maximum(opacities.λ), maximum(Temp)) 
+
 
     # None of the bins is allowed to be empty as this stage
     @assert all(binning .!= 0)
 
-    @inbounds for j in eachindex(eos.lnRho)
-        @inbounds for i in eachindex(eos.lnEi)
+    @inbounds for j in 1:rhoBins
+        @inbounds for i in 1:AxBins
             B  .= 0.0
             δB .= 0.0
             @inbounds for k in eachindex(opacities.λ)
@@ -663,11 +687,11 @@ function box_integrated_v3(binning, weights, eos, opacities; remove_from_thin=fa
             χRBox[i, j, :] ./= δB
         end
 
-        if j == rtest
-            @info "TestBin: $(test_bin), rho: $(ρ[j])"
-            @info "χ: $(log(χBox[ttest, j, test_bin])), χR: $(log(1. /χRBox[ttest, j, test_bin])), simple mean: $(log(mean(χBox[ttest, j, test_bin])))"
-            @info "wthin: $(exp(T(-1.5e7) .* T(1.0) ./χRBox[ttest, j, test_bin] *ρ[j]))"
-        end
+        #if j == rtest
+        #    @info "TestBin: $(test_bin), rho: $(ρ[j])"
+        #    @info "χ: $(log(χBox[ttest, j, test_bin])), χR: $(log(1. /χRBox[ttest, j, test_bin])), simple mean: $(log(mean(χBox[ttest, j, test_bin])))"
+        #    @info "wthin: $(exp(T(-1.5e7) .* T(1.0) ./χRBox[ttest, j, test_bin] *ρ[j]))"
+        #end
 
         χBox[:,  j, :] .*= ρ[j]
         χRBox[:, j, :] ./= ρ[j]
@@ -676,6 +700,10 @@ function box_integrated_v3(binning, weights, eos, opacities; remove_from_thin=fa
     κBox  .= χBox
     wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
     wthick = T(1.0) .- wthin
+
+    @info minimum(SBox) maximum(SBox)
+    @info SBox[1,1,:]
+
 
     ## Use rosseland average where optically thick, Planck average where optically thin
     #return log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)), log.(SBox), log.(κBox ./ χBox)
@@ -696,6 +724,10 @@ function box_integrated_v3(binning, weights, eos, opacities; remove_from_thin=fa
 
     RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
 end
+
+box_integrated_v3(binning, weights, eos::E, opacities, scattering; kwargs...) where {E<:RegularEoSTable} = box_integrated_v3(binning, weights, AxedEoS(eos), opacities, scattering; kwargs...)
+box_integrated_v3(binning, weights, eos::E, opacities; kwargs...) where {E<:RegularEoSTable} = box_integrated_v3(binning, weights, AxedEoS(eos), opacities; kwargs...)
+
 
 function clear!(args...)
     for arg in args

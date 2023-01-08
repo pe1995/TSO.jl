@@ -217,7 +217,7 @@ Square the given MARCSOS part tables. All of the different tables may have diffe
 We first interpolate every sub-table to a common density grid. Then we pick a common Temp. grid 
 between all tables and interpolate 
 """
-function square(mos::MARCSOS...)
+function uniform(mos::MARCSOS...)
     m_rho = []
     common_rho = common_grid(log, mos..., which=:ρ)
 
@@ -230,6 +230,9 @@ function square(mos::MARCSOS...)
 
     ## interpolate the table to uniform lnT grid
     mos_inter = interpolate_lnT(m_rho)
+
+    ## set lower limit for opacities to avoid NaN in log
+    lower_limit!(mos_inter, 1e-30)
 
     ## Fill in NaNs in the opacity table using linear interpolation
     fill_nan!(mos_inter)
@@ -249,7 +252,7 @@ using a lot of RAM. If it takes too long, the individual loops over eos and lamb
 can be drawn together to make it probably much faster. TBD. At the moment molecular lines
 are not included.
 """
-function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:opacity)
+function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:opacity, upsample=-1, unify=false) where {E1<:AxedEoS}
     ## The grid is always taken from the MOS
     newlnT   = mos.T
     newlnRho = mos.ρ
@@ -258,17 +261,21 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
     nr = length(newlnRho)
     T  = eltype(newlnT)
 
+    eaxis_new = is_internal_energy(eos)
+
+    @info "Size of the table: T-$(nt), ρ-$(nr), λ-$(length(mos.λ))"
+
 
     ## Go though additional quantities and take them from where they should be takes
     ### lnEi is bisected from the EoS
     newlnEi = if lnEi == :eos            
-        emin,emax,_,_ = limits(eos)
+        emin,emax     = limits(eos, 1)
         E             = zeros(T, nt, nr)
-        lims          = [emin-0.1(emax-emin), emax+0.1(emax-emin)]
-
+        lims          = limits(eos, 1) #[emin-0.1(emax-emin), emax+0.1(emax-emin)]
+        lf            = lookup_function(eos, :lnEi)
         for j in eachindex(newlnRho)
             for i in eachindex(newlnT)
-                E[i, j] = bisect(eos, lnRho=newlnRho[j], lnT=newlnT[i], lnEi=lims)
+                E[i, j] = lookup(lf, newlnRho[j], newlnT[i]) #eaxis_new ? bisect(eos, newlnRho[j], lims, lnT=newlnT[i]) : lookup(eos, :lnEi, newlnRho[j], newlnT[i])
             end
         end
 
@@ -283,9 +290,10 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
         ross = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnRoss)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            ross[:, j] = lookup(eos, :lnRoss, rho, newlnEi)
+            ross[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
         ross 
@@ -298,9 +306,10 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnPg)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            y[:, j] = lookup(eos, :lnPg, rho, newlnEi)
+            y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
         y
@@ -313,9 +322,10 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnNe)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            y[:, j] = lookup(eos, :lnNe, rho, newlnEi)
+            y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
         y
@@ -352,39 +362,41 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
     # Save for testing
     save(neweos, "intermediate_eos.hdf5")
 
-    ## Opacities are stored in linealy so this can be done 
+    ## Opacities are stored linealy so this can be done 
     newopa_c = RegularOpacityTable(mos.κ_c,  newlnRoss, src, mos.λ, false)
     newopa_l = RegularOpacityTable(mos.κ_la, newlnRoss, src, mos.λ, false)
     newopa_s = RegularOpacityTable(mos.κ_s,  newlnRoss, src, mos.λ, false)
     
-    ## Now that we have everything we can interpolate to the correct grid (inefficient though)
-    neweos, newopacities = unify(neweos, (newopa_c, newopa_l, newopa_s))
-    newopa_c, newopa_l, newopa_s = newopacities
+    neweos, newopa, newopa_c, newopa_l, newopa_s = if !unify
+        no = deepcopy(newopa_c) 
+        no.κ .= newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
 
-    newopa    = deepcopy(newopa_c) 
-    newopa.κ .= newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
+        (RegularEoSTable(newlnRho, newlnT, newlnEi, newlnPg, newlnRoss, newlnNe),
+            no, newopa_c, newopa_l, newopa_s)
+    else
+        ## Now that we have everything we can interpolate to the correct grid (inefficient though)
+        neweos, newopacities = unify(neweos, (newopa_c, newopa_l, newopa_s), upsample=upsample)
+        newopa_c, newopa_l, newopa_s = newopacities
 
+        no    = deepcopy(newopa_c) 
+        no.κ .= newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
+
+        neweos, no, newopa_c, newopa_l, newopa_s
+    end
+
+    aos_new = AxedEoS(neweos)
 
     ## set small parts to almost 0
-    @inbounds for j in eachindex(neweos.lnRho)
-        @inbounds for i in eachindex(neweos.lnEi)
-            if neweos.lnT[i, j] < log(1.0f-30)
-                neweos.lnT[i, j] = log(1.0f-30)
-            end
-            if neweos.lnPg[i, j] < log(1.0f-30)
-                neweos.lnPg[i, j] = log(1.0f-30)
-            end
-            if neweos.lnRoss[i, j] < log(1.0f-30)
-                neweos.lnRoss[i, j] = log(1.0f-30)
-            end
-            if neweos.lnNe[i, j] < log(1.0f-30)
-                neweos.lnNe[i, j] = log(1.0f-30)
-            end
-        end
-    end
+    a_not_axis = is_internal_energy(aos_new) ? neweos.lnT : neweos.lnEi
+    a_not_axis[a_not_axis .< 1.0f-30]    .= 1.0f-30
+    neweos.lnPg[neweos.lnPg .< 1.0f-30]   .= 1.0f-30
+    neweos.lnRoss[neweos.lnRoss .< 1.0f-30] .= 1.0f-30
+    neweos.lnNe[neweos.lnNe .< 1.0f-30]   .= 1.0f-30
+
+
     @inbounds for k in eachindex(mos.λ)
         @inbounds for j in eachindex(newlnRho)
-            @inbounds for i in eachindex(newlnT)
+            @inbounds for i in eachindex(aos_new.energy_axes.values)
                 if newopa.κ[i, j, k] < 1.0f-30
                     newopa.κ[i, j, k] = 1.0f-30
                 end
@@ -417,6 +429,7 @@ function complement(mos::MARCSOS, eos::RegularEoSTable; lnEi=:eos, lnRoss=:opaci
     return neweos, newopa, newopa_c, newopa_l, newopa_s
 end
 
+complement(mos::MARCSOS, eos::E1; kwargs...) where {E1<:RegularEoSTable} = complement(mos, AxedEoS(eos); kwargs...) 
 
 
 
@@ -573,9 +586,25 @@ function fill_nan!(mos::MARCSOS)
         end
     end
 
-    @assert all(.!isnan.(mos.κ_c))
-    @assert all(.!isnan.(mos.κ_la)) 
-    @assert all(.!isnan.(mos.κ_s))
+    #@assert all(.!isnan.(mos.κ_c))
+    #@assert all(.!isnan.(mos.κ_la)) 
+    #@assert all(.!isnan.(mos.κ_s))
 end
 
-@inline interpolate_at(x, y, x0) = linear_interpolation(x, y, extrapolation_bc=Line()).(x0)
+function lower_limit!(mos::MARCSOS, lim)
+    @inbounds for k in eachindex(mos.λ)
+        @inbounds for j in eachindex(mos.ρ)
+            @inbounds for i in eachindex(mos.T)
+                if mos.κ_c[i, j, k] < lim
+                    mos.κ_c[i, j, k] = lim
+                end
+                if mos.κ_la[i, j, k] < lim
+                    mos.κ_la[i, j, k] = lim
+                end
+                if mos.κ_s[i, j, k] < lim
+                    mos.κ_s[i, j, k] = lim
+                end
+            end
+        end
+    end
+end
