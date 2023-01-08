@@ -1162,7 +1162,7 @@ end
 
 #= Model conversions =#
 
-"""
+#="""
 Convert z,T,ρ to z,E,ρ model based on EoS.
 """
 function lnT_to_lnEi(model::AbstractArray, eos::EoSTable)
@@ -1176,7 +1176,7 @@ function lnT_to_lnEi(model::AbstractArray, eos::EoSTable)
     end
     
     hcat(z, exp.(lnEi), exp.(lnρ))
-end
+end=#
 
 
 
@@ -1257,9 +1257,9 @@ transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnR
 Compute monochromatic and rosseland optical depth scales of the model 
 based on the opacity table
 """
-function optical_depth(eos::E, opacities::OpacityTable, model) where {E<:AxedEoS}
+function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
-    z, lnρ, lnT = model[:, 1], log.(model[:, 3]), log.(model[:, 2]) 
+    z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(opacities.κ)
 
@@ -1271,7 +1271,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model) where {E<:AxedEoS
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
     for i in eachindex(opacities.λ)
         # Look up the opacity in the table
-        κ  .= lookup(eos, opacities, :κ, lnρ, lnT, i)
+        κ  .= lookup(eos, opacities, :κ, lnρ, lnE, i)
         ρκ .= exp.(lnρ) .* κ
 
         # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
@@ -1285,7 +1285,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model) where {E<:AxedEoS
     end
 
     # Rosseland optical depth
-    κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnT)
+    κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnE)
     ρκ .= exp.(lnρ) .* κ
     for j in eachindex(z)
         if j==1 
@@ -1302,14 +1302,14 @@ end
 Compute the formation height + opacity, i.e. the rosseland optical depth
 where the monochromatic optical depth is 1.
 """
-function formation_height(model, eos::E, opacities::OpacityTable, τ_ross, τ_λ) where {E<:AxedEoS}
-    z, lnρ, lnT = model[:, 1], log.(model[:, 3]), log.(model[:, 2]) 
+function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable, τ_ross, τ_λ) where {E<:AxedEoS}
+    z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
     
     T = eltype(opacities.κ)
 
     z   = Base.convert.(T, z)
     lnρ = Base.convert.(T, lnρ)
-    lnT = Base.convert.(T, lnT)
+    lnE = Base.convert.(T, lnE)
 
     rosseland_depth = zeros(T, size(τ_λ, 2))
     opacity_depth   = zeros(T, size(τ_λ, 2))
@@ -1319,7 +1319,7 @@ function formation_height(model, eos::E, opacities::OpacityTable, τ_ross, τ_λ
 
     t_mono = zeros(T, size(τ_λ, 1))
     r_ross = linear_interpolation(lRoss, lnρ, extrapolation_bc=Line())
-    T_ross = linear_interpolation(lRoss, lnT, extrapolation_bc=Line())
+    T_ross = linear_interpolation(lRoss, lnE, extrapolation_bc=Line())
 
     for i in axes(τ_λ, 2)
         t_mono .= lλ[:, i]

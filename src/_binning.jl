@@ -31,6 +31,11 @@ struct Co5boldBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
+struct BinnedOpacities{O<:RegularOpacityTable, F<:AbstractFloat, Nϵ}
+    opacities ::O
+    ϵ ::Array{F, Nϵ}
+end
+
 
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -527,7 +532,7 @@ function box_integrated_v2(binning, weights, eos, opacities, scattering; remove_
     S_table = log.(SBox)
     #S_table = log.(κBox ./ χBox .* SBox)
 
-    RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
+    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
 end
 
 function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remove_from_thin=false) where {E<:AxedEoS}
@@ -622,7 +627,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remo
     S_table = log.(SBox)
     #S_table = log.(κBox ./ χBox .* SBox)
 
-    RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
+    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
 end
 
 function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin=false) where {E<:AxedEoS}
@@ -656,13 +661,13 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
     #rtest = argmin(abs.(ρ .- test_r))
     #ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
 
-    @info minimum(Temp) maximum(Temp)
-    @info minimum(opacities.κ) maximum(opacities.κ)
-    @info minimum(opacities.λ) maximum(opacities.λ)
-    @info Bν(minimum(opacities.λ), minimum(Temp)) 
-    @info δBν(minimum(opacities.λ), minimum(Temp)) 
-    @info Bν(maximum(opacities.λ), maximum(Temp)) 
-    @info δBν(maximum(opacities.λ), maximum(Temp)) 
+    #@info minimum(Temp) maximum(Temp)
+    #@info minimum(opacities.κ) maximum(opacities.κ)
+    #@info minimum(opacities.λ) maximum(opacities.λ)
+    #@info Bν(minimum(opacities.λ), minimum(Temp)) 
+    #@info δBν(minimum(opacities.λ), minimum(Temp)) 
+    #@info Bν(maximum(opacities.λ), maximum(Temp)) 
+    #@info δBν(maximum(opacities.λ), maximum(Temp)) 
 
 
     # None of the bins is allowed to be empty as this stage
@@ -701,7 +706,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
     wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
     wthick = T(1.0) .- wthin
 
-    @info minimum(SBox) maximum(SBox)
+    #@info minimum(SBox) maximum(SBox)
     @info SBox[1,1,:]
 
 
@@ -711,18 +716,18 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
 
     ## Opacity
     opacity_table = remove_from_thin ? 
-                    log.(wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox)) : 
-                    log.(wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox))
+                    wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox) : 
+                    wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)
 
     ## ϵ table
-    ϵ_table = log.(κBox ./ χBox)
+    ϵ_table = κBox ./ χBox
 
     ## Source function table --> S                = x/x+s * B + s/x+s * J 
     ##                       --> thermal emission = x/x+s * B
-    S_table = log.(SBox)
+    S_table = SBox
     #S_table = log.(κBox ./ χBox .* SBox)
 
-    RegularOpacityTable(opacity_table, ϵ_table, S_table, collect(T, 1:radBins), false)
+    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
 end
 
 box_integrated_v3(binning, weights, eos::E, opacities, scattering; kwargs...) where {E<:RegularEoSTable} = box_integrated_v3(binning, weights, AxedEoS(eos), opacities, scattering; kwargs...)
@@ -749,6 +754,40 @@ recommended version of box_integrated, which is box_integrated_v3, which is
 the fastest implementation, however without scattering at the moment to save memory.
 """
 tabulate(args...; kwargs...) = box_integrated_v3(args...; kwargs...)
+
+
+#= Wrapper for normal functionality of binned tables =#
+
+for_dispatch(eos::EoSTable, opacities::BinnedOpacities) = for_dispatch(eos, opacities.opacities.κ, opacities.opacities.src, opacities.ϵ)
+
+switch_energy(aos::A, opacities::BinnedOpacities, args...; kwargs...) where {A<:AxedEoS} = begin
+    eos_e, opa_e = switch_energy(aos, opacities.opacities, args...; kwargs...)
+
+    binned_e     = RegularOpacityTable(opacities.ϵ, opacities.opacities.κ_ross, opacities.opacities.src, opacities.opacities.λ, opacities.opacities.optical_depth)
+    eos_e2, ϵ_e   = switch_energy(aos, binned_e, args...; kwargs...)
+
+    eos_e, BinnedOpacities(opa_e, ϵ_e.κ)
+end
+
+complement(aos_old::A1, aos_new::A2, opacities::BinnedOpacities, args...; kwargs...) where {A1<:AxedEoS, A2<:AxedEoS} = begin
+    opa_e = complement(aos_old, aos_new, opacities.opacities, args...; kwargs...)
+
+    binned_e = RegularOpacityTable(opacities.ϵ, opacities.opacities.κ_ross, opacities.opacities.src, opacities.opacities.λ, opacities.opacities.optical_depth)
+    ϵ_e  = complement(aos_old, aos_new, binned_e, args...; kwargs...)
+
+    BinnedOpacities(opa_e, ϵ_e.κ)
+end
+
+uniform(aos::A, opacities::BinnedOpacities, args...; kwargs...) where {A<:AxedEoS} = begin
+    eos_e, opa_e = complement(aos, opacities.opacities, args...; kwargs...)
+
+    binned_e     = RegularOpacityTable(opacities.ϵ, opacities.opacities.κ_ross, opacities.opacities.src, opacities.opacities.λ, opacities.opacities.optical_depth)
+    eos_e2, ϵ_e  = complement(aos, binned_e, args...; kwargs...)
+
+    eos_e, BinnedOpacities(opa_e, ϵ_e.κ)
+end
+
+
 
 ###########################################################################
 

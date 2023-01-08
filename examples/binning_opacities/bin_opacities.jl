@@ -57,10 +57,10 @@ end;
 # Compute binned quantities
 binned_opacities = tabulate(bin, weights, eos, opacities, remove_from_thin=false)
 
-function save(binned_opacities, version)
+function save_table(binned_opacities, version)
     # Save everything in the dispatch format
-    for_dispatch(eos, binned_opacities)
-    save(binned_opacities, "binned_opacities.hdf5")
+    for_dispatch(@axed(eos), binned_opacities)
+    save(binned_opacities.opacities, "binned_opacities.hdf5")
 
 
     # Move files to the final folder for dispatch
@@ -88,7 +88,7 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save(binned_opacities, "1.1")
+save_table(binned_opacities, "1.1")
 
 #bo = deepcopy(binned_opacities)
 #scale!(bo, binned_opacities, "k", [1], 1/2.0)

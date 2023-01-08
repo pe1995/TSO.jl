@@ -47,7 +47,7 @@ export formation_height, optical_depth
 export MARCSOS, MARCSOpacity
 
 ## Intpolations
-export gridded, uniform, complement, switch
+export gridded, uniform, complement, switch_energy
 
 ## Turbospectrum
 export load_wrapper, load_TS, move_output, import_wrapper, inTS, inWrapper
@@ -55,6 +55,9 @@ export babsma!, bsyn!
 
 ## Aesopus
 export AesopusEoS, AesopusOpacity
+
+## Models
+export Model1D, Average3D
 
 
 #= Python libs =#
@@ -66,6 +69,7 @@ const scipy_loaded      = Ref(false)
 include("_aux.jl")
 include("_communication.jl")
 include("_tables.jl")
+include("_models.jl")
 include("_eos.jl")
 include("_smooth.jl")
 include("_binning.jl")
