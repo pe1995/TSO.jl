@@ -57,5 +57,5 @@ opa = reload(SqOpacity, "combined_opacities.hdf5")
 
 ### Binning
 
-The binning procedure consists of 2 steps, that can be seen in the examples folders. First, the formation height of the different wavelength need to be computed. For this, a 1D model is needed, which should be read into the generic `Model1D` type. Afterwards, the actual binning can take place, where different binning schemes can be picked.
+The binning procedure consists of 2 steps, that can be seen in the `examples/binning_opacities` folder. First, the formation height of the different wavelength need to be computed. For this, a 1D model is needed, which should be read into the generic `Model1D` type. Afterwards, the actual binning can take place, where different binning schemes can be picked.
 
