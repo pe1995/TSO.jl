@@ -7,62 +7,64 @@ TSO.load_TS()
 TSO.load_wrapper()
 
 
-table_folder = joinpath("tables/sun_Magg_v1.2")
+table_folder = joinpath("tables", "TSO_AESOPUS_v1.1")
 
 
 # TS quantities after post-processing
-eos           = TSO.reload(TSO.RegularEoSTable,     joinpath(table_folder, "combined_ross_eos.hdf5"))
-opacities     = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_opacities.hdf5"), mmap=false)
+eos           = reload(SqEoS,     joinpath(table_folder, "combined_eos.hdf5")) # ross for others
+opacities     = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"), mmap=false)
 #opacitiesS    = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_Sopacities.hdf5"), mmap=false)
-formOpacities = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_formation_opacities.hdf5"), mmap=true)
+formOpacities = reload(SqOpacity, joinpath(table_folder, "combined_formation_opacities.hdf5"), mmap=true)
 
 
 # λ Integration weights
-weights = TSO.ω_midpoint(opacities.λ)
+weights = ω_midpoint(opacities.λ)
 
 
 # Choose the method of Binning. For each bin type, the binning function creates the bins (e.g. bin edges)
 # The binning() function then sorts the wavelength points from the opacity table into the correct bins, so that 
 # the integrated source function and average opacities can be computed in the box_integrated() function accordingly.
-bins_tabgen = TSO.TabgenBinning(TSO.EqualTabgenBins, 
+bins_tabgen = TabgenBinning(TSO.EqualTabgenBins, 
                                     opacities=opacities, formation_opacity=log10.(formOpacities.κ_ross))   # A Tabgen styled binning
-bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                                                         #
+bins_stagger = StaggerBinning(TSO.StaggerBins,                                                         #
                                     opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross),  #
                                     Nbins=12, λ_low=3.7)                                                   # A Stagger styled, L-shaped binning
-bins_co = TSO.Co5boldBinning(TSO.Co5boldBins)                                                              # Fixed Co5bold binning
+bins_co = Co5boldBinning(TSO.Co5boldBins)                                                              # Fixed Co5bold binning
 
 
 #= Modifications of the binning =#
 ## TSO_sun_Magg_v3.1: Use only 8 bins for speed reasons. Also shift the edge a bit lower 
-bins_stagger = TSO.StaggerBinning(TSO.StaggerBins,                                                         
+bins_stagger = StaggerBinning(TSO.StaggerBins,                                                         
                                     opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross),  
                                     Nbins=12, #κ_bins=4,
                                     λ_low=3.6)                 
 
-bins_tabgen = TSO.TabgenBinning(TSO.EqualTabgenBins, 
+bins_tabgen = TabgenBinning(TSO.EqualTabgenBins, 
                                     opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross), binsize=1.7)   # A Tabgen styled binning
 #= End modifications =#
   
 
 # Sort the wavelength points into the bins based on the chosen bin type
-binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
+bin = binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
 #binning = TSO.binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
 #binning = TSO.binning(bins_tabgen, opacities, log10.(formOpacities.κ_ross)) 
 
-
+for i in 1:12
+    @info "$(count(bin .== i)) wavelengths in bin $(i)"
+end;
 
 # Compute binned quantities
-binned_opacities = TSO.tabulate(binning, weights, eos, opacities, remove_from_thin=false)
+binned_opacities = tabulate(bin, weights, eos, opacities, remove_from_thin=false)
 
-function save(binned_opacities, version)
+function save_table(binned_opacities, version)
     # Save everything in the dispatch format
-    TSO.for_dispatch(eos, binned_opacities)
-    TSO.save(binned_opacities, "binned_opacities.hdf5")
+    for_dispatch(@axed(eos), binned_opacities)
+    save(binned_opacities.opacities, "binned_opacities.hdf5")
 
 
     # Move files to the final folder for dispatch
-    eos_table_name = "TSO_sun_Magg_v$(version)"
+    eos_table_name = "DIS_AESOPUS_v$(version)"
     !isdir(eos_table_name) && mkdir(eos_table_name) 
     mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
     mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
@@ -86,7 +88,8 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save(binned_opacities, "10.2")
+save_table(binned_opacities, "1.1")
+
 #bo = deepcopy(binned_opacities)
 #scale!(bo, binned_opacities, "k", [1], 1/2.0)
 #scale!(bo, binned_opacities, "k", [4], 2.0)

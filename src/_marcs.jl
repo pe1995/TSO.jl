@@ -1,6 +1,6 @@
-#================================================
-========== MARCS Sampled Opacities ==============
-================================================#
+#=================================================#
+#========== MARCS Sampled Opacities ==============#
+#=================================================#
 
 #= Intermediate opacity table type =#
 
@@ -115,6 +115,8 @@ Note that the T grid will not yet be uniform. The output is a 2D Matrix
 for all variables except T and rho.
 The results from this routine can be appended to each other if the T values
 are mutually exclusive. (they should be)
+
+Note also that the opacities are interpolated in log but saved linearly to fit in the API!
 """
 function interpolate_lnRho(m::MARCSOS, new_axis)
     T    = m.T |> unique 
@@ -151,16 +153,16 @@ function interpolate_lnRho(m::MARCSOS, new_axis)
         
         @inbounds for l in eachindex(m.λ)    
             oldV .= view(m.κ_c, view(point_assignment, :, i), l) .|> log
-            κ_c[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis)
+            κ_c[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis) .|> exp
 
             oldV .= view(m.κ_s, view(point_assignment, :, i), l) .|> log
-            κ_s[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis)
+            κ_s[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis) .|> exp
 
             oldV .= view(m.κ_la, view(point_assignment, :, i), l) .|> log
-            κ_la[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis)
+            κ_la[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis) .|> exp
 
             oldV .= view(m.κ_lm, view(point_assignment, :, i), l) .|> log
-            κ_lm[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis)
+            κ_lm[i, :, l] .= linear_interpolation(oldR, oldV, extrapolation_bc=Line()).(new_axis) .|> exp
         end
     end
     
@@ -193,17 +195,17 @@ function interpolate_lnT(m::MARCSOS)
         pg[:, i] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)
         
         for l in eachindex(m.λ)    
-            oldV         .= view(m.κ_c, :, i, l)
-            κ_c[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)
+            oldV         .= view(m.κ_c, :, i, l)   .|> log
+            κ_c[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)  .|> exp
 
-            oldV         .= view(m.κ_s, :, i, l)
-            κ_s[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)
+            oldV         .= view(m.κ_s, :, i, l)   .|> log
+            κ_s[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)  .|> exp
 
-            oldV          .= view(m.κ_la, :, i, l)
-            κ_la[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)
+            oldV          .= view(m.κ_la, :, i, l) .|> log
+            κ_la[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT) .|> exp
 
-            oldV          .= view(m.κ_lm, :, i, l)
-            κ_lm[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT)
+            oldV          .= view(m.κ_lm, :, i, l) .|> log
+            κ_lm[:, i, l] .= linear_interpolation(oldT, oldV, extrapolation_bc=Line()).(newT) .|> exp
         end
     end
     
@@ -215,19 +217,27 @@ Square the given MARCSOS part tables. All of the different tables may have diffe
 We first interpolate every sub-table to a common density grid. Then we pick a common Temp. grid 
 between all tables and interpolate 
 """
-function square(mos::MARCSOS...)
+function uniform(mos::MARCSOS...)
     m_rho = []
-    common_rho = TSO.common_grid(log, mos..., which=:ρ)
+    common_rho = common_grid(log, mos..., which=:ρ)
 
     for m in mos
-        append!(m_rho, [TSO.interpolate_lnRho(m, common_rho)])
+        append!(m_rho, [interpolate_lnRho(m, common_rho)])
     end
 
     ## append together all tables and sort them in T
     m_rho = append(m_rho...)
 
     ## interpolate the table to uniform lnT grid
-    interpolate_lnT(m_rho)
+    mos_inter = interpolate_lnT(m_rho)
+
+    ## set lower limit for opacities to avoid NaN in log
+    lower_limit!(mos_inter, 1e-30)
+
+    ## Fill in NaNs in the opacity table using linear interpolation
+    fill_nan!(mos_inter)
+
+    mos_inter
 end
 
 
@@ -239,9 +249,10 @@ from where. Electron density will be computed from the electron pressure.
 
 NOTE: This function has not been tested. It is expected to be slow, not optimizes and 
 using a lot of RAM. If it takes too long, the individual loops over eos and lambda 
-can be drawn together to make it probably much faster. TBD.
+can be drawn together to make it probably much faster. TBD. At the moment molecular lines
+are not included.
 """
-function complement(mos, eos; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:opacity)
+function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:opacity, upsample=-1, unify=false) where {E1<:AxedEoS}
     ## The grid is always taken from the MOS
     newlnT   = mos.T
     newlnRho = mos.ρ
@@ -250,16 +261,21 @@ function complement(mos, eos; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:o
     nr = length(newlnRho)
     T  = eltype(newlnT)
 
+    eaxis_new = is_internal_energy(eos)
+
+    @info "Size of the table: T-$(nt), ρ-$(nr), λ-$(length(mos.λ))"
+
+
     ## Go though additional quantities and take them from where they should be takes
     ### lnEi is bisected from the EoS
     newlnEi = if lnEi == :eos            
-        emin,emax,_,_ = TSO.limits(eos)
+        emin,emax     = limits(eos, 1)
         E             = zeros(T, nt, nr)
-        lims          = [emin, emax]
-
+        lims          = limits(eos, 1) #[emin-0.1(emax-emin), emax+0.1(emax-emin)]
+        lf            = lookup_function(eos, :lnEi)
         for j in eachindex(newlnRho)
             for i in eachindex(newlnT)
-                E[i, j] = TSO.bisect(eos, lnRho=newlnRho[j], lnT=newlnT[i], lnEi=lims)
+                E[i, j] = lookup(lf, newlnRho[j], newlnT[i]) #eaxis_new ? bisect(eos, newlnRho[j], lims, lnT=newlnT[i]) : lookup(eos, :lnEi, newlnRho[j], newlnT[i])
             end
         end
 
@@ -268,56 +284,71 @@ function complement(mos, eos; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:o
         error("Given lnEi not available. Take from EoS for now.")
     end
 
+
     ### lnRoss can be computed or taken. When it should be computed, do it later.
     newlnRoss = if lnRoss == :eos
         ross = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnRoss)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            ross[:, j] = TSO.lookup(eos, :lnRoss, rho, newlnT)
+            ross[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
-        ross
+        ross 
     else
         zeros(T, nt, nr)
     end
+
 
     newlnPg = if lnPg == :eos
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnPg)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            y[:, j] = TSO.lookup(eos, :lnPg, rho, newlnT)
+            y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
         y
     else
-        mos.pg
+        mos.pg |> deepcopy
     end
+
 
     newlnNe = if lnNe == :eos
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
+        f = lookup_table(eos, :lnNe)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
-            y[:, j] = TSO.lookup(eos, :lnNe, rho, newlnT)
+            y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
         end
 
         y
     else
-        log(exp.(mos.pe) / (TSO.KBoltzmann * exp.(newlnT)))
+        y = zeros(T, nt, nr)
+        for j in eachindex(newlnRho)
+            for i in eachindex(newlnT)
+                y[i, j] = log(exp.(mos.pe[i, j]) / (TSO.KBoltzmann * exp.(newlnT[i])))
+            end
+        end
+
+        y
     end
+
 
     # Compute the monochromatic source function (LTE)
     src = zeros(T, nt, nr, length(mos.λ))
     for j in eachindex(mos.λ)
         for i in eachindex(newlnT)
-            src[i, :, j] = TSO.Bν(mos.λ[j], exp(newlnT[i]))
+            src[i, :, j] .= Bν(mos.λ[j], exp(newlnT[i]))
         end
     end
+
 
     lnT_temp = zeros(T, nt, nr)
     for i in eachindex(newlnRho)
@@ -326,32 +357,83 @@ function complement(mos, eos; lnEi=:eos, lnRoss=:opacity, lnPg=:opacity, lnNe=:o
 
 
     ## Combine to EoS + opacity tables
-    neweos = TSO.RegularEoSTable(newlnRho, lnT_temp, newlnEi, newlnPg, newlnRoss, newlnNe)
+    neweos = RegularEoSTable(newlnRho, lnT_temp, newlnEi, newlnPg, newlnRoss, newlnNe)
 
-    newopa_c = TSO.RegularOpacityTable(mos.κ_c,                                    newlnRoss, src, mos.λ, false)
-    newopa_l = TSO.RegularOpacityTable(mos.κ_lm .+ mos.κ_la,                       newlnRoss, src, mos.λ, false)
-    newopa_s = TSO.RegularOpacityTable(mos.κ_s,                                    newlnRoss, src, mos.λ, false)
-    #newopa   = TSO.RegularOpacityTable(mos.κ_c .+ mos.κ_lm .+ mos.κ_la .+ mos.κ_s, newlnRoss, src, mos.λ, false)
+    # Save for testing
+    save(neweos, "intermediate_eos.hdf5")
 
-    ## Now that we have everything we can interpolate to the correct grid (inefficient though)
-    neweos, newopa_c, newopa_l, newopa_s = TSO.unify(neweos, [newopa_c, newopa_l, newopa_s])
+    ## Opacities are stored linealy so this can be done 
+    newopa_c = RegularOpacityTable(mos.κ_c,  newlnRoss, src, mos.λ, false)
+    newopa_l = RegularOpacityTable(mos.κ_la, newlnRoss, src, mos.λ, false)
+    newopa_s = RegularOpacityTable(mos.κ_s,  newlnRoss, src, mos.λ, false)
+    
+    neweos, newopa, newopa_c, newopa_l, newopa_s = if !unify
+        no = deepcopy(newopa_c) 
+        no.κ .= newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
+
+        (RegularEoSTable(newlnRho, newlnT, newlnEi, newlnPg, newlnRoss, newlnNe),
+            no, newopa_c, newopa_l, newopa_s)
+    else
+        ## Now that we have everything we can interpolate to the correct grid (inefficient though)
+        neweos, newopacities = unify(neweos, (newopa_c, newopa_l, newopa_s), upsample=upsample)
+        newopa_c, newopa_l, newopa_s = newopacities
+
+        no    = deepcopy(newopa_c) 
+        no.κ .= newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
+
+        neweos, no, newopa_c, newopa_l, newopa_s
+    end
+
+    aos_new = AxedEoS(neweos)
+
+    ## set small parts to almost 0
+    a_not_axis = is_internal_energy(aos_new) ? neweos.lnT : neweos.lnEi
+    a_not_axis[a_not_axis .< 1.0f-30]    .= 1.0f-30
+    neweos.lnPg[neweos.lnPg .< 1.0f-30]   .= 1.0f-30
+    neweos.lnRoss[neweos.lnRoss .< 1.0f-30] .= 1.0f-30
+    neweos.lnNe[neweos.lnNe .< 1.0f-30]   .= 1.0f-30
+
+
+    @inbounds for k in eachindex(mos.λ)
+        @inbounds for j in eachindex(newlnRho)
+            @inbounds for i in eachindex(aos_new.energy_axes.values)
+                if newopa.κ[i, j, k] < 1.0f-30
+                    newopa.κ[i, j, k] = 1.0f-30
+                end
+                if newopa_c.κ[i, j, k] < 1.0f-30
+                    newopa_c.κ[i, j, k] = 1.0f-30
+                end
+                if newopa_l.κ[i, j, k] < 1.0f-30
+                    newopa_l.κ[i, j, k] = 1.0f-30
+                end
+                if newopa_s.κ[i, j, k] < 1.0f-30
+                    newopa_s.κ[i, j, k] = 1.0f-30
+                end
+            end
+        end
+    end
+
+    @assert all(newopa.κ .> 0.0)
 
     ## Recompute the rosseland opacity if wanted
     if lnRoss == :opacity
-        TSO.rosseland_opacity!(newlnRoss, neweos, newopa; weights=ω_midpoint(opacities.λ))
+        rosseland_opacity!(newlnRoss, neweos, newopa; weights=ω_midpoint(newopa.λ))
         neweos.lnRoss   .= newlnRoss
-        newopa_c.κ_ross .= newlnRoss
-        newopa_l.κ_ross .= newlnRoss
-        newopa_s.κ_ross .= newlnRoss
+        newopa_c.κ_ross .= exp.(newlnRoss)
+        newopa_l.κ_ross .= exp.(newlnRoss)
+        newopa_s.κ_ross .= exp.(newlnRoss)
+        newopa.κ_ross   .= exp.(newlnRoss)
     end
 
-    newopa   = deepcopy(newopa_c) 
-    newopa.κ = newopa_c.κ .+ newopa_l.κ .+ newopa_s.κ
 
     return neweos, newopa, newopa_c, newopa_l, newopa_s
 end
 
-## Utility functions
+complement(mos::MARCSOS, eos::E1; kwargs...) where {E1<:RegularEoSTable} = complement(mos, AxedEoS(eos); kwargs...) 
+
+
+
+#= Utility functions =#
 
 function common_grid(mos::MARCSOS...; which=:ρ)
     mi = minimum((minimum(getfield(m, which)) for m in mos))
@@ -372,7 +454,7 @@ end
 """
 Append all tables together, sort by increasing T.
 """
-function append(mos::TSO.MARCSOS...)
+function append(mos::MARCSOS...)
     n_tot = [length(m.T) for m in mos] |> sum
     
     ## Append all the fields
@@ -396,4 +478,133 @@ function append(mos::TSO.MARCSOS...)
     κ_lmnew = κ_lmnew[mask, :, :]
     
     MARCSOS(Tnew, penew, pgnew, ρnew, κ_cnew, κ_snew, κ_lanew, κ_lmnew, mos[1].λ, mos[1].ω, mos[1].abundance)
+end
+
+"""
+    fill_nan(mos::MARCSOS)
+
+Fill NaN entries in the opacities by interpolating at constant temperature.
+Note: The currently available tables for molecular lines appear to be empty entirely.
+Maybe this requires adjustments in this function (and the 'complement' function).
+"""
+function fill_nan!(mos::MARCSOS)
+    xc    = mos.ρ
+    mask  = falses(length(mos.ρ))
+    nmask = similar(mask)
+    lm    = length(mask)
+
+    xc2    = mos.T
+    mask2  = falses(length(mos.T))
+    nmask2 = similar(mask2)
+    lm2    = length(mask2)
+
+    ## go though all wavelenght and try to interpolate
+    for k in eachindex(mos.λ)
+        for i in eachindex(mos.T)
+            ## check if there is a NaN in any opacity source (except molec. lines for now)
+            ### Continuum
+            mask  .= isnan.(view(mos.κ_c, i, :, k))
+            nmask .= .!mask
+            cm = count(mask)
+            if (cm<=lm-2) & (cm>0)
+                mos.κ_c[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_c, i, nmask, k)), view(xc, mask)) .|> exp
+            elseif (cm>0)
+                @info "All nan κ_c at k,i: $(k), $(i)"
+            end
+
+
+            ### Lines
+            mask  .= isnan.(view(mos.κ_la, i, :, k))
+            nmask .= .!mask
+            cm = count(mask)
+            if (cm<=lm-2) & (cm>0)
+                mos.κ_la[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_la, i, nmask, k)), view(xc, mask)) .|> exp
+            elseif (cm>0)
+                @info "All nan κ_c at k,i: $(k), $(i)"
+            end
+
+
+            ### Scattering
+            mask  .= isnan.(view(mos.κ_s, i, :, k))
+            nmask .= .!mask
+            cm = count(mask)
+            if (cm<=lm-2) & (cm>0)
+                mos.κ_s[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_s, i, nmask, k)), view(xc, mask)) .|> exp
+            elseif (cm>0)
+                @info "All nan κ_c at k,i: $(k), $(i)"
+            end
+        end
+
+
+        ## the other direction
+        for j in eachindex(mos.ρ)
+            ## check if there is a NaN in any opacity source (except molec. lines for now)
+            ### Continuum
+            mask2  .= isnan.(view(mos.κ_c, :, j, k))
+            nmask2 .= .!mask2
+            cm = count(mask2)
+            if (cm<=lm2-2) & (cm>0)
+                mos.κ_c[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_c, nmask2, j, k)), view(xc2, mask2)) .|> exp
+            elseif cm>0
+                @info "All nan κ_c at k,j: $(k), $(j)"
+                mos.κ_c[mask2, j, k] .= 1.0f-30
+            end
+    
+    
+            ### Lines
+            mask2  .= isnan.(view(mos.κ_la, :, j, k))
+            nmask2 .= .!mask2
+            cm = count(mask2)
+            if (cm<=lm2-2) & (cm>0)
+                mos.κ_la[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_la, nmask2, j, k)), view(xc2, mask2)) .|> exp
+            elseif cm>0
+                @info "All nan κ_la at k,j: $(k), $(j)"
+                mos.κ_la[mask2, j, k] .= 1.0f-30
+            end
+    
+    
+            ### Scattering
+            mask2  .= isnan.(view(mos.κ_s, :, j, k))
+            nmask2 .= .!mask2
+            cm = count(mask2)
+            if (cm<=lm2-2) & (cm>0)
+                mos.κ_s[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_s, nmask2, j, k)), view(xc2, mask2)) .|> exp
+            elseif cm>0
+                @info "All nan κ_s at k,j: $(k), $(j)"
+                mos.κ_s[mask2, j, k] .= 1.0f-30
+            end
+        end
+    end
+
+    @inbounds for k in axes(mos.κ_c, 3)
+        @inbounds for j in axes(mos.κ_c, 2)
+            @inbounds for i in axes(mos.κ_c, 1)
+                mos.κ_c[i, j, k]  = isnan(mos.κ_c[i, j, k])  ? 1.0f-30 : mos.κ_c[i, j, k]
+                mos.κ_la[i, j, k] = isnan(mos.κ_la[i, j, k]) ? 1.0f-30 : mos.κ_la[i, j, k]
+                mos.κ_s[i, j, k]  = isnan(mos.κ_s[i, j, k])  ? 1.0f-30 : mos.κ_s[i, j, k]
+            end
+        end
+    end
+
+    #@assert all(.!isnan.(mos.κ_c))
+    #@assert all(.!isnan.(mos.κ_la)) 
+    #@assert all(.!isnan.(mos.κ_s))
+end
+
+function lower_limit!(mos::MARCSOS, lim)
+    @inbounds for k in eachindex(mos.λ)
+        @inbounds for j in eachindex(mos.ρ)
+            @inbounds for i in eachindex(mos.T)
+                if mos.κ_c[i, j, k] < lim
+                    mos.κ_c[i, j, k] = lim
+                end
+                if mos.κ_la[i, j, k] < lim
+                    mos.κ_la[i, j, k] = lim
+                end
+                if mos.κ_s[i, j, k] < lim
+                    mos.κ_s[i, j, k] = lim
+                end
+            end
+        end
+    end
 end

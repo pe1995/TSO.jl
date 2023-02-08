@@ -1,8 +1,8 @@
-#================================================
-======= AESOPUS 2.0 Opacity + EoS ===============
-================================================#
+#=================================================#
+#======= AESOPUS 2.0 Opacity + EoS ===============#
+#=================================================#
 
-## Constructors for the EoS
+#= Constructors for the EoS =#
 
 """
     AesopusEoS(path)
@@ -76,7 +76,6 @@ function AesopusEoS_ascii(; energy, kross, ne, pg, type=Float32)
     lnRho = log.(first(content))
     for it in 1:nT
         lnT[it] = log(first(content[it+1]))
-        #@show lnT[it] first(content[it+1])
 
         for jr in 1:nR
             lnEi[it,   jr] = content[ it+1][jr+1]
@@ -94,7 +93,7 @@ end
 
 
 
-## Constructors for the Opacity table
+#= Constructors for the Opacity table =#
 
 """
     AesopusOpacity(eos; sigma=path_to_file, λ_nodes=5776)
@@ -120,7 +119,6 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
     κ = zeros(Float64, lt, lr, ll)
     line = zeros(Float64, 4)
 
-    #f = FortranFiles.FortranFile(sigma, "r")
     f = open(sigma, "r")
 
     for k in 1:lt
@@ -131,30 +129,70 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
         end
     end
 
-    #read!(f, T)
-    #read!(f, r)
-    #read!(f, l)
-    #read!(f, κ)
-
     close(f)
 
-    ## log10 - ln
+    ## log10 -> ln
     T .*= log(10)
     r .*= log(10)
     l .*= log(10)
     κ .*= log(10)
 
-    @info all(T .≈ eos.lnT)
-    @info all(r .≈ eos.lnRho)
-    @info size(κ)
+    ## Sort T from low to high
+    reverse!(T)
+    reverse!(κ, dims=1)
 
-    T, r, l, κ
+    ## Sort lambda from low to high
+    reverse!(l)
+    reverse!(κ, dims=3)
+
+    ## Convert to the requested type
+    if eltype(T) != eltype(eos.lnT)
+        tp   = eltype(eos.lnT)
+        Tnew = zeros(tp, size(T)...)
+        rnew = zeros(tp, size(r)...)
+        lnew = zeros(tp, size(l)...)
+        κnew = zeros(tp, size(κ)...)
+        
+        @inbounds for k in eachindex(l)
+            @inbounds for j in 1:lr
+                @inbounds for i in 1:lt
+                    κnew[i, j, k] = Base.convert(tp, κ[i, j, k])
+                    lnew[k]       = Base.convert(tp, l[k])
+                    Tnew[i]       = Base.convert(tp, T[i])
+                    rnew[j]       = Base.convert(tp, r[j])
+                end
+            end
+        end
+    else
+        Tnew = T
+        rnew = r
+        lnew = l
+        κnew = κ
+    end
+        
+
+    ## The grids have to match (for now, could be interpolated if needed)
+    @assert all(Tnew .≈ eos.lnT)
+    @assert all(rnew .≈ eos.lnRho)
+
+    ## Compute the source function (not integrated)
+    src = similar(κnew)
+    @inbounds for k in eachindex(lnew)
+        @inbounds for j in 1:lr
+            @inbounds for i in 1:lt
+                src[i, j, k] = Bν(exp(lnew[k]), exp(Tnew[i]))
+            end
+        end
+    end
+
+    ## Create the opacity table
+    RegularOpacityTable(exp.(κnew), exp.(eos.lnRoss), src, exp.(lnew), false)
 end
 
 
 
 
-## Utility functions
+#= Utility functions =#
 
 """
 Read and parse content of ascii files

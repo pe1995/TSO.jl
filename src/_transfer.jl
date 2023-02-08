@@ -1,9 +1,3 @@
-## Abstract type structure
-
-abstract type RadiativeTransferSolver end
-
-
-
 ## Concrete types
 
 struct BinnedTransferSolver{T<:AbstractFloat} <:RadiativeTransferSolver

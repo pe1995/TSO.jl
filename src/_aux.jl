@@ -45,6 +45,28 @@ randrange(a,b,args...) = begin
     rand(args...) .* (xmax-xmin) .+ xmin
 end
 
+function stretch(x, y, z)
+    npoints = prod(size(x))
+    ndims   = 2
+
+    pp = zeros(npoints, ndims)
+    zz = zeros(npoints)
+
+    c = 1
+    for j in axes(x, 2)
+        for i in axes(x, 1)
+            pp[c, 1] = x[i, j]
+            pp[c, 2] = y[i, j]
+
+            zz[c] = z[i, j]
+
+            c += 1
+        end
+    end
+
+    pp, zz
+end
+
 
 
 
@@ -69,6 +91,11 @@ macro pythonHelp(mod, dir)
     path_esc = esc(dir)
     mod_s = :($mod)
     :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
+end
+
+load_scipy_interpolate!(mod=scipy_interpolate) = begin
+    copy!(mod, pyimport("scipy.interpolate"))
+    scipy_loaded[] = true
 end
 
 
@@ -108,7 +135,6 @@ get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fna
     
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
-
 
 
 
@@ -245,9 +271,70 @@ const atomic_mass = Dict(   "H"  => ("Hydrogen"	    ,1.00797),
                             "Bh" =>	("Bohrium"	    ,262),
                             "Db" =>	("Dubnium"	    ,262),
                             "Sg" =>	("Seaborgium"	,263))
+
+## Magg 2022 abundances 
+const magg2022 = [12.000
+        10.930
+        1.050
+        1.380
+        2.700
+        8.560
+        7.980
+        8.770
+        4.400
+        8.150
+        6.290
+        7.550
+        6.430
+        7.590
+        5.410
+        7.160
+        5.250
+        6.500
+        5.140
+        6.370
+        3.070
+        4.940
+        3.890
+        5.740
+        5.520
+        7.500
+        4.950
+        6.240
+        4.210
+        4.600
+        2.880
+        3.580
+        2.290
+        3.330
+        2.560
+        3.250
+        2.600
+        2.920
+        2.210
+        2.580
+        1.420
+        1.920
+        1.840
+        1.120
+        1.660
+        0.940
+        1.770
+        1.600
+        2.000
+        1.000
+        2.190
+        1.510
+        2.240
+        1.070
+        2.170
+        1.130
+        1.700
+        0.580
+        1.450
+        1.000
+        0.520]
 #####
-
-
 
 
 
@@ -263,6 +350,31 @@ mass_u(number::Int)  = mass_u(number |> id_atom)
 mass_g(number::Int)  = mass_g(number |> id_atom)
 
 full_name(name) = first(atomic_mass[name])
+
+
+
+## Conversion of abundances to fractions
+function composition_fractions(abundances=magg2022)
+    zx = 0.0
+    for i in eachindex(abundances)
+        if i >2
+            zx += exp10(abundances[i] .-12) * mass_u(i)
+        end
+    end
+    
+    yx = exp10(abundances[2] .-12) * mass_u(:He) / mass_u(:H)
+
+    zx = zx / mass_u(:H)
+    x = 1 / (1+yx+zx)
+    y = yx * x
+    z = zx * x
+
+    x, y, z
+end
+
+
+
+
 
 
 ## Plot default setup that kind-of works
