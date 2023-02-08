@@ -32,8 +32,8 @@ end
 ##################################################################################################
 
 # Creating initial set of tables
-lnT = range(log(1.1e3), log(5.5e5); length=200)
-lnρ = range(log(1e-15), log(1e-3); length=200)
+lnT = range(log(1.1e3), log(5.5e5); length=159)
+lnρ = range(log(1e-15), log(1e-3); length=159)
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
 
 
@@ -62,7 +62,7 @@ begin
     ## path to the linelist(s)
     #linelist = ['/u/peitner/Turbospectrum/TSwrapperOpac/nlte_ges_linelist.txt', '/u/peitner/Turbospectrum/TSwrapperOpac/Hlinedata', '/u/peitner/Turbospectrum/TSwrapperOpac/*GESv5.bsyn']
     #linelist = [ TSO.@inTS("../TSwrapperOpac/nlte_ges_linelist.txt"), TSO.@inTS("../TSwrapperOpac/Hlinedata")]
-    linelist = abspath.([#"LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
+    linelist = abspath.(["LINE-LISTS/ADDITIONAL-LISTS/1000-2490-vald.list", 
                          "LINE-LISTS/ADDITIONAL-LISTS/vald_2490-25540.list",
                          #"LINE-LISTS/25500-200000_cut-4/atom_25500-200000.list",
                          "LINE-LISTS/ADDITIONAL-LISTS/Hlinedata"])
@@ -77,16 +77,17 @@ begin
     #nlte_config += [ Ba : [ 'Ba/NLTEgrid_Ba_MARCS_May-10-2021.bin', 'Ba/auxData_Ba_MARCS_May-10-2021.txt', 'Ba/atom.ba111' ] ]
 
     ## starting wavelenght, AA
-    #lam_start = 1000
-    lam_start = 2500
+    ### Three ranges:
+    ### 1000-4000 (hres)
+    ### 4000-25500 (lres)
+    ### 25500-200000 (lres)
 
-    ## last wavelenght, AA
-    #lam_end =  26000
-    lam_end = 4000
+    lam_start = 1000
+    lam_end   = 4000
 
     ## resolution per wavelenght (R capital)
-    resolution = 325000
-    #resolution = 2500
+    resolution = 200000 # hres
+    #resolution = 20000  # lres
 
     tmolim = 20000.0
 
@@ -107,7 +108,7 @@ begin
     setup       = compute_opac.setup(file=setup_input, mode="MAprovided")
     setup.jobID = "TSO"
     
-    wvl_set = "UVD_Magg_v1.1"
+    wvl_set = "UV_sun_Magg_v4.0"
 
     magg_2022 = [(TSO.atom_id(:H ), 12.0),
                  (TSO.atom_id(:C ), 8.56),

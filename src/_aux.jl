@@ -47,6 +47,8 @@ end
 
 
 
+
+
 ## Importing of python modules
 
 function _get_help_py(mod ,dir=dirname(@__FILE__))
@@ -68,6 +70,7 @@ macro pythonHelp(mod, dir)
     mod_s = :($mod)
     :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
 end
+
 
 
 
@@ -105,6 +108,8 @@ get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fna
     
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
+
+
 
 
 
@@ -241,6 +246,10 @@ const atomic_mass = Dict(   "H"  => ("Hydrogen"	    ,1.00797),
                             "Db" =>	("Dubnium"	    ,262),
                             "Sg" =>	("Seaborgium"	,263))
 #####
+
+
+
+
 
 ## Convenience functions for mass 
 
