@@ -11,6 +11,8 @@ using Glob
 using HDF5
 using Statistics
 
+import Base.size
+
 
 #= Abstract Interface =#
 abstract type AbstractTable end
@@ -27,10 +29,10 @@ abstract type RadiativeTransferSolver end
 ## Tables
 export OpacityTable, EoSTable, SqOpacity, SqEoS
 export for_dispatch
-export @axed, limits, EnergyAxis, DensityAxis, AxedEoS
+export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
 ## Aux
-export save, reload
+export save, reload, meshgrid
 
 ## Binning 
 export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning
@@ -38,6 +40,7 @@ export binning
 export ω_midpoint
 export lookup, lookup_function, bisect
 export tabulate
+export @binned
 
 ## EoS
 export rosseland_opacity!, rosseland_opacity, transfer_rosseland!, upsample

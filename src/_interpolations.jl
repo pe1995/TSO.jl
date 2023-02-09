@@ -21,7 +21,7 @@ function gridded(aos::A, opacities::OpacityTable...; conservative=false, upsampl
     # Check the current grid, if it is gridded alredy there is nothing to do
     if is_gridded(aos) & !switch ## Nothing to do here
         return (aos.eos, opacities...)  
-    else
+    elseif switch
         return switch_energy(aos, opacities...; conservative=conservative, upsample=upsample, newE=nothing)
     end
 
@@ -58,7 +58,7 @@ Make the EoS uniform in both Axes. Checks if it is gridded before.
 function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
     if is_uniform(aos) & !switch ## Nothing to do here
         return (aos.eos, opacities...)  
-    else
+    elseif switch
         return switch_energy(aos, opacities...; conservative=conservative, upsample=upsample, newE=nothing)
     end
 
@@ -751,6 +751,8 @@ end
 
 @inline interpolate_at(x, y, x0) = linear_interpolation(x, y, extrapolation_bc=Line()).(x0)
 
+nan_or_inf(a) = isnan(a) | !isfinite(a)
+
 function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS} 
     eos = aos.eos
     xc    = DensityAxis(aos).values
@@ -766,71 +768,57 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
     var = getfield(aos.eos, dependent_energy_variable(aos))
 
     for i in eachindex(xc2)
-        mask  .= isnan.(view(var, i, :))
+        mask  .= nan_or_inf.(view(var, i, :))
         nmask .= .!mask
         cm = count(mask)
         if (cm<=lm-2) & (cm>0)
             var[i, mask] .= interpolate_at(view(xc, nmask), view(var, i, nmask), view(xc, mask))
-        elseif (cm>0)
-            @info "All nan var at k,i: $(k), $(i)"
         end
 
-        mask  .= isnan.(view(eos.lnPg, i, :))
+        mask  .= nan_or_inf.(view(eos.lnPg, i, :))
         nmask .= .!mask
         cm = count(mask)
         if (cm<=lm-2) & (cm>0)
             eos.lnPg[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnPg, i, nmask), view(xc, mask))
-        elseif (cm>0)
-            @info "All nan lnPg at k,i: $(k), $(i)"
         end
 
-        mask  .= isnan.(view(eos.lnNe, i, :))
+        mask  .= nan_or_inf.(view(eos.lnNe, i, :))
         nmask .= .!mask
         cm = count(mask)
         if (cm<=lm-2) & (cm>0)
             eos.lnNe[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnNe, i, nmask), view(xc, mask))
-        elseif (cm>0)
-            @info "All nan lnNe at k,i: $(k), $(i)"
         end
 
-        mask  .= isnan.(view(eos.lnRoss, i, :))
+        mask  .= nan_or_inf.(view(eos.lnRoss, i, :))
         nmask .= .!mask
         cm = count(mask)
         if (cm<=lm-2) & (cm>0)
             eos.lnRoss[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnRoss, i, nmask), view(xc, mask))
-        elseif (cm>0)
-            @info "All nan lnRoss at k,i: $(k), $(i)"
         end
 
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask  .= isnan.(view(opa.κ_ross, i, :))
+            mask  .= nan_or_inf.(view(opa.κ_ross, i, :))
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
                 opa.κ_ross[i, mask] .= interpolate_at(view(xc, nmask), log.(view(opa.κ_ross, i, nmask)), view(xc, mask)) .|> exp
-            elseif (cm>0)
-                @info "All nan opa.κ_ross at k,i: $(k), $(i)"
             end
             
             for k in eachindex(opa.λ)
-                mask  .= isnan.(view(opa.κ, i, :, k))
+                mask  .= nan_or_inf.(view(opa.κ, i, :, k))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
                     opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
-                elseif (cm>0)
-                    @info "All nan kappa at k,i: $(k), $(i)"
                 end
 
-                mask  .= isnan.(view(opa.src, i, :, k))
+                mask  .= nan_or_inf.(view(opa.src, i, :, k))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
                     opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
-                elseif (cm>0)
-                    @info "All nan ross at k,i: $(k), $(i)"
                 end
             end
         end
@@ -838,7 +826,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
 
     ## the other direction
     for j in eachindex(xc)
-        mask2  .= isnan.(view(var, :, j))
+        mask2  .= nan_or_inf.(view(var, :, j))
         nmask2 .= .!mask2
         cm = count(mask2)
         if (cm<=lm2-2) & (cm>0)
@@ -848,7 +836,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             var[mask2, j] .= 1.0f-30
         end
 
-        mask2  .= isnan.(view(eos.lnPg, :, j))
+        mask2  .= nan_or_inf.(view(eos.lnPg, :, j))
         nmask2 .= .!mask2
         cm = count(mask2)
         if (cm<=lm2-2) & (cm>0)
@@ -858,7 +846,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             eos.lnPg[mask2, j] .= 1.0f-30
         end
 
-        mask2  .= isnan.(view(eos.lnNe, :, j))
+        mask2  .= nan_or_inf.(view(eos.lnNe, :, j))
         nmask2 .= .!mask2
         cm = count(mask2)
         if (cm<=lm2-2) & (cm>0)
@@ -868,7 +856,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             eos.lnNe[mask2, j] .= 1.0f-30
         end
 
-        mask2  .= isnan.(view(eos.lnRoss, :, j))
+        mask2  .= nan_or_inf.(view(eos.lnRoss, :, j))
         nmask2 .= .!mask2
         cm = count(mask2)
         if (cm<=lm2-2) & (cm>0)
@@ -882,7 +870,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask2  .= isnan.(view(opa.κ_ross, :, j))
+            mask2  .= nan_or_inf.(view(opa.κ_ross, :, j))
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
@@ -893,7 +881,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             end
             
             for k in eachindex(opa.λ)
-                mask2  .= isnan.(view(opa.κ, :, j, k))
+                mask2  .= nan_or_inf.(view(opa.κ, :, j, k))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)
@@ -903,7 +891,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
                     opa.κ[mask2, j, k] .= 1.0f-30
                 end
 
-                mask2  .= isnan.(view(opa.src, :, j, k))
+                mask2  .= nan_or_inf.(view(opa.src, :, j, k))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)
@@ -916,3 +904,49 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         end
     end;
 end
+
+function set_small!(aos, opa, small=1e-30)
+    otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
+    lsmall = log(small)
+    for j in eachindex(aos.density_axes.values)
+        for i in eachindex(aos.energy_axes.values)
+            otherV[i, j]         = check(otherV[i, j], lsmall) ? otherV[i, j] : lsmall
+            aos.eos.lnPg[i, j]   = check(aos.eos.lnPg[i, j],   lsmall) ? aos.eos.lnPg[i, j]   : lsmall
+            aos.eos.lnNe[i, j]   = check(aos.eos.lnNe[i, j],   lsmall) ? aos.eos.lnNe[i, j]   : lsmall
+            aos.eos.lnRoss[i, j] = check(aos.eos.lnRoss[i, j], lsmall) ? aos.eos.lnRoss[i, j] : lsmall
+            opa.κ_ross[i, j]     = check(opa.κ_ross[i, j],     small)  ? opa.κ_ross[i, j]     : small
+
+            for k in eachindex(opa.λ)
+                opa.κ[i, j, k]     = check(opa.κ[i, j, k],   small)  ? opa.κ[i, j, k]    : small
+                opa.src[i, j, k]   = check(opa.src[i, j, k], small)  ? opa.src[i, j, k]  : small
+            end
+        end
+    end
+end
+
+function set_large!(aos, opa, large=1e30)
+    otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
+    llarge = log(large)
+    for j in eachindex(aos.density_axes.values)
+        for i in eachindex(aos.energy_axes.values)
+            otherV[i, j]         = check_large(otherV[i, j], llarge) ? otherV[i, j] : llarge
+            aos.eos.lnPg[i, j]   = check_large(aos.eos.lnPg[i, j],   llarge) ? aos.eos.lnPg[i, j]   : llarge
+            aos.eos.lnNe[i, j]   = check_large(aos.eos.lnNe[i, j],   llarge) ? aos.eos.lnNe[i, j]   : llarge
+            aos.eos.lnRoss[i, j] = check_large(aos.eos.lnRoss[i, j], llarge) ? aos.eos.lnRoss[i, j] : llarge
+            opa.κ_ross[i, j]     = check_large(opa.κ_ross[i, j],     large)  ? opa.κ_ross[i, j]     : large
+
+            for k in eachindex(opa.λ)
+                opa.κ[i, j, k]     = check_large(opa.κ[i, j, k],   large)  ? opa.κ[i, j, k]    : large
+                opa.src[i, j, k]   = check_large(opa.src[i, j, k], large)  ? opa.src[i, j, k]  : large
+            end
+        end
+    end
+end
+
+set_limits!(aos, opa; small=1e-30, large=1e30) = begin
+    set_small!(aos, opa, small)
+    set_large!(aos, opa, large)
+end
+
+check(v, small) = !isnan(v) & (v >= small)
+check_large(v, large) = !isnan(v) & (v < large)

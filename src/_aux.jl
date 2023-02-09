@@ -40,7 +40,7 @@ end
 """
 create random number between a and b
 """
-randrange(a,b,args...) = begin
+randrange(a, b, args...) = begin
     xmin,xmax = min(a,b),max(a,b)
     rand(args...) .* (xmax-xmin) .+ xmin
 end
@@ -66,6 +66,19 @@ function stretch(x, y, z)
 
     pp, zz
 end
+
+stretch(x, y) = begin
+    xy = zeros(eltype(x), length(x), 2)
+    for i in eachindex(x)
+        xy[i, 1] = x[i]
+        xy[i, 2] = y[i]
+    end
+
+    xy
+end
+
+zeros_as(x)    = zeros(eltype(x), size(x)...)
+zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
 
 
@@ -133,9 +146,9 @@ add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
+
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
-
 
 
 
@@ -351,7 +364,7 @@ mass_g(number::Int)  = mass_g(number |> id_atom)
 
 full_name(name) = first(atomic_mass[name])
 
-
+to_cm(aa) = aa * aa_to_cm
 
 ## Conversion of abundances to fractions
 function composition_fractions(abundances=magg2022)

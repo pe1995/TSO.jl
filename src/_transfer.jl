@@ -1,8 +1,8 @@
 ## Concrete types
 
-struct BinnedTransferSolver{T<:AbstractFloat} <:RadiativeTransferSolver
-    eos       ::EoSTable
-    opacities ::OpacityTable
+struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:RadiativeTransferSolver
+    eos       ::A
+    opacities ::O
     angles    ::Vector{T}
     weights   ::Vector{T}
     bins      ::Int
@@ -28,6 +28,7 @@ end
 
 
 
+
 ## Constructors
 
 """
@@ -38,7 +39,8 @@ Construct a binned radiative transfer solver based on a 1D model witht the kind:
 
     needs to be ordered from bottom to top. z increasing outwards.
 """
-Solver(model::Array{T,2}; eos, opacities, angles=[1.0, 0.76505530, 0.28523153, -1, -0.76505530, -0.28523153], weights=[0.13333334/2, 0.14477713*2, 0.07913155*2, 0.13333334/2, 0.14477713*2, 0.07913155*2]) where {T} = begin
+Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=[1.0, 0.76505530, 0.28523153, -1, -0.76505530, -0.28523153], weights=[0.13333334/2, 0.14477713*2, 0.07913155*2, 0.13333334/2, 0.14477713*2, 0.07913155*2]) where {T} = begin
+    opacities = opacities.opacities
     bins    = size(opacities.κ, 3)
     T2      = eltype(opacities.κ)
     model   = Base.convert.(T2, deepcopy(model))
@@ -66,6 +68,17 @@ Solver(model::Array{T,2}; eos, opacities, angles=[1.0, 0.76505530, 0.28523153, -
                         zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1)))
 end
 
+Solver(model::Model1D, eos::AxedEoS; kwargs...) = begin
+    model_array = zeros(eltype(model.z), length(model.z), 3)
+    model_array[:, 1] = deepcopy(model.z)
+    model_array[:, 2] = exp.(getfield(model, energy_variable(eos)))
+    model_array[:, 3] = exp.(model.lnρ)
+
+    Solver(model_array; eos=eos, kwargs...)
+end 
+
+Solver(model::Model1D, eos::EoSTable; kwargs...) = Solver(model; eos=@axed(eos), kwargs...)
+
 
 
 ## Solving routines
@@ -73,7 +86,7 @@ end
 """
 Solve the 1D radiative transfer in a given direction μ=cos(θ).
 """
-function transfer1d!(solver)
+function transfer1d!(solver) 
 
     # Check in which direction we are going
     down = solver.μ[] .< 0.0
@@ -96,25 +109,35 @@ function transfer1d!(solver)
 
     #@assert all(solver.dt .> 0.0)
 
-    solver.ex .= exp.(-solver.dt) 
+    @inbounds for i in eachindex(solver.dt)
+        solver.ex[i] = exp(-solver.dt[i]) 
 
-    # Compute the U functions
-    solver.U0 .= 1.0        .- solver.ex
-    solver.U1 .= solver.dt  .- solver.U0
+        # Compute the U functions
+        solver.U0[i] = 1.0           - solver.ex[i]
+        solver.U1[i] = solver.dt[i]  - solver.U0[i]
 
-    # Mask the small dt regions
-    solver.mask .= solver.dt .< 1e-3
-    solver.U1[solver.mask] .= 0.5 .* solver.dt[solver.mask].^2 .- 1/6 .* solver.dt[solver.mask].^2 .* solver.dt[solver.mask]
-    solver.U0[solver.mask] .=  solver.dt[solver.mask] .- solver.U1[solver.mask]
+        # Mask the small dt regions
+        if solver.dt[i] < 1e-3
+            solver.U1[i] = 0.5 * solver.dt[i]^2 - 1/6 * solver.dt[i]^2 * solver.dt[i]
+            solver.U0[i] =  solver.dt[i] - solver.U1[i]
+        end
 
-    # Psi arrays
-    solver.psiup .= solver.U0 .- solver.U1 ./ solver.dt
-    solver.psi0  .= solver.U1 ./ solver.dt
+        # Psi arrays
+        solver.psiup[i] = solver.U0[i] - solver.U1[i] / solver.dt[i]
+        solver.psi0[i]  = solver.U1[i] / solver.dt[i]
 
-    # intensity at center point
-    solver.I_temp   .= similar(S)
-    solver.I_temp[1] = first(S)#down ? 0.0 : first(S) 
-    lI   = length(solver.I_temp)
+        # intensity at center point
+        solver.I_temp[i] = S[i]
+    end
+
+    solver.I_temp[1] = if !down
+        first(S) 
+    else
+        solver.psiup[1]*S[1] + solver.psi0[1]*S[1]
+        first(S) 
+    end 
+
+    lI = length(solver.I_temp)
 
     # now solve
     for i in 2:lI
@@ -149,14 +172,14 @@ end
 Compute source funtion and opacity for the given model in the given bin.
 """
 function optics!(solver, bin)
-    solver.S .= exp.(lookup(solver.eos, solver.opacities, :src, view(solver.model, :, 3), view(solver.model, :, 2), bin))
-    solver.χ .= exp.(lookup(solver.eos, solver.opacities, :κ,   view(solver.model, :, 3), view(solver.model, :, 2), bin));
+    solver.S .= lookup(solver.eos, solver.opacities, :src, view(solver.model, :, 3), view(solver.model, :, 2), bin)
+    solver.χ .= lookup(solver.eos, solver.opacities, :κ,   view(solver.model, :, 3), view(solver.model, :, 2), bin);
 end
 
 """
 Compute the radiation field from the given solver from Binned radiative transfer.
 """
-function binned_radiation(solver::BinnedTransferSolver; mean_intensity=false)
+function binned_radiation(solver::B; mean_intensity=false) where {B<:BinnedTransferSolver}
     F = zeros(eltype(solver.I), size(solver.I, 1), solver.bins)
 
     #debug[] = true
@@ -203,6 +226,8 @@ end
 
 
 
+
+
 ## Commputation of mean intensity
 
 """
@@ -228,6 +253,8 @@ end
 
 
 
+
+
 ## Commputation of heating rate
 
 Qr(solver::BinnedTransferSolver) = begin
@@ -242,17 +269,23 @@ end
 
 heating(solver, I; weights=ones(solver.bins)) = begin
     Q = zeros(eltype(I), size(I, 1))
-
+    S = similar(solver.S)
     for i in 1:solver.bins
 
         # set the source function and opacities
         optics!(solver, i)
 
-        Q .+= solver.χ .* weights[i] .* (I[:, i] .- solver.S)
+        #S .= 0.0
+        #for j in eachindex(solver.weights)
+        #    S .+= solver.S .* solver.weights[j]
+        #end
+        Q .+= solver.χ .* weights[i] .* (I[:, i] .- S)
     end
 
     Q .* 4 .*π 
 end
+
+
 
 
 
@@ -273,11 +306,15 @@ source_function(solver::BinnedTransferSolver, S_b; weights=ones(solver.bins)) = 
         # set the source function and opacities in this bin
         optics!(solver, i)
 
-        S_b .+= weights[i] .* solver.S
+        for j in eachindex(solver.weights)
+            S_b .+= weights[i] * solver.weights[j] .* solver.S
+        end
     end
 
     S_b
 end
+
+
 
 
 
@@ -301,10 +338,14 @@ end
 
 
 
+
+
 ## General methods
 
 effective_temperature(F) = (F/σ_S)^(1/4)
 @inline angle_index(solver) = findfirst(solver.angles .≈ solver.μ[])
+
+
 
 
 
