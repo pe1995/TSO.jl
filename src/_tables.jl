@@ -101,6 +101,7 @@ Opacity(args...; regular=true, kwargs...) = regular ? RegularOpacityTable(args..
 EoS(args...;     regular=true, kwargs...) = regular ? RegularEoSTable(args...;     kwargs...) : IrregularEoSTable(args...;     kwargs...)
 
 RegularOpacityTable(κ::Array, κ_ross::Array, src::Array; optical_depth=false) = RegularOpacityTable(κ, κ_ross, src, optical_depth) 
+#RegularOpacityTable(; κ, src, κ_ross=zeros_as(κ, 1:3), κ_ross=zeros_as(κ, 1:3))
 
 AxedEoS(eos) = AxedEoS(eos, EnergyAxis(eos), DensityAxis(eos))
 
@@ -238,7 +239,6 @@ is_uniform(values::A) where {N, T, A<:AbstractArray{T, N}} = begin
 
         if !isapprox(d2, d, atol=sqrt(tol_i))
             uni = false
-            @show i (d2-d) sqrt(tol_i)
             break
         end
     end
@@ -258,6 +258,12 @@ Check if the energy axis of this EoS is internal energy or not.
 is_internal_energy(aos::AxedEoS) = EnergyAxis(aos).name == :lnEi
 dependent_energy_variable(aos::AxedEoS) = is_internal_energy(aos) ? :lnT : :lnEi
 energy_variable(aos::AxedEoS) = EnergyAxis(aos).name
+
+## Convenience
+meshgrid(aos::A) where {A<:AxedEoS}     = meshgrid(EnergyAxis(aos).values, DensityAxis(aos).values)
+size(aos::A) where {A<:AxedEoS}         = (EnergyAxis(aos).length, DensityAxis(aos).length)
+size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
+
 
 
 #= Lookup functions =#
@@ -324,7 +330,6 @@ lookup_function(eos::EA, what::Symbol, args...) where {EA<:AxedEoS} = begin
     
     end
 end
-
 lookup_function(eos::EA, opacities::O, what::Symbol, args...) where {EA<:AxedEoS, O<:OpacityTable} = begin
     ip = if is_uniform(eos)
         second_axis = EnergyAxis(eos).unirange
@@ -367,15 +372,78 @@ lookup_function(eos::EA, opacities::O, what::Symbol, args...) where {EA<:AxedEoS
     end
 end
 
+
 ## Regular Lookup function
 lookup_function(eos::EB, what::Symbol, args...) where {EB<:RegularEoSTable} = begin
-    GriddedLookup(extrapolate(interpolate((EnergyAxis(eos).values, eos.lnRho), view(getfield(eos, what), :, :, args...), Gridded(Linear())), Line()))
+    lookup_function(@axed(eos), what, args...)
+    #GriddedLookup(extrapolate(interpolate((EnergyAxis(eos).values, eos.lnRho), view(getfield(eos, what), :, :, args...), Gridded(Linear())), Line()))
+end
+lookup_function(eos::EB, opacities::O, what::Symbol, args...) where {EB<:RegularEoSTable, O<:OpacityTable} = begin
+    lookup_function(@axed(eos), opacities, what, args...)
+    #ip = extrapolate(interpolate((EnergyAxis(eos).values, eos.lnRho), log.(view(getfield(opacities, what), :, :, args...)), Gridded(Linear())), Line())
+    #GriddedLookup((x1, x2) -> exp(ip(x1, x2)))
 end
 
-lookup_function(eos::EB, opacities::O, what::Symbol, args...) where {EB<:RegularEoSTable, O<:OpacityTable} = begin
-    ip = extrapolate(interpolate((EnergyAxis(eos).values, eos.lnRho), log.(view(getfield(opacities, what), :, :, args...)), Gridded(Linear())), Line())
-    GriddedLookup((x1, x2) -> exp(ip(x1, x2)))
+
+## Specific lookup function (to bypass form requirement)
+lookup_function(::Type{ScatteredLookup}, aos::A, what::Symbol) where {A<:AxedEoS} = begin
+    if !scipy_loaded[]
+        load_scipy_interpolate!()
+    end
+
+    ScatteredLookup(scipy_interpolate.LinearNDInterpolator(stretch(EnergyAxis(aos).values, DensityAxis(aos).values), getfield(aos.eos, which)))
 end
+lookup_function(::Type{ScatteredLookup}, aos::A, opa::B, what::Symbol, args...) where {A<:AxedEoS, B<:OpacityTable} = begin
+    if !scipy_loaded[]
+        load_scipy_interpolate!()
+    end
+
+    ip = ScatteredLookup(scipy_interpolate.LinearNDInterpolator(stretch(EnergyAxis(aos).values, DensityAxis(aos).values), log.(view(getfield(opa, which), :, i))))
+    (x,y)->exp.(ip(x,y))
+end
+
+
+## Save interface (maybe a bit slower though)
+lookup(eos::A, what::Symbol; lnRho, kwargs...) where {A<:RegularEoSTable} = lookup(@axed(eos), what; lnRho=lnRho, kwargs...)
+lookup(eos::A, opa::B, what::Symbol; iλ, lnRho, kwargs...) where {A<:RegularEoSTable, B<:OpacityTable} = lookup(@axed(eos), opa, what; iλ=iλ, lnRho=lnRho, kwargs...)
+
+function lookup(aos::A, what::Symbol; lnRho, kwargs...) where {A<:AxedEoS}
+    ename   = energy_variable(aos)
+    givenE  = first(keys(kwargs))
+    givenEV = kwargs[givenE]
+    otherE  = givenE == :lnT ? :lnEi : :lnT
+
+    if (givenE != ename) & (what != ename)
+        error("The given E variable is not the Eaxis of the table. If you want to bisect, please pass the E variable as second argument.")
+    end
+
+    if (givenE != dependent_energy_variable(aos)) & (what == ename)
+        error("The variable to search is the E axis of the table. Please pass the complementary E variable to bisect.")
+    end
+
+    lookup(aos, what, lnRho, givenEV)
+end
+function lookup(aos::A, opa::B, what::Symbol; iλ, lnRho, kwargs...) where {A<:AxedEoS, B<:OpacityTable}
+    ename   = energy_variable(aos)
+    givenE  = first(keys(kwargs))
+    givenEV = kwargs[givenE]
+    otherE  = givenE == :lnT ? :lnEi : :lnT
+
+    if (givenE != ename) & (what != ename) & (givenE != dependent_energy_variable(aos))
+        error("The given E variable is not the Eaxis of the table. If you want to bisect, please pass the E variable as second argument.")
+    end
+
+    givenEV = if (givenE != ename) & (what != ename)
+        lookup(aos, ename, lnRho, givenEV)
+    else
+        givenEV
+    end
+
+    iλ > length(opa.λ) && error("Lambda out of bounds for opacities")
+
+    lookup(aos, opa, what, lnRho, givenEV, iλ)
+end
+
 
 ZeroLookup() = ZeroLookup((args...; kwargs...)->0.0)
 
@@ -556,4 +624,22 @@ for_dispatch(aos::AxedEoS, args...; kwargs...) = begin
     end
 
     for_dispatch(aos.eos, args...; kwargs...)
+end
+
+function save_tables(aos, opa, eos_table_name, table_folder=nothing)
+    # Save everything in the dispatch format
+    for_dispatch(aos, opa)
+    save(opa.opacities, "binned_opacities.hdf5")
+
+    # Move files to the final folder for dispatch
+    !isdir(eos_table_name) && mkdir(eos_table_name) 
+    mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
+    mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
+    mv("rhoei_radtab.dat",      joinpath(eos_table_name, "rhoei_radtab.dat"),      force=true)
+    mv("binned_opacities.hdf5", joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
+
+    # Copy the eos for convenience. Usually not a big deal because rather small
+    if !isnothing(table_folder)
+        cp(joinpath(table_folder, "combined_eos.hdf5"), joinpath(eos_table_name, "eos.hdf5"), force=true);
+    end;
 end

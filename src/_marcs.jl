@@ -417,7 +417,7 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
 
     ## Recompute the rosseland opacity if wanted
     if lnRoss == :opacity
-        rosseland_opacity!(newlnRoss, neweos, newopa; weights=ω_midpoint(newopa.λ))
+        rosseland_opacity!(newlnRoss, @axed(neweos), newopa; weights=ω_midpoint(newopa))
         neweos.lnRoss   .= newlnRoss
         newopa_c.κ_ross .= exp.(newlnRoss)
         newopa_l.κ_ross .= exp.(newlnRoss)

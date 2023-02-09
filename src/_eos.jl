@@ -1085,7 +1085,7 @@ end
 
 function Bν(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
-    B = @. twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) *aa_to_cm
+    B = @. twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
     B[T .<= 1e-1] .= 0.0
 
     B
@@ -1111,7 +1111,7 @@ end
 
 function δBν(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
-    B = @. twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 * aa_to_cm
+    B = @. twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
     B[T .<= 1e-1] .= 0.0
 
     B
@@ -1137,7 +1137,7 @@ end
 
 @inline function δBν(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
-    v = twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 * aa_to_cm
+    v = twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
 
     if isnan(v) || v<1e-30 
         A(1e-30)
@@ -1148,7 +1148,7 @@ end
 
 @inline function Bν(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
-    v = twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) *aa_to_cm
+    v = twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
     
     if isnan(v) || v<1e-30 
         A(1e-30)
@@ -1188,7 +1188,7 @@ end=#
 
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
-function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities.λ)) where {E<:AxedEoS}
+function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
     lnRoss  = similar(eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
@@ -1199,7 +1199,7 @@ end
 
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
-function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities.λ)) where {E<:AxedEoS}
+function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
     eos      = aos.eos 
     axis_val = aos.energy_axes.values
     eaxis    = is_internal_energy(aos)
@@ -1236,7 +1236,7 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
 end
 
 rosseland_opacity!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity!(lnRoss, AxedEoS(eos), args...; kwargs...) 
-rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(eos, args...; kwargs...)
+rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(AxedEoS(eos), args...; kwargs...)
 
 """
     transfer_rosseland(from, to)
@@ -1257,7 +1257,7 @@ transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnR
 Compute monochromatic and rosseland optical depth scales of the model 
 based on the opacity table
 """
-function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel) where {E<:AxedEoS}
+function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
@@ -1272,7 +1272,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel) wh
     for i in eachindex(opacities.λ)
         # Look up the opacity in the table
         κ  .= lookup(eos, opacities, :κ, lnρ, lnE, i)
-        ρκ .= exp.(lnρ) .* κ
+        ρκ .= binned ? κ : exp.(lnρ) .* κ
 
         # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
         for j in eachindex(z)
@@ -1286,7 +1286,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel) wh
 
     # Rosseland optical depth
     κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnE)
-    ρκ .= exp.(lnρ) .* κ
+    ρκ .= binned ? κ : exp.(lnρ) .* κ
     for j in eachindex(z)
         if j==1 
             τ_ross[1] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])

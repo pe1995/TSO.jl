@@ -1,4 +1,4 @@
-###########################################################################
+#============================ Binning Interface ========================================#
 
 """
 Tabgen-styled bins of equal size.
@@ -31,9 +31,10 @@ struct Co5boldBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
-struct BinnedOpacities{O<:RegularOpacityTable, F<:AbstractFloat, Nϵ}
+struct BinnedOpacities{O<:RegularOpacityTable, F<:AbstractFloat, Nϵ, Nw}
     opacities ::O
-    ϵ ::Array{F, Nϵ}
+    ϵ         ::Array{F, Nϵ}
+    wthin     ::Array{F, Nw}
 end
 
 struct Beeck2012StaggerBins{F<:AbstractFloat} <:OpacityBins
@@ -54,6 +55,7 @@ StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...) = fill(t, args...; kw
 StaggerBinning(t::Type{<:Beeck2012StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 MURaMBinning(args...; kwargs...)                           = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
+
 
 
 
@@ -202,6 +204,7 @@ fill(::Type{<:ExactTabgenBins}; Nbins=4, dbox=0.5, kwargs...) = ExactTabgenBins(
 
 
 
+
 ## Functions for computing the binned opacities
 """
 Tabgen-styled opacity binning.
@@ -272,6 +275,11 @@ function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{
 end
 
 
+
+
+
+#======================= Wavelength integration weights ================================#
+
 """
 Compute midpoint-weights from wavelenght array.
 """
@@ -289,8 +297,13 @@ function ω_midpoint(λ)
     w
 end
 
+ω_midpoint(opacities::OpacityTable) = ω_midpoint(to_cm(opacities.λ))
 
-### Computation of binned properties ######################################
+
+
+
+
+#====================== Computation of binned properties ===============================#
 
 ## Storage for computation
 struct BinningStorage{F<:AbstractFloat}
@@ -337,6 +350,8 @@ function extrapolate_intensity(model, J, eos)
 
     J_new
 end
+
+
 
 """
 Loop through eos and integrate quantities in the opacity table according to the chosen binning.
@@ -559,10 +574,10 @@ function box_integrated_v2(binning, weights, eos, opacities, scattering; remove_
     S_table = log.(SBox)
     #S_table = log.(κBox ./ χBox .* SBox)
 
-    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
+    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table, wthin)
 end
 
-function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remove_from_thin=false) where {E<:AxedEoS}
+#=function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remove_from_thin=false) where {E<:AxedEoS}
     eos = aos.eos
     eaxis = is_internal_energy(aos)
     
@@ -655,11 +670,13 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering; remo
     #S_table = log.(κBox ./ χBox .* SBox)
 
     BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
-end
+end=#
 
-function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin=false) where {E<:AxedEoS}
+function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothing; remove_from_thin=false, transition_model=nothing) where {E<:AxedEoS}
     eos = aos.eos
     eaxis = is_internal_energy(aos)
+
+    iscat = isnothing(scattering)
 
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
@@ -668,6 +685,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
 
     χBox   = zeros(T, AxBins, rhoBins, radBins)    
     χRBox  = zeros(T, AxBins, rhoBins, radBins)
+    χ_thin = similar(χRBox)
     κBox   = zeros(T, AxBins, rhoBins, radBins)
     SBox   = zeros(T, AxBins, rhoBins, radBins)
     Temp   = zeros(T, AxBins, rhoBins)
@@ -684,20 +702,9 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
     dbnu ::Float32  = 0.0
     b    ::Int      = 0
 
-    ρ     = exp.(eos.lnRho)
-    #rtest = argmin(abs.(ρ .- test_r))
-    #ttest = argmin(abs.(eos.lnT[:, rtest] .- test_t))
+    ρ = exp.(eos.lnRho)
 
-    #@info minimum(Temp) maximum(Temp)
-    #@info minimum(opacities.κ) maximum(opacities.κ)
-    #@info minimum(opacities.λ) maximum(opacities.λ)
-    #@info Bν(minimum(opacities.λ), minimum(Temp)) 
-    #@info δBν(minimum(opacities.λ), minimum(Temp)) 
-    #@info Bν(maximum(opacities.λ), maximum(Temp)) 
-    #@info δBν(maximum(opacities.λ), maximum(Temp)) 
-
-
-    # None of the bins is allowed to be empty as this stage
+    # None of the bins are allowed to be empty as this stage
     @assert all(binning .!= 0)
 
     @inbounds for j in 1:rhoBins
@@ -709,32 +716,42 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
                 bnu  = Bν( opacities.λ[k], Temp[i, j])
                 dbnu = δBν(opacities.λ[k], Temp[i, j]) 
 
-                χBox[ i, j, b]  += weights[k] .* opacities.κ[i, j, k]                            .* bnu  #Bν( opacities.λ[k], T[i, j])   
-                χRBox[i, j, b]  += weights[k] .* 1.0 ./ opacities.κ[i, j, k]                     .* dbnu #δBν(opacities.λ[k], T[i, j]) 
-                SBox[ i, j, b]  += weights[k] .*                                                    bnu  #Bν( opacities.λ[k], T[i, j])  
-                B[ b]           += weights[k] .*                                                    bnu  #Bν( opacities.λ[k], T[i, j]) 
-                δB[b]           += weights[k] .*                                                    dbnu #δBν(opacities.λ[k], T[i, j]) 
+                χBox[ i, j, b]  += weights[k] .* opacities.κ[i, j, k]         .* bnu  
+                χRBox[i, j, b]  += weights[k] .* 1.0 ./ opacities.κ[i, j, k]  .* dbnu 
+                χ_thin[i,j, b]   = χRBox[i, j, b]
+                SBox[ i, j, b]  += weights[k] .* bnu    
+                B[ b]           += weights[k] .* bnu  
+                δB[b]           += weights[k] .* dbnu 
+                κBox[ i, j, b]  += (!iscat) ? 
+                                    weights[k] .* (opacities.κ[i, j, k] .- scattering.κ[i, j, k]) .* bnu : 
+                                    weights[k] .* opacities.κ[i, j, k] .* bnu
             end
-            χBox[i, j, :]  ./= B
-            χRBox[i, j, :] ./= δB
+            χBox[i,   j, :] ./= B
+            χRBox[i,  j, :] ./= δB
+            χ_thin[i, j, :] ./= δB
         end
-
-        #if j == rtest
-        #    @info "TestBin: $(test_bin), rho: $(ρ[j])"
-        #    @info "χ: $(log(χBox[ttest, j, test_bin])), χR: $(log(1. /χRBox[ttest, j, test_bin])), simple mean: $(log(mean(χBox[ttest, j, test_bin])))"
-        #    @info "wthin: $(exp(T(-1.5e7) .* T(1.0) ./χRBox[ttest, j, test_bin] *ρ[j]))"
-        #end
 
         χBox[:,  j, :] .*= ρ[j]
         χRBox[:, j, :] ./= ρ[j]
     end
 
-    κBox  .= χBox
-    wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
-    wthick = T(1.0) .- wthin
+    #wthin  = exp.(T(-1.5e7) .* T(1.0) ./χRBox)
+    #wthin  = exp.(T(-2.0) .* T(1.0) ./ χ_thin)
+    #wthick = T(1.0) .- wthin
+
+    κ_ross = T(1.0) ./χRBox
+
+    wthin, wthick = if isnothing(transition_model)
+        wthin_l = exp.(T(-1.5e7) .* κ_ross)
+        wthick_l = T(1.0) .- wthin_l
+        wthin_l, wthick_l
+    else
+        pure_rosseland = RegularOpacityTable(κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false)
+        opacity_transition(aos, pure_rosseland, transition_model)
+    end
 
     #@info minimum(SBox) maximum(SBox)
-    @info SBox[1,1,:]
+    #@info SBox[1,1,:]
 
 
     ## Use rosseland average where optically thick, Planck average where optically thin
@@ -743,8 +760,8 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
 
     ## Opacity
     opacity_table = remove_from_thin ? 
-                    wthin .* κBox .+ wthick .* (T(1.0) ./ χRBox) : 
-                    wthin .* χBox .+ wthick .* (T(1.0) ./ χRBox)
+                    wthin .* κBox .+ wthick .* κ_ross : 
+                    wthin .* χBox .+ wthick .* κ_ross
 
     ## ϵ table
     ϵ_table = κBox ./ χBox
@@ -752,13 +769,54 @@ function box_integrated_v3(binning, weights, aos::E, opacities; remove_from_thin
     ## Source function table --> S                = x/x+s * B + s/x+s * J 
     ##                       --> thermal emission = x/x+s * B
     S_table = SBox
+    
     #S_table = log.(κBox ./ χBox .* SBox)
+    #(BinnedOpacities(RegularOpacityTable(χBox, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table, wthin), 
+    #BinnedOpacities(RegularOpacityTable(κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false)))
 
-    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
+    BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table, wthin)
 end
 
 box_integrated_v3(binning, weights, eos::E, opacities, scattering; kwargs...) where {E<:RegularEoSTable} = box_integrated_v3(binning, weights, AxedEoS(eos), opacities, scattering; kwargs...)
 box_integrated_v3(binning, weights, eos::E, opacities; kwargs...) where {E<:RegularEoSTable} = box_integrated_v3(binning, weights, AxedEoS(eos), opacities; kwargs...)
+
+
+
+
+"""
+    opacity_transition(aos, opacities, model)
+
+Compute the transition limit between free streaming and diffusion based on a model and binned opacities.
+At this point one could either
+    A) Compute the optical depth for the model and interpolate in density to the table values, might be weird
+    because the table is much larger in density than the model. So there is extrapolation involved then.
+    B) Use the approximation from Ludwig 1999, i.e.
+        τ ≈ κross * Pg / g
+For simplicity we choose B) for the time being.
+"""
+function opacity_transition(aos::A, opacities::O, model::AbstractModel) where {A<:AxedEoS, O<:OpacityTable}
+    ## Compute the optical depth from the pure rosseland opacities
+    #τ,_ = optical_depth(aos, @binned(opacities), model) --> then interpolate/extrapolate to table rho
+    
+    T = eltype(opacities.κ)
+
+    ## Approximation from Ludwig 1999
+    τ = zeros(T, size(opacities.κ)...)
+    for k in eachindex(opacities.λ)
+        for j in eachindex(DensityAxis(aos).values)
+            τ[:, j, k] .= opacities.κ[:, j, k] ./ exp(aos.eos.lnRho[j]) .* exp.(aos.eos.lnPg[:, j]) ./ exp10(model.logg)
+        end
+    end
+
+    ## τ contains the optical depth computed from the rosseland mean in each bin
+    wthin = exp.(T(-2.0) .* τ)
+
+    (wthin, T(1.0) .- wthin)
+end
+
+optical_depth(aos::E, opacities::B, model::AbstractModel) where {E<:AxedEoS, B<:BinnedOpacities} = optical_depth(aos, opacities.opacites, model, binned=true)
+
+
 
 
 function clear!(args...)
@@ -783,9 +841,15 @@ the fastest implementation, however without scattering at the moment to save mem
 tabulate(args...; kwargs...) = box_integrated_v3(args...; kwargs...)
 
 
-#= Wrapper for normal functionality of binned tables =#
 
-for_dispatch(eos::EoSTable, opacities::BinnedOpacities) = for_dispatch(eos, opacities.opacities.κ, opacities.opacities.src, opacities.ϵ)
+
+
+#=============== Wrapper for normal functionality of binned tables =====================#
+
+for_dispatch(eos::EoSTable, opacities::BinnedOpacities) = for_dispatch(eos, 
+                                                                        opacities.opacities.κ, 
+                                                                        opacities.opacities.src, 
+                                                                        opacities.ϵ)
 
 switch_energy(aos::A, opacities::BinnedOpacities, args...; kwargs...) where {A<:AxedEoS} = begin
     eos_e, opa_e = switch_energy(aos, opacities.opacities, args...; kwargs...)
@@ -814,9 +878,38 @@ uniform(aos::A, opacities::BinnedOpacities, args...; kwargs...) where {A<:AxedEo
     eos_e, BinnedOpacities(opa_e, ϵ_e.κ)
 end
 
+BinnedOpacities(opa::SqOpacity) = BinnedOpacities(opa, ones(eltype(opa.κ), size(opa.κ)...))
+BinnedOpacities(opa::SqOpacity, ϵ::AbstractArray) = BinnedOpacities(opa, ϵ, ones(eltype(opa.κ), size(opa.κ)...))
+
+_binned_from_regular(opa::SqOpacity) = BinnedOpacities(opa)
+_binned_from_regular(opa::SqOpacity, eos::SqEoS)   = _binned_from_regular(opa, @axed(eos))
+_binned_from_regular(opa::SqOpacity, eos::AxedEoS) = begin
+    opa_new = deepcopy(opa)
+    _, rr   = meshgrid(eos)
+    rr     .= exp.(rr)
+    for i in eachindex(opa.λ)
+        opa_new.κ[:, :, i] .*= rr
+    end
+    
+    BinnedOpacities(opa_new)
+end
 
 
-###########################################################################
+macro binned(opa)
+    opa_l = esc(opa)
+    :(_binned_from_regular($opa_l))
+end
+
+macro binned(opa, eos)
+    opa_l = esc(opa)
+    eos_l = esc(eos)
+    :(_binned_from_regular($opa_l, $eos_l))
+end
+
+
+
+
+#=======================================================================================#
 
 ## Debugging things
 const test_bin = 4

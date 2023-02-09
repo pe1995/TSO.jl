@@ -97,7 +97,7 @@ function LegacyOpacities(path)
 
     t, r = grid(l)
 
-    #@show size(r) size(t) size(l.tab)
+    @show size(r) size(t) size(l.tab)
     for i in eachindex(r)
         l.tab[:, i, 1, :] .+= r[i]
     end
@@ -242,8 +242,39 @@ function toTSO(eos::LegacyTable, opacities::LegacyTable)
     end
 
     RegularEoSTable(newR, eos.tab[:, :, 1, 3], newE, eos.tab[:, :, 1, 1], RossCM2G, eos.tab[:, :, 1, 4]),
-    RegularOpacityTable(κ, ϵ, S, λ, false)
+    BinnedOpacities(RegularOpacityTable(exp.(κ), exp.(RossCM2G), exp.(S), λ, false), ϵ)
 end
+
+function toTSO(aos::AxedEoS, opacities::LegacyTable)
+    eos = aos.eos
+    ## new axes
+    newE, newR = EnergyAxis(aos).values, DensityAxis(aos).values
+    oldT, oldR = grid(opacities)
+
+    T = eltype(opacities.tab)
+
+    nbins = size(opacities.tab, 4) - 1
+    λ = collect(T, 1:nbins)
+    κ = zeros(T, length(newE), length(newR), nbins)
+    S = similar(κ)
+    ϵ = similar(S)
+    ϵ .= 0.0
+    RossCM2G = deepcopy(eos.lnRoss)
+    Temp = eos.lnT
+
+    for i in eachindex(newR)
+        T = @view Temp[:, i]
+        for bin in 1:nbins
+            κ[:, i, bin] .= legacyLookup(opacities, 1, newR[i], T, bin)
+            S[:, i, bin] .= legacyLookup(opacities, 2, newR[i], T, bin)
+        end
+    end
+
+    BinnedOpacities(RegularOpacityTable(exp.(κ), exp.(RossCM2G), exp.(S), λ, false), ϵ)
+end
+
+toTSO(eos::LegacyTable) = RegularEoSTable(last(grid(eos)), eos.tab[:, :, 1, 3], first(grid(eos)), eos.tab[:, :, 1, 1], eos.tab[:, :, 1, 2], eos.tab[:, :, 1, 4])
+
 
 function legacyLookup(opacities, what, rho, T, args...)
     Tg, rg = grid(opacities)
