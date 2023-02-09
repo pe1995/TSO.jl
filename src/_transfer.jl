@@ -70,9 +70,11 @@ end
 
 Solver(model::Model1D, eos::AxedEoS; kwargs...) = begin
     model_array = zeros(eltype(model.z), length(model.z), 3)
-    model_array[:, 1] = deepcopy(model.z)
+    model_array[:, 1] = - deepcopy(model.z)
     model_array[:, 2] = exp.(getfield(model, energy_variable(eos)))
     model_array[:, 3] = exp.(model.lnρ)
+
+    reverse!(model_array, dims=1)
 
     Solver(model_array; eos=eos, kwargs...)
 end 
@@ -235,7 +237,7 @@ Compute the mean intensity using the given Solver.
 """
 Jν() = error("Please provide a solver.")
 
-Jν(solver::BinnedTransferSolver) = sum(binned_radiation(solver, mean_intensity=true), dims=2)
+Jν(solver::BinnedTransferSolver) = sum(binned_radiation(solver, mean_intensity=true), dims=2)[:, 1]
 Jν(solver::BinnedTransferSolver, weights) = begin
     f     = binned_radiation(solver, mean_intensity=true)
     mean_intensity(f, weights=weights)

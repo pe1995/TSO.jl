@@ -272,7 +272,18 @@ size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
 Lookup "what" in the EoS, return the value spliced as args... indicate.
 """
 lookup(eos::E,                          what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
-lookup(eos::E, opacities::OpacityTable, what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, opacities, what, args...), rho, var)
+lookup(eos::E, opacities::OpacityTable, what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = begin
+    if (length(args) > 0) | (ndims(getfield(opacities, what))==2)
+        lookup(lookup_function(eos, opacities, what, args...), rho, var)
+    else # lookup all of the wavelength points
+        v = zeros(eltype(opacities.κ), size(rho)..., length(opacities.λ))
+        for i in eachindex(opacities.λ)
+            setindex!(v, lookup(lookup_function(eos, opacities, what, i), rho, var), (Base.Colon() for j in 1:ndims(rho))..., i)
+        end
+
+        v
+    end
+end
 
 ## Generic lookup procedure
 @inline lookup(lf::LookupFunction, rho::V, var::V) where {V<:AbstractFloat} = lf.f(var, rho)

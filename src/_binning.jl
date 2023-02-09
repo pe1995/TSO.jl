@@ -85,22 +85,23 @@ end
 fill(::Type{Beeck2012StaggerBins}; kwargs...) = begin
     bin_edges = zeros(12, 4)
 
-    bin_edges[1,  4] = -1.46; bin_edges[1,  3] = 9.00 ; bin_edges[1,  1] = 0.0   ; bin_edges[1,  2] = 380.9
-    bin_edges[2,  4] = -3.81; bin_edges[2,  3] = -1.46; bin_edges[2,  1] = 0.0   ; bin_edges[2,  2] = 380.9
-    bin_edges[3,  4] = -17.0; bin_edges[3,  3] =-3.81 ; bin_edges[3,  1] = 0.0   ; bin_edges[3,  2] = 380.9
-    bin_edges[4,  4] = -0.62; bin_edges[4,  3] = 9.0  ; bin_edges[4,  1] = 380.9 ; bin_edges[4,  2] = 562.4
-    bin_edges[5,  4] = -0.62; bin_edges[5,  3] = 9.0  ; bin_edges[5,  1] = 562.4 ; bin_edges[5,  2] = 2161.2
-    bin_edges[6,  4] = -1.50; bin_edges[6,  3] = -0.62; bin_edges[6,  1] = 380.9 ; bin_edges[6,  2] = 642.6
-    bin_edges[7,  4] = -2.28; bin_edges[7,  3] = -1.50; bin_edges[7,  1] = 380.9 ; bin_edges[7,  2] = 710.9
-    bin_edges[8,  4] = -10.0; bin_edges[8,  3] = -2.28; bin_edges[8,  1] = 380.9 ; bin_edges[8,  2] = 1646.5
-    bin_edges[9,  4] = -0.62; bin_edges[9,  3] = 9.0  ; bin_edges[9,  1] = 2161.2; bin_edges[9,  2] = 1000000.0
-    bin_edges[10, 4] = -1.50; bin_edges[10, 3] = -0.62; bin_edges[10, 1] = 642.6 ; bin_edges[10, 2] = 1000000.0
-    bin_edges[11, 4] = -2.28; bin_edges[11, 3] = -1.5 ; bin_edges[11, 1] = 710.9 ; bin_edges[11, 2] = 1000000.0
-    bin_edges[12, 4] = -10.0; bin_edges[12, 3] = -2.28; bin_edges[12, 1] = 1646.5; bin_edges[12, 2] = 1000000.0
+    bin_edges[1,  4] = -1.46; bin_edges[1,  3] = 9.00 ; bin_edges[1,  1] = 1.0   ; bin_edges[1,  2] = 3809.0
+    bin_edges[2,  4] = -3.81; bin_edges[2,  3] = -1.46; bin_edges[2,  1] = 1.0   ; bin_edges[2,  2] = 3809.0
+    bin_edges[3,  4] = -17.0; bin_edges[3,  3] =-3.81 ; bin_edges[3,  1] = 1.0   ; bin_edges[3,  2] = 3809.0
+    bin_edges[4,  4] = -0.62; bin_edges[4,  3] = 9.0  ; bin_edges[4,  1] = 3809.0 ; bin_edges[4,  2] = 5624.
+    bin_edges[5,  4] = -0.62; bin_edges[5,  3] = 9.0  ; bin_edges[5,  1] = 5624.0 ; bin_edges[5,  2] = 21612.
+    bin_edges[6,  4] = -1.50; bin_edges[6,  3] = -0.62; bin_edges[6,  1] = 3809.0 ; bin_edges[6,  2] = 6426.
+    bin_edges[7,  4] = -2.28; bin_edges[7,  3] = -1.50; bin_edges[7,  1] = 3809.0 ; bin_edges[7,  2] = 7109.
+    bin_edges[8,  4] = -14.0; bin_edges[8,  3] = -2.28; bin_edges[8,  1] = 3809.0 ; bin_edges[8,  2] = 16465.
+    bin_edges[9,  4] = -0.62; bin_edges[9,  3] = 9.0  ; bin_edges[9,  1] = 21612.0; bin_edges[9,  2] = 1000000.0
+    bin_edges[10, 4] = -1.50; bin_edges[10, 3] = -0.62; bin_edges[10, 1] = 6426.0 ; bin_edges[10, 2] = 1000000.0
+    bin_edges[11, 4] = -2.28; bin_edges[11, 3] = -1.5 ; bin_edges[11, 1] = 7109.0 ; bin_edges[11, 2] = 1000000.0
+    bin_edges[12, 4] = -14.0; bin_edges[12, 3] = -2.28; bin_edges[12, 1] = 16465.0; bin_edges[12, 2] = 1000000.0
 
     bin_edges[:, 3] .*= -1
     bin_edges[:, 4] .*= -1
-
+    bin_edges[:, 1] .= log10.(bin_edges[:, 1])
+    bin_edges[:, 2] .= log10.(bin_edges[:, 2])
     Beeck2012StaggerBins(bin_edges)
 end
 
@@ -270,7 +271,7 @@ function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{
         end
     end
 
-    @assert all(binning .!= 0)
+    @info "All wavelength points sorted in to bins? $(all(binning .!= 0))"
     binning
 end
 
