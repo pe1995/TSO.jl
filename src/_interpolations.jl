@@ -21,7 +21,7 @@ function gridded(aos::A, opacities::OpacityTable...; conservative=false, upsampl
     # Check the current grid, if it is gridded alredy there is nothing to do
     if is_gridded(aos) & !switch ## Nothing to do here
         return (aos.eos, opacities...)  
-    else
+    elseif switch
         return switch_energy(aos, opacities...; conservative=conservative, upsample=upsample, newE=nothing)
     end
 
@@ -58,7 +58,7 @@ Make the EoS uniform in both Axes. Checks if it is gridded before.
 function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
     if is_uniform(aos) & !switch ## Nothing to do here
         return (aos.eos, opacities...)  
-    else
+    elseif switch
         return switch_energy(aos, opacities...; conservative=conservative, upsample=upsample, newE=nothing)
     end
 

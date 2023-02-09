@@ -36,6 +36,10 @@ struct BinnedOpacities{O<:RegularOpacityTable, F<:AbstractFloat, Nϵ}
     ϵ ::Array{F, Nϵ}
 end
 
+struct Beeck2012StaggerBins{F<:AbstractFloat} <:OpacityBins
+    bin_edges ::Array{F,2}
+end
+
 
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -47,6 +51,7 @@ UniformTabgenBins() = UniformTabgenBins(Float64[])
 TabgenBins = Union{<:EqualTabgenBins, <:UniformTabgenBins, <:CustomTabgenBins}
 TabgenBinning(t::Type{<:OpacityBins}, args...; kwargs...)  = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
+StaggerBinning(t::Type{<:Beeck2012StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 MURaMBinning(args...; kwargs...)                           = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
 
@@ -73,6 +78,28 @@ fill(::Type{Co5boldBins}; kwargs...) = begin
     bin_edges[12, 3] = -99.0; bin_edges[12, 4] = -4.50; bin_edges[12, 1] = 0.0;    bin_edges[12, 2] = 1000000.0
 
     Co5boldBins(bin_edges)
+end
+
+fill(::Type{Beeck2012StaggerBins}; kwargs...) = begin
+    bin_edges = zeros(12, 4)
+
+    bin_edges[1,  4] = -1.46; bin_edges[1,  3] = 9.00 ; bin_edges[1,  1] = 0.0   ; bin_edges[1,  2] = 380.9
+    bin_edges[2,  4] = -3.81; bin_edges[2,  3] = -1.46; bin_edges[2,  1] = 0.0   ; bin_edges[2,  2] = 380.9
+    bin_edges[3,  4] = -17.0; bin_edges[3,  3] =-3.81 ; bin_edges[3,  1] = 0.0   ; bin_edges[3,  2] = 380.9
+    bin_edges[4,  4] = -0.62; bin_edges[4,  3] = 9.0  ; bin_edges[4,  1] = 380.9 ; bin_edges[4,  2] = 562.4
+    bin_edges[5,  4] = -0.62; bin_edges[5,  3] = 9.0  ; bin_edges[5,  1] = 562.4 ; bin_edges[5,  2] = 2161.2
+    bin_edges[6,  4] = -1.50; bin_edges[6,  3] = -0.62; bin_edges[6,  1] = 380.9 ; bin_edges[6,  2] = 642.6
+    bin_edges[7,  4] = -2.28; bin_edges[7,  3] = -1.50; bin_edges[7,  1] = 380.9 ; bin_edges[7,  2] = 710.9
+    bin_edges[8,  4] = -10.0; bin_edges[8,  3] = -2.28; bin_edges[8,  1] = 380.9 ; bin_edges[8,  2] = 1646.5
+    bin_edges[9,  4] = -0.62; bin_edges[9,  3] = 9.0  ; bin_edges[9,  1] = 2161.2; bin_edges[9,  2] = 1000000.0
+    bin_edges[10, 4] = -1.50; bin_edges[10, 3] = -0.62; bin_edges[10, 1] = 642.6 ; bin_edges[10, 2] = 1000000.0
+    bin_edges[11, 4] = -2.28; bin_edges[11, 3] = -1.5 ; bin_edges[11, 1] = 710.9 ; bin_edges[11, 2] = 1000000.0
+    bin_edges[12, 4] = -10.0; bin_edges[12, 3] = -2.28; bin_edges[12, 1] = 1646.5; bin_edges[12, 2] = 1000000.0
+
+    bin_edges[:, 3] .*= -1
+    bin_edges[:, 4] .*= -1
+
+    Beeck2012StaggerBins(bin_edges)
 end
 
 function fill(::Type{<:StaggerBins}; opacities, formation_opacity, Nbins=6, κ_low=1.5, λ_high=4.0, λ_low=nothing, κ_bins=nothing, kwargs...) 
@@ -226,7 +253,7 @@ function binning(bins::ExactTabgenBins, opacities, formation_opacity, kwargs...)
     return binning
 end
 
-function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{<:StaggerBins, <:Co5boldBins}}
+function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{<:StaggerBins, <:Co5boldBins, <:Beeck2012StaggerBins}}
     bins = b.bin_edges
     binning = zeros(Int, size(opacities.λ)...)
     for i in eachindex(opacities.λ)
