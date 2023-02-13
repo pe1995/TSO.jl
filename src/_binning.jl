@@ -673,11 +673,12 @@ end
     BinnedOpacities(RegularOpacityTable(opacity_table, opacities.κ_ross, S_table, collect(T, 1:radBins), false), ϵ_table)
 end=#
 
-function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothing; remove_from_thin=false, transition_model=nothing) where {E<:AxedEoS}
+function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothing; transition_model=nothing) where {E<:AxedEoS}
     eos = aos.eos
     eaxis = is_internal_energy(aos)
 
     iscat = isnothing(scattering)
+    remove_from_thin = !iscat
 
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
@@ -728,11 +729,13 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothi
                                     weights[k] .* opacities.κ[i, j, k] .* bnu
             end
             χBox[i,   j, :] ./= B
+            κBox[i,   j, :] ./= B
             χRBox[i,  j, :] ./= δB
             χ_thin[i, j, :] ./= δB
         end
 
         χBox[:,  j, :] .*= ρ[j]
+        κBox[:,  j, :] .*= ρ[j]
         χRBox[:, j, :] ./= ρ[j]
     end
 

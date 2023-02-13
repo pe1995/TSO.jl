@@ -14,7 +14,7 @@ table_folder   = joinpath("tables", "TSO_MARCS_v0.4")
 eos           = reload(SqEoS,     joinpath(table_folder, "combined_ross_eos.hdf5")) # ross for others
 opacities     = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"), mmap=true)
 formOpacities = reload(SqOpacity, joinpath(table_folder, "combined_formation_opacities.hdf5"), mmap=true)
-#opacitiesS    = TSO.reload(TSO.RegularOpacityTable, joinpath(table_folder, "combined_Sopacities.hdf5"), mmap=false)
+opacitiesS    = reload(SqOpacity, joinpath(table_folder, "combined_Sopacities.hdf5"), mmap=true)
 
 
 # λ Integration weights
@@ -55,7 +55,7 @@ end;
 
 
 # Compute binned quantities
-binned_opacities = tabulate(bin, weights, eos, opacities, remove_from_thin=false, transition_model=model)
+binned_opacities = tabulate(bin, weights, eos, opacities, opacitiesS, transition_model=model)
 
 
 
@@ -95,4 +95,4 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save_table(binned_opacities, "0.4.1", dispatch=false)
+save_table(binned_opacities, "0.4.2", dispatch=false)
