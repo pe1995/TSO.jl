@@ -1083,7 +1083,7 @@ end
 
 #= Planck function =#
 
-function Bν(λ::AbstractFloat, T::AbstractArray)
+function Bλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
     B = @. twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
     B[T .<= 1e-1] .= 0.0
@@ -1091,7 +1091,7 @@ function Bν(λ::AbstractFloat, T::AbstractArray)
     B
 end
 
-Bν(λ::AbstractVector, T::AbstractVector) = begin
+Bλ(λ::AbstractVector, T::AbstractVector) = begin
     B = zeros(length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= Bν(λ[i], T)
@@ -1100,7 +1100,7 @@ Bν(λ::AbstractVector, T::AbstractVector) = begin
     B
 end
 
-Bν(λ::AbstractVector, T::AbstractMatrix) = begin
+Bλ(λ::AbstractVector, T::AbstractMatrix) = begin
     B = zeros(size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= Bν(λ[i], T)
@@ -1109,7 +1109,7 @@ Bν(λ::AbstractVector, T::AbstractMatrix) = begin
     B
 end
 
-function δBν(λ::AbstractFloat, T::AbstractArray)
+function δBλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
     B = @. twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
     B[T .<= 1e-1] .= 0.0
@@ -1117,7 +1117,7 @@ function δBν(λ::AbstractFloat, T::AbstractArray)
     B
 end
 
-δBν(λ::AbstractVector, T::AbstractVector) = begin
+δBλ(λ::AbstractVector, T::AbstractVector) = begin
     B = zeros(length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= δBν(λ[i], T)
@@ -1126,7 +1126,7 @@ end
     B
 end
 
-δBν(λ::AbstractVector, T::AbstractMatrix) = begin
+δBλ(λ::AbstractVector, T::AbstractMatrix) = begin
     B = zeros(size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= δBν(λ[i], T)
@@ -1135,7 +1135,7 @@ end
     B
 end
 
-@inline function δBν(λ::A, T::A) where {A<:AbstractFloat}
+@inline function δBλ(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
     v = twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
 
@@ -1146,7 +1146,7 @@ end
     end
 end
 
-@inline function Bν(λ::A, T::A) where {A<:AbstractFloat}
+@inline function Bλ(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
     v = twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
     
@@ -1157,7 +1157,11 @@ end
     end
 end
 
-
+"""
+Proxi for Bλ
+"""
+Bν(args...; kwargs...)  = Bλ(args...; kwargs...)
+δBν(args...; kwargs...) = δBλ(args...; kwargs...)
 
 
 #= Model conversions =#

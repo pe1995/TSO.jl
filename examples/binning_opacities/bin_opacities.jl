@@ -42,20 +42,24 @@ bins_tabgen = TabgenBinning(TSO.EqualTabgenBins,
                                     opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross), 
                                     binsize=1.7)   # A Tabgen styled binning
+
+bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
+bins_muram = MURaMBinning();
+
 #= End modifications =#
   
 
 # Sort the wavelength points into the bins based on the chosen bin type
-bin = binning(bins_stagger, opacities, -log10.(formOpacities.κ_ross)) 
+bin = binning(bins_muram, opacities, -log10.(formOpacities.κ_ross)) 
 
 
-for i in 1:12
-    @info "$(count(bin .== i)) wavelengths in bin $(i)"
-end;
+#for i in 1:12
+#    @info "$(count(bin .== i)) wavelengths in bin $(i)"
+#end;
 
 
 # Compute binned quantities
-binned_opacities = tabulate(bin, weights, eos, opacities, opacitiesS, transition_model=model)
+binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
 
 
 
@@ -95,4 +99,4 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save_table(binned_opacities, "0.4.2", dispatch=false)
+save_table(binned_opacities, "0.4.4", dispatch=false)

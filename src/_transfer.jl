@@ -42,7 +42,7 @@ Construct a binned radiative transfer solver based on a 1D model witht the kind:
 
     needs to be ordered from bottom to top. z increasing outwards.
 """
-Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=labatto_4angles, weights=labatto_4weights) where {T} = begin
+Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=sort(labatto_4angles), weights=J_weights(labatto_4angles)) where {T} = begin
     opacities = opacities.opacities
     bins    = size(opacities.κ, 3)
     T2      = Float64 #eltype(opacities.κ)
@@ -106,7 +106,7 @@ function chat_transfer1d!(intensity, S, k, z, angles)
             opacity         .= reverse(k)
             depth           .= reverse(z)
             # Set the initial conditions for the intensity array for each angle
-            intensity[1, i] = 0
+            intensity[1, i] = source_function[1]
         else
             source_function .= S
             opacity         .= k
@@ -144,21 +144,40 @@ function transfer1d!(solver)
     # Check in which direction we are going
     down = solver.μ[] .< 0.0
 
-    solver.z      .= solver.model[:, 1]
-    solver.S_temp .= solver.S
-    solver.χ_temp .= solver.χ
-
-    if down
-        solver.z      .= reverse(solver.z) 
-        solver.S_temp .= reverse(solver.S)
-        solver.χ_temp .= reverse(solver.χ)
+    @inbounds for i in axes(solver.model, 1)
+        if down
+            solver.z[i]      = solver.model[end+1-i, 1]
+            solver.S_temp[i] = solver.S[end+1-i]
+            solver.χ_temp[i] = solver.χ[end+1-i]
+        else
+            solver.z[i]      = solver.model[i, 1]
+            solver.S_temp[i] = solver.S[i]
+            solver.χ_temp[i] = solver.χ[i]
+        end
+    
+        if i >= 2
+            solver.dt[i-1] = 0.5 / solver.μ[] * (solver.z[i] - solver.z[i-1]) * ( solver.χ_temp[i] + solver.χ_temp[i-1] ) 
+        end
     end
 
-    S = solver.S_temp
-    χ = solver.χ_temp
-    z = solver.z
+    #solver.z      .= solver.model[:, 1]
+    #solver.S_temp .= solver.S
+    #solver.χ_temp .= solver.χ
+    #
+    #if down
+    #    solver.z      .= reverse(solver.z) 
+    #    solver.S_temp .= reverse(solver.S)
+    #    solver.χ_temp .= reverse(solver.χ)
+    #end
+    #
+    #S = solver.S_temp
+    #χ = solver.χ_temp
+    #z = solver.z
+    #
+    #solver.dt .= 0.5 ./ solver.μ[] .* (z[2:end] .- z[1:end-1]) .* ( χ[2:end] + χ[1:end-1] ) 
 
-    solver.dt .= 0.5 ./ solver.μ[] .* (z[2:end] .- z[1:end-1]) .* ( χ[2:end] + χ[1:end-1] ) 
+
+    S = solver.S_temp
 
     #@assert all(solver.dt .> 0.0)
 
@@ -183,27 +202,15 @@ function transfer1d!(solver)
 
     end
 
-    solver.I_temp[1] = if !down
-        first(S) 
-    else
-        #solver.psiup[1]*S[1] + solver.psi0[1]*S[1]
-        first(S) 
-    end 
-
-    solver.Q_temp[1] = if !down
-        0.0
-    else
-        0.0
-        #solver.psiup[1]*S[1] + solver.psi0[1]*S[1]
-        #first(S) 
-    end 
+    solver.I_temp[1] = first(S) 
+    solver.Q_temp[1] = 0.0
 
     lI = length(solver.I_temp)
 
     # now solve
     for i in 2:lI
         solver.I_temp[i] = solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + solver.psi0[i-1]*S[i]
-        solver.Q_temp[i] = χ[i-1] *( solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + (solver.psi0[i-1]-1)*S[i])
+        #solver.Q_temp[i] = χ[i-1] *( solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + (solver.psi0[i-1]-1)*S[i])
         #@show i solver.I_temp[i] solver.psi0[i-1] solver.psiup[i-1] S[i]
     end
 
@@ -362,7 +369,6 @@ end
 
 Qr(solver::BinnedTransferSolver) = begin
     I = binned_radiation(solver, mean_intensity=true)
-    @show size(I)
     heating(solver, I)
 end
 
@@ -378,22 +384,21 @@ end
 
 chat_Qr(solver::BinnedTransferSolver) = begin
     I = chat_binned_radiation(solver, mean_intensity=true)
-    @show size(I)
     heating(solver, I)
 end
 
 heating(solver, I; weights=ones(solver.bins)) = begin
     Q = zeros(eltype(I), size(I, 1))
-    S = similar(solver.S)
+    #S = similar(solver.S)
     for i in 1:solver.bins
 
         # set the source function and opacities
         optics!(solver, i)
 
-        S .= 0.0
-        for j in eachindex(solver.weights)
-            S .+= solver.S .* solver.weights[j]
-        end
+        #S .= 0.0
+        #for j in eachindex(solver.weights)
+        #    S .+= solver.S .* solver.weights[j]
+        #end
        
         #if i==1
         #    for j in axes(I, 1)
@@ -401,7 +406,7 @@ heating(solver, I; weights=ones(solver.bins)) = begin
         #    end
         #end
 
-        Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- S)
+        Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- solver.S)
     end
 
     Q .* 4 .*π 
@@ -466,7 +471,7 @@ end
 
 effective_temperature(F) = (F/σ_S)^(1/4)
 @inline angle_index(solver) = findfirst(solver.angles .≈ solver.μ[])
-
+J_weights(angles) = ω_midpoint(sort(angles), -1, 1) ./ 2
 
 
 
@@ -477,3 +482,5 @@ const debug_index = Ref(0)
 
 const labatto_4angles  = [0.9739065285, 0.8650633666, 0.6794095682, 0.4333953941, -0.9739065285, -0.8650633666, -0.6794095682, -0.4333953941]
 const labatto_4weights = [0.0666713443, 0.1494513491, 0.2190863625, 0.2692667193,  0.0666713443,  0.1494513491,  0.2190863625,  0.2692667193]
+const labatto_7angles  = [-0.9951872199, -0.9604912684, -0.8884592328, -0.7818314825, -0.6423493394, -0.4646021794, -0.2492867453, 
+                           0.2492867453,  0.4646021794,  0.6423493394,  0.7818314825,  0.8884592328,  0.9604912684,  0.9951872199]

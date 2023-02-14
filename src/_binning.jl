@@ -298,6 +298,24 @@ function ω_midpoint(λ)
     w
 end
 
+
+"""
+Compute midpoint-weights from wavelenght array between lower and upper boundary.
+"""
+function ω_midpoint(λ, lo, hi) 
+    Δλ = zeros(eltype(λ), length(λ)+1)
+    Δλ[2:end-1] = (λ[2:end] .- λ[1:end-1]) ./ 2
+    Δλ[1]   = λ[1] - lo
+    Δλ[end] = hi - λ[end]
+
+    w  = similar(λ)
+    for i in eachindex(λ)
+        w[i] = Δλ[i] + Δλ[i+1]
+    end
+
+    w
+end
+
 ω_midpoint(opacities::OpacityTable) = ω_midpoint(to_cm(opacities.λ))
 
 
