@@ -1290,7 +1290,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
 
     # Rosseland optical depth
     κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnE)
-    ρκ .= binned ? κ : exp.(lnρ) .* κ
+    ρκ .= exp.(lnρ) .* κ # binned ? κ : exp.(lnρ) .* κ
     for j in eachindex(z)
         if j==1 
             τ_ross[1] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
@@ -1301,6 +1301,34 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
 
     return τ_ross, τ_λ
 end
+
+function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
+    # Model z, ρ and T in cgs
+    z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
+
+    T = eltype(opacities.κ)
+
+    τ_ross = zeros(T, length(lnρ)) 
+    ρκ     = zeros(T, length(lnρ))
+    κ      = zeros(T, length(lnρ))
+
+    # Rosseland optical depth
+    κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnE)
+    ρκ .= exp.(lnρ) .* κ # binned ? κ : exp.(lnρ) .* κ
+    for j in eachindex(z)
+        if j==1 
+            τ_ross[1] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
+        else
+            τ_ross[j] = τ_ross[j-1] + (z[j] - z[j-1]) * 0.5 * (ρκ[j] + ρκ[j-1])
+        end
+    end
+
+    return τ_ross
+end
+
+rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
+
+
 
 """
 Compute the formation height + opacity, i.e. the rosseland optical depth

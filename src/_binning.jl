@@ -805,6 +805,9 @@ box_integrated_v3(binning, weights, eos::E, opacities; kwargs...) where {E<:Regu
 
 
 
+
+#================= Extensions of EoS functions for binned opacities ====================#
+
 """
     opacity_transition(aos, opacities, model)
 
@@ -838,8 +841,16 @@ end
 
 optical_depth(aos::E, opacities::B, model::AbstractModel) where {E<:AxedEoS, B<:BinnedOpacities} = optical_depth(aos, opacities.opacites, model, binned=true)
 
+rosseland_optical_depth(eos::E,        opacities::BinnedOpacities, model::AbstractModel; binned=false) where {E<:AxedEoS} = rosseland_optical_depth(eos, opacities.opacities, model; binned=true)
+rosseland_optical_depth(eos::EoSTable, opacities::BinnedOpacities, model::AbstractModel; binned=false) where {E<:AxedEoS} = rosseland_optical_depth(@axed(eos), opacities.opacities, model; binned=true)
+
+formation_height(model::AbstractModel, eos::E, opacities::BinnedOpacities, τ_ross, τ_λ) where {E<:AxedEoS     } = formation_height(model, eos, opacities.opacities, τ_ross, τ_λ)
+formation_height(model::AbstractModel, eos::E, opacities::BinnedOpacities, τ_ross, τ_λ) where {E<:OpacityTable} = formation_height(model, @axed(eos), opacities.opacities, τ_ross, τ_λ)
 
 
+
+
+## Binned storage extensions (deprecated) 
 
 function clear!(args...)
     for arg in args
@@ -852,6 +863,11 @@ clear!(b::BinningStorage) = begin
     @assert all(store.wT .== 0.0)
 end
 
+
+
+
+
+#======================== Convenience binning interface =================================#
 
 """
     tabulate(binning, weights, eos, opacities; kwargs...)
@@ -931,9 +947,11 @@ end
 
 
 
-#=======================================================================================#
+#============================ Debugging things =========================================#
 
 ## Debugging things
 const test_bin = 4
 const test_t   = 4843.07
 const test_r   = 2.38802e-8
+
+#=======================================================================================#

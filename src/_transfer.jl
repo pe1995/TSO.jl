@@ -71,7 +71,7 @@ Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=sort(
                         zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1), bins))
 end
 
-Solver(model::Model1D, eos::AxedEoS; kwargs...) = begin
+Solver(model::AbstractModel, eos::AxedEoS; kwargs...) = begin
     model_array = zeros(eltype(model.z), length(model.z), 3)
     model_array[:, 1] = - deepcopy(model.z)
     model_array[:, 2] = exp.(getfield(model, energy_variable(eos)))
@@ -82,7 +82,7 @@ Solver(model::Model1D, eos::AxedEoS; kwargs...) = begin
     Solver(model_array; eos=eos, kwargs...)
 end 
 
-Solver(model::Model1D, eos::EoSTable; kwargs...) = Solver(model; eos=@axed(eos), kwargs...)
+Solver(model::AbstractModel, eos::EoSTable; kwargs...) = Solver(model; eos=@axed(eos), kwargs...)
 
 
 

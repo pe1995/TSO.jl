@@ -2,5 +2,6 @@
 
 examples/converting_tables/*
 examples/converting_tables/Manifest.toml
-!examples/converting_tables/aesopus.ipynb
+!examples/converting_tables/*.ipynb
 !examples/converting_tables/Project.toml
+!examples/converting_tables/*.jl

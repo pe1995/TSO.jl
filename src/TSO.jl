@@ -60,7 +60,7 @@ export babsma!, bsyn!
 export AesopusEoS, AesopusOpacity
 
 ## Models
-export Model1D, Average3D
+export Model1D, Average3D, @optical
 
 
 #= Python libs =#
