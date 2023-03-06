@@ -140,7 +140,7 @@ function interpolate_lnRho(m::MARCSOS, new_axis)
         point_assignment[i, j] = true
     end
 
-    # wo walk through every fixed T and interpolate all rho to new grid
+    # we walk through every fixed T and interpolate all rho to new grid
     # We save the result as a Matrix
     @inbounds for i in 1:nT
         oldR = m.ρ[view(point_assignment, :, i)] .|> log
@@ -388,10 +388,10 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
 
     ## set small parts to almost 0
     a_not_axis = is_internal_energy(aos_new) ? neweos.lnT : neweos.lnEi
-    a_not_axis[a_not_axis .< 1.0f-30]    .= 1.0f-30
-    neweos.lnPg[neweos.lnPg .< 1.0f-30]   .= 1.0f-30
-    neweos.lnRoss[neweos.lnRoss .< 1.0f-30] .= 1.0f-30
-    neweos.lnNe[neweos.lnNe .< 1.0f-30]   .= 1.0f-30
+    a_not_axis[a_not_axis       .< log(1.0f-30)]  .= log(1.0f-30)
+    neweos.lnPg[neweos.lnPg     .< log(1.0f-30)]  .= log(1.0f-30)
+    neweos.lnRoss[neweos.lnRoss .< log(1.0f-30)]  .= log(1.0f-30)
+    neweos.lnNe[neweos.lnNe     .< log(1.0f-30)]  .= log(1.0f-30)
 
 
     @inbounds for k in eachindex(mos.λ)

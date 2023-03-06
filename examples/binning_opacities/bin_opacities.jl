@@ -7,7 +7,7 @@ TSO.load_TS()
 TSO.load_wrapper()
 
 name_extension = "DIS_MARCS"
-table_folder   = joinpath("tables", "TSO_MARCS_v0.4")
+table_folder   = joinpath("tables", "TSO_MARCS_v0.5")
 
 
 # TS quantities after post-processing
@@ -22,6 +22,9 @@ weights = ω_midpoint(opacities)
 
 # Load a model for the transition between optically thin and thick regime
 model = Average3D(eos, "stagger_av.dat")
+
+# Bin edges from MURaM (obtained from Veronica at MPS)
+muram_edges = sort([99.00, 3.0, 1.5, 0.5, -99.00])
 
 
 # Choose the method of Binning. For each bin type, the binning function creates the bins (e.g. bin edges)
@@ -44,7 +47,7 @@ bins_tabgen = TabgenBinning(TSO.EqualTabgenBins,
                                     binsize=1.7)   # A Tabgen styled binning
 
 bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
-bins_muram = MURaMBinning();
+bins_muram = MURaMBinning(bin_edges=muram_edges);
 
 #= End modifications =#
   
@@ -64,7 +67,6 @@ binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model
 
 
 # Save the binned opacities only
-
 function save_table(binned_opacities, version; dispatch=true)
     eos_table_name = "$(name_extension)_v$(version)"
     save(binned_opacities.opacities, "binned_opacities.hdf5")
@@ -99,4 +101,4 @@ function scale!(bo, binned_opacities, what, bins, factor)
     end
 end
 
-save_table(binned_opacities, "0.4.4", dispatch=false)
+save_table(binned_opacities, "0.5.1", dispatch=false)

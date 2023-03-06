@@ -17,7 +17,7 @@ begin
     neweos, newopa, newopa_c, newopa_l, newopa_s = complement(m_int, eos, unify=false)
 
     ## Save everything in the usual TSO format
-    dname = "TSO_MARCS_v0.4"
+    dname = "TSO_MARCS_v0.5"
 
     save(neweos,   "combined_eos_marcs.hdf5")
     save(newopa,   "combined_opacities_marcs.hdf5")
