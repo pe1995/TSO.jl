@@ -62,6 +62,9 @@ export AesopusEoS, AesopusOpacity
 ## Models
 export Model1D, Average3D, @optical
 
+## Transfer
+export Solver, Jν, Qr
+
 
 #= Python libs =#
 const scipy_interpolate = PyNULL()
