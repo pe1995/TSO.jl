@@ -1,4 +1,4 @@
-## Concrete types
+#= Concrete types =#
 
 struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:RadiativeTransferSolver
     eos       ::A
@@ -29,10 +29,22 @@ struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:Rad
     Q      ::Array{T, 2}
 end
 
+struct RadiationField{A<:AbstractModel, T<:AbstractFloat, N} <:AbstractRadiationField
+    model::A
+    values::Array{T, N}
+end
+
+struct InterpolatedRadiationField{R<:RadiationField, I} <:AbstractRadiationField
+    radiation::R
+    interpolation_function::Vector{I}
+end
 
 
 
-## Constructors
+
+
+
+#= Constructors =#
 
 """
 Construct a binned radiative transfer solver based on a 1D model witht the kind:
@@ -42,7 +54,7 @@ Construct a binned radiative transfer solver based on a 1D model witht the kind:
 
     needs to be ordered from bottom to top. z increasing outwards.
 """
-Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=sort(labatto_4angles), weights=J_weights(labatto_4angles)) where {T} = begin
+Solver(model::Array{T,2}; eos::AxedEoS, opacities::AbstractBinnedOpacities, angles=sort(labatto_4angles), weights=J_weights(labatto_4angles)) where {T} = begin
     opacities = opacities.opacities
     bins    = size(opacities.κ, 3)
     T2      = Float64 #eltype(opacities.κ)
@@ -52,9 +64,15 @@ Solver(model::Array{T,2}; eos::AxedEoS, opacities::BinnedOpacities, angles=sort(
     model[:, 2] .= log.(model[:, 2])
     model[:, 3] .= log.(model[:, 3])
 
-    if model[2, 1] < model[1,1]
-        @warn "z needs to be increasing outwards and start at the bottom. Flipping axes..."
+    if model[2, 3] > model[1, 3]
+        # The second point has a higher density as the first one, so we are going down
+        @warn "Model is increasing in density! Assuming flipped z axis..."
         model = reverse(model, dims=1)
+    end
+
+    if model[2, 1] < model[1, 1]
+        @warn "z needs to be increasing outwards and start at the bottom. Flipping axes..."
+        model[:, 1] .= -model[:, 1]
     end
 
     mask    = sortperm(angles, rev=true)
@@ -84,10 +102,27 @@ end
 
 Solver(model::AbstractModel, eos::EoSTable; kwargs...) = Solver(model; eos=@axed(eos), kwargs...)
 
+## For the inteprolation of the results
+InterpolatedRadiationField(r::AbstractRadiationField, field::Symbol) = begin
+    v = getfield(r.model, field)
+    ip = [linear_interpolation(v |> reverse, r.values[:, i] .|> log |> reverse, extrapolation_bc=Line()) for i in axes(r.values, 2)]
+
+    InterpolatedRadiationField(r, ip)
+end
+
+## Convenience
+macro interpolated(r, field)
+    r_l = esc(r)
+    f_l = esc(field)
+
+    :(InterpolatedRadiationField($(r_l), $(f_l)))
+end
 
 
 
-## Solving routines
+
+
+#= Solving routines =#
 
 function chat_transfer1d!(intensity, S, k, z, angles)
     n_points = length(z)
@@ -133,8 +168,6 @@ function chat_transfer1d!(intensity, S, k, z, angles)
 end
 
 chat_transfer1d!(solver::BinnedTransferSolver) = chat_transfer1d!(solver.I, solver.S, solver.χ, solver.model[:, 1], solver.angles)
-
-
 
 """
 Solve the 1D radiative transfer in a given direction μ=cos(θ).
@@ -331,7 +364,7 @@ end
 
 
 
-## Commputation of mean intensity
+#= Commputation of mean intensity =#
 
 """
 Compute the mean intensity using the given Solver.
@@ -362,10 +395,42 @@ mean_intensity(I; weights=ones(size(I, 1))) = begin
 end
 
 
+"""
+    mean_intensity(aos, opacity, model)
+
+Compute the frequency dependent, angle integrated mean intensity from the given model.
+Return a RadiationField object, that can be used for interpolation/extrapolation.
+"""
+mean_intensity(aos::AxedEoS, opacity::AbstractBinnedOpacities, model) = begin
+    solver = Solver(model, aos, opacities=opacity)
+
+    # Make a new model with the flipped axes saved
+    args = []
+    for f in fieldnames(typeof(model))
+        v = if f == :lnρ
+            solver.model[:, 3]
+        elseif f == energy_variable(aos)
+            solver.model[:, 2]
+        elseif f == :z
+            solver.model[:, 1]
+        else
+            getfield(model, f)
+        end
+
+        append!(args, [v])
+    end
+
+    m = typeof(model)(args...)
+
+    RadiationField(m, binned_radiation(solver, mean_intensity=true))
+end
 
 
 
-## Commputation of heating rate
+
+
+
+#= Commputation of heating rate =#
 
 Qr(solver::BinnedTransferSolver) = begin
     I = binned_radiation(solver, mean_intensity=true)
@@ -416,7 +481,7 @@ end
 
 
 
-## Source function integration for testing
+#= Source function integration for testing =#
 
 S(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -445,7 +510,7 @@ end
 
 
 
-## Opacity integration for testing
+#= Opacity integration for testing =#
 
 κ(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -466,8 +531,17 @@ end
 
 
 
+#= Interpolation API =#
 
-## General methods
+evaluate_radiation(r::InterpolatedRadiationField, bin_index, values...) = r.interpolation_function[bin_index](values...)
+broadcastable(r::InterpolatedRadiationField) = Ref(r)
+
+
+
+
+
+
+#= General methods =#
 
 effective_temperature(F) = (F/σ_S)^(1/4)
 @inline angle_index(solver) = findfirst(solver.angles .≈ solver.μ[])
@@ -476,7 +550,8 @@ J_weights(angles) = ω_midpoint(sort(angles), -1, 1) ./ 2
 
 
 
-## General global variables
+
+#= General global variables =#
 const debug = Ref(true)
 const debug_index = Ref(0)
 

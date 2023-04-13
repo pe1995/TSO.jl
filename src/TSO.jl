@@ -12,16 +12,19 @@ using HDF5
 using Statistics
 
 import Base.size
+import Base.broadcastable
 
 
 #= Abstract Interface =#
 abstract type AbstractTable end
 abstract type AbstractRegularTable <:AbstractTable end
 abstract type AbstractIrregularTable <:AbstractTable end
+abstract type AbstractBinnedOpacities end
 abstract type OpacityBins end
 abstract type AbstractModel end
 abstract type LookupFunction end
 abstract type RadiativeTransferSolver end
+abstract type AbstractRadiationField end
 
 
 
@@ -78,8 +81,8 @@ include("_tables.jl")
 include("_models.jl")
 include("_eos.jl")
 include("_smooth.jl")
-include("_binning.jl")
 include("_transfer.jl")
+include("_binning.jl")
 include("_legacy_tables.jl")
 include("_aesopus.jl")
 include("_marcs.jl")
