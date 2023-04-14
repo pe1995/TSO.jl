@@ -73,15 +73,15 @@ function AesopusEoS_ascii(; energy, kross, ne, pg, type=Float32)
     contentN = get_content(ne, type)
     contentP = get_content(pg, type)
 
-    lnRho = log.(first(content))
+    lnRho = Base.convert.(type, first(content) .* log(10))
     for it in 1:nT
-        lnT[it] = log(first(content[it+1]))
+        lnT[it] = Base.convert.(type, first(content[it+1]) .* log(10))
 
         for jr in 1:nR
-            lnEi[it,   jr] = content[ it+1][jr+1]
-            lnRoss[it, jr] = contentK[it+1][jr+1]
-            lnNe[it,   jr] = contentN[it+1][jr+1]
-            lnPg[it,   jr] = contentP[it+1][jr+1]
+            lnEi[it,   jr] = Base.convert(type, content[ it+1][jr+1] * log(10))
+            lnRoss[it, jr] = Base.convert(type, contentK[it+1][jr+1] * log(10))
+            lnNe[it,   jr] = Base.convert(type, contentN[it+1][jr+1] * log(10))
+            lnPg[it,   jr] = Base.convert(type, contentP[it+1][jr+1] * log(10))
         end
     end
 
