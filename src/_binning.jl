@@ -833,6 +833,16 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothi
         χRBox[:, j, :] ./= ρ[j]
     end
 
+    χRBox[χRBox .<= 1e-30] .= 1e-30
+    χRBox[χRBox .>= 1e30]  .= 1e30
+    χBox[ χBox  .<= 1e-30] .= 1e-30
+    χBox[ χBox  .>= 1e30]  .= 1e30
+    SBox[SBox   .<= 1e-30] .= 1e-30
+    SBox[SBox   .>= 1e30]  .= 1e30
+
+
+    @show minimum(χRBox) maximum(χRBox) minimum(χBox) maximum(χBox)
+
     κ_ross = T(1.0) ./χRBox
 
     wthin, wthick = if isnothing(transition_model)

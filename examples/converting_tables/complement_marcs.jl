@@ -16,8 +16,13 @@ begin
     ## Interpolate the tables to new eos
     neweos, newopa, newopa_c, newopa_l, newopa_s = complement(m_int, eos, unify=false)
 
+    TSO.set_limits!(@axed(neweos), newopa)
+    TSO.set_limits!(@axed(neweos), newopa_c)
+    TSO.set_limits!(@axed(neweos), newopa_l)
+
+
     ## Save everything in the usual TSO format
-    dname = "TSO_MARCS_v0.5"
+    dname = "TSO_MARCS_v0.6"
 
     save(neweos,   "combined_eos_marcs.hdf5")
     save(newopa,   "combined_opacities_marcs.hdf5")

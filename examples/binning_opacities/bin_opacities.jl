@@ -1,10 +1,83 @@
 using Pkg; Pkg.activate(".")
 using TSO
-using BenchmarkTools
 
 begin
     TSO.load_TS()
     TSO.load_wrapper()
+
+    name_extension = "DIS_MARCS"
+    table_folder   = "TSO_MARCS_v0.6"
+
+
+    # TS quantities after post-processing
+    eos           = reload(SqEoS,     joinpath(table_folder, "combined_ross_eos.hdf5")) # ross for others
+    opacities     = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"), mmap=true)
+    formOpacities = reload(SqOpacity, joinpath(table_folder, "combined_formation_opacities.hdf5"), mmap=true)
+    opacitiesS    = reload(SqOpacity, joinpath(table_folder, "combined_Sopacities.hdf5"), mmap=true)
+
+
+    # λ Integration weights
+    weights = ω_midpoint(opacities)
+
+    # Load a model for the transition between optically thin and thick regime
+    model = Average3D(eos, "/home/eitner/shared/model_grid/examples/initial_models/t5777g44m0005_00020_av.dat")
+
+    # Bin edges from MURaM (obtained from Veronica at MPS)
+    muram_edges = sort([99.00, 3.0, 1.5, 0.5, -99.00])
+
+
+    # Choose the method of Binning. For each bin type, the binning function creates the bins (e.g. bin edges)
+    # The binning() function then sorts the wavelength points from the opacity table into the correct bins, so that 
+    # the integrated source function and average opacities can be computed in the box_integrated() function accordingly.
+    bins_co = Co5boldBinning(TSO.Co5boldBins)     # Fixed Co5bold binning
+
+
+    #= Modifications of the binning =#
+    ## TSO_sun_Magg_v3.1: Use only 8 bins for speed reasons. Also shift the edge a bit lower 
+    bins_stagger = StaggerBinning(TSO.StaggerBins,                                                         
+                                        opacities=opacities, 
+                                        formation_opacity=-log10.(formOpacities.κ_ross),  
+                                        Nbins=12, κ_bins=4,
+                                        λ_low=3.6)                 
+
+    bins_stagger8 = StaggerBinning(TSO.StaggerBins,                                                         
+                                        opacities=opacities, 
+                                        formation_opacity=-log10.(formOpacities.κ_ross),  
+                                        Nbins=8, κ_bins=4,
+                                        λ_low=3.7)    
+
+    bins_tabgen = TabgenBinning(TSO.EqualTabgenBins, 
+                                        opacities=opacities, 
+                                        formation_opacity=-log10.(formOpacities.κ_ross), 
+                                        binsize=1.7)   # A Tabgen styled binning
+
+    bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
+    bins_muram = MURaMBinning(bin_edges=muram_edges);
+
+    bins_semistagger = StaggerBinning(TSO.SemiStaggerBins, 
+                                    opacities=opacities, 
+                                    formation_opacity=-log10.(formOpacities.κ_ross), κ_bins=3, Nbins=7)
+
+    #= End modifications =#
+    
+
+    # Sort the wavelength points into the bins based on the chosen bin type
+    bin   = binning(bins_muram,    opacities, -log10.(formOpacities.κ_ross)) 
+    bin12 = binning(bins_stagger,  opacities, -log10.(formOpacities.κ_ross)) 
+    bin8  = binning(bins_semistagger, opacities, -log10.(formOpacities.κ_ross)) 
+
+
+    #for i in 1:12
+    #    @info "$(count(bin .== i)) wavelengths in bin $(i)"
+    #end;
+
+
+    # Compute binned quantities
+    #binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    #save_table(binned_opacities, "0.5.1.1", dispatch=false)
+
+    #binned_opacities12 = tabulate(bin12, weights, eos, opacities, transition_model=model)
+    #save_table(binned_opacities12, "0.5.2.1", dispatch=false)
 
 
     # Save the binned opacities only
@@ -43,80 +116,7 @@ begin
     end
 
 
-    name_extension = "DIS_MARCS"
-    table_folder   = joinpath("tables", "TSO_MARCS_v0.5")
-
-
-    # TS quantities after post-processing
-    eos           = reload(SqEoS,     joinpath(table_folder, "combined_ross_eos.hdf5")) # ross for others
-    opacities     = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"), mmap=true)
-    formOpacities = reload(SqOpacity, joinpath(table_folder, "combined_formation_opacities.hdf5"), mmap=true)
-    opacitiesS    = reload(SqOpacity, joinpath(table_folder, "combined_Sopacities.hdf5"), mmap=true)
-
-
-    # λ Integration weights
-    weights = ω_midpoint(opacities)
-
-    # Load a model for the transition between optically thin and thick regime
-    model = Average3D(eos, "stagger_av.dat")
-
-    # Bin edges from MURaM (obtained from Veronica at MPS)
-    muram_edges = sort([99.00, 3.0, 1.5, 0.5, -99.00])
-
-
-    # Choose the method of Binning. For each bin type, the binning function creates the bins (e.g. bin edges)
-    # The binning() function then sorts the wavelength points from the opacity table into the correct bins, so that 
-    # the integrated source function and average opacities can be computed in the box_integrated() function accordingly.
-    bins_co = Co5boldBinning(TSO.Co5boldBins)     # Fixed Co5bold binning
-
-
-    #= Modifications of the binning =#
-    ## TSO_sun_Magg_v3.1: Use only 8 bins for speed reasons. Also shift the edge a bit lower 
-    bins_stagger = StaggerBinning(TSO.StaggerBins,                                                         
-                                        opacities=opacities, 
-                                        formation_opacity=-log10.(formOpacities.κ_ross),  
-                                        Nbins=12, κ_bins=4,
-                                        λ_low=3.6)                 
-
-    bins_stagger8 = StaggerBinning(TSO.StaggerBins,                                                         
-                                        opacities=opacities, 
-                                        formation_opacity=-log10.(formOpacities.κ_ross),  
-                                        Nbins=8, κ_bins=4,
-                                        λ_low=3.7)    
-
-    bins_tabgen = TabgenBinning(TSO.EqualTabgenBins, 
-                                        opacities=opacities, 
-                                        formation_opacity=-log10.(formOpacities.κ_ross), 
-                                        binsize=1.7)   # A Tabgen styled binning
-
-    bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
-    bins_muram = MURaMBinning(bin_edges=muram_edges);
-
-    bins_semistagger = StaggerBinning(TSO.SemiStaggerBins, 
-                                    opacities=opacities, 
-                                    formation_opacity=-log10.(formOpacities.κ_ross), κ_bins=2, Nbins=6)
-
-    #= End modifications =#
-    
-
-    # Sort the wavelength points into the bins based on the chosen bin type
-    bin   = binning(bins_muram,    opacities, -log10.(formOpacities.κ_ross)) 
-    bin12 = binning(bins_stagger,  opacities, -log10.(formOpacities.κ_ross)) 
-    bin8  = binning(bins_semistagger, opacities, -log10.(formOpacities.κ_ross)) 
-
-
-    #for i in 1:12
-    #    @info "$(count(bin .== i)) wavelengths in bin $(i)"
-    #end;
-
-
-    # Compute binned quantities
-    #binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
-    #save_table(binned_opacities, "0.5.1.1", dispatch=false)
-
-    #binned_opacities12 = tabulate(bin12, weights, eos, opacities, transition_model=model)
-    #save_table(binned_opacities12, "0.5.2.1", dispatch=false)
 
     binned_opacities8 = tabulate(bin8, weights, eos, opacities, transition_model=model)
-    save_table(binned_opacities8, "0.5.5.1", dispatch=false)
+    save_table(binned_opacities8, "0.6.5.1", dispatch=false)
 end
