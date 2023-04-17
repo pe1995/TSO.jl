@@ -58,6 +58,8 @@ begin
                                     opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross), κ_bins=3, Nbins=7)
 
+    bins_density = TSO.DensityBinning(TSO.DensityBins, opacities=opacities, 
+                                    formation_opacity=-log10.(formOpacities.κ_ross), λ_bins=4)
     #= End modifications =#
     
 
@@ -65,6 +67,12 @@ begin
     bin   = binning(bins_muram,    opacities, -log10.(formOpacities.κ_ross)) 
     bin12 = binning(bins_stagger,  opacities, -log10.(formOpacities.κ_ross)) 
     bin8  = binning(bins_semistagger, opacities, -log10.(formOpacities.κ_ross)) 
+    bind  = binning(bins_density, opacities, -log10.(formOpacities.κ_ross)) 
+
+
+    TSO.combine_bins!(bins_density, (1, 5), (6, 7, 8))
+    TSO.split_bins!(bins_density, -log10.(formation_opacities.κ_ross), (1, 3))
+    bind = TSO.reset_bins(bins_density);
 
 
     #for i in 1:12
@@ -117,6 +125,8 @@ begin
 
 
 
-    binned_opacities8 = tabulate(bin8, weights, eos, opacities, transition_model=model)
-    save_table(binned_opacities8, "0.6.5.1", dispatch=false)
+    #binned_opacities8 = tabulate(bin8, weights, eos, opacities, transition_model=model)
+    binned_opacitiesd = tabulate(bind, weights, eos, opacities, transition_model=model)
+
+    save_table(binned_opacitiesd, "0.6.6", dispatch=false)
 end
