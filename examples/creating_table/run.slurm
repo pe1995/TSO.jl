@@ -1,7 +1,7 @@
 #!/bin/sh
-#SBATCH --job-name='TSO'
-#SBATCH --nodes=7
-#SBATCH --ntasks=202
+#SBATCH --job-name=TSO_OPA
+#SBATCH --nodes=5
+#SBATCH --ntasks=160
 ##SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=100G
@@ -9,4 +9,4 @@
 #SBATCH --mail-user=eitner@mpia.de  
 #SBATCH --mail-type=BEGIN,END,FAIL
     
-julia create_table.jl
+~/bin/julia create_table.jl

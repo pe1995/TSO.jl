@@ -76,6 +76,11 @@ function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsampl
 
     ename = switch ? dependent_energy_variable(aos) : energy_variable(aos)
 
+    @show density_gridded
+    @show energy_gridded 
+    @show density_uniform
+    @show energy_uniform 
+    @show size(newE)
 
     return if density_uniform                  ## This mean E is not uniform!
         aos_puff = if energy_gridded           ## However E is still gridded, which means we have to puff it up in order
@@ -210,11 +215,11 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
 end
 
 """
-    switch(eos, opacities; kwargs...)
+    switch_energy(eos, opacities; kwargs...)
 
 Switch out the Energy axis of the given tables. It is required that the tables are gridded.
 """
-function switch_energy(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS} 
+function switch_energy(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=true, newE=nothing, newRho=nothing) where {A<:AxedEoS} 
     @assert is_gridded(aos)
 
     newE2,_ = pick_axis(aos, conservative=conservative, upsample=upsample, switch=true)
@@ -236,7 +241,7 @@ switch_energy(eos::A, args...; kwargs...) where {A<:RegularEoSTable} = switch_en
 
 
 
-#= Interpolation functions =#
+#================================================================= Interpolation functions ===#
 
 """
     interpolate_at_density(eos, opacities...; newE...)
@@ -554,7 +559,7 @@ end
 
 
 
-#= EoS manipulation functions =#
+#============================================================ EoS manipulation functions ===#
 
 function upsample(eos, axis, N)
     a = getfield(eos, axis)
@@ -637,7 +642,7 @@ replace_axis(eos::E; kwargs...) where {E<:RegularEoSTable} = replace_axis(AxedEo
 
 
 
-#= Utilities =#
+#================================================================== Utilities ===#
 
 conservative_axis(mat::Vector) = default_axis(mat)
 conservative_axis(mat::Matrix) = begin
@@ -747,7 +752,7 @@ end
 
 
 
-#= NaN handling =#
+#=================================================================== NaN handling ===#
 
 @inline interpolate_at(x, y, x0) = linear_interpolation(x, y, extrapolation_bc=Line()).(x0)
 
