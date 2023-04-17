@@ -48,6 +48,13 @@ struct SemiStaggerBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
+"""
+Bins based on the density distribution of points.
+"""
+struct DensityBins{F<:AbstractFloat} <:OpacityBins
+    bin_edges ::Array{F,2}
+end
+
 
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -62,6 +69,7 @@ StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...)          = fill(t, ar
 StaggerBinning(t::Type{<:Beeck2012StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:SemiStaggerBins}, args...; kwargs...)      = fill(t, args...; kwargs...)
 Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
+DensityBinning(t::Type{<:DensityBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 MURaMBinning(args...; kwargs...)                                    = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
 
 
@@ -273,6 +281,60 @@ end
 
 fill(::Type{<:ExactTabgenBins}; Nbins=4, dbox=0.5, kwargs...) = ExactTabgenBins(dbox, Nbins)
 
+"""
+stack 2 bins on top of each other, with the limit being 1 σ off the mean.
+"""
+function fill(::Type{DensityBins}; opacities, formation_opacity, λ_bins=4, κ_edge=nothing)
+    nλBins = λ_bins
+    logλ   = log10.(opacities.λ)
+
+    formMin = minimum(formation_opacity)
+    formMax = maximum(formation_opacity)
+    rminmax = abs(formMax - formMin)
+    formMax = formMax + 0.01*rminmax
+    formMin = formMin - 0.01*rminmax
+
+    logλMin = minimum(logλ)
+
+    λ_edges = zeros(nλBins+1)
+    m  = isnothing(κ_edge) ? maximum(logλ) : maximum(logλ[formation_opacity .<= κ_edge])
+    vm = isnothing(κ_edge) ? formation_opacity[argmax(logλ)] : κ_edge
+    l  = minimum(logλ[formation_opacity .<= vm])
+    r  = abs(m - l)
+    l = l - 0.01*r
+    m = m + 0.01*r
+    λ_edges .= collect(range(l, m, length=nλBins+1))
+
+    ## reset the lower edge
+    l  = logλMin
+    m  = maximum(logλ)
+    r  = abs(m - l)
+    l = l - 0.01*r
+    m = m + 0.01*r
+    λ_edges[1] = l
+    λ_edges[end] = m
+
+    λ_mask  = [(logλ .> λ_edges[i]) .& (logλ .< λ_edges[i+1]) for i in 1:nλBins]
+    k_limit = [mean(formation_opacity[λ_mask[i]]) + 1.5*std(formation_opacity[λ_mask[i]]) for i in 1:nλBins]
+
+
+
+    # Now we stack line bins on top
+    bins = zeros(nλBins*2 , 4)
+    for i in 1:nλBins
+        bins[i, 1] = λ_edges[i]
+        bins[i, 2] = λ_edges[i+1]
+        bins[i, 3] = formMin
+        bins[i, 4] = k_limit[i]
+
+        bins[nλBins + i, 1] = λ_edges[i]
+        bins[nλBins + i, 2] = λ_edges[i+1]
+        bins[nλBins + i, 3] = k_limit[i]
+        bins[nλBins + i, 4] = formMax
+    end
+
+    DensityBins(bins)
+end
 
 
 
@@ -346,8 +408,101 @@ function binning(b::B, opacities, formation_opacity, kwargs...) where {B<:Union{
     binning
 end
 
+function binning(b::DensityBins, opacities, formation_opacity; splits=[], combine=[], kwargs...)
+    bins_normal = binning(StaggerBins(b.bin_edges), opacities, formation_opacity, kwargs...)
+
+    # Should bins be combined or splitted?
+    combine_bins!(bins_normal, combine...)
+    split_bins!(bins_normal, formation_opacity, splits...)
+
+    #reset_bins(bins_normal)
+
+    bins_normal
+end
+
+"""Reset the bins to a simple increasing structure."""
+function reset_bins(binning)
+    bin_assignment = []
+    assigned_bins  = []
+
+    for bin in binning
+        if !(bin in assigned_bins)
+            append!(assigned_bins, [bin])
+            append!(bin_assignment, [length(bin_assignment)+1])
+        end
+    end
+
+    bin_switch = Dict(a=>b for (a, b) in zip(assigned_bins, bin_assignment))
+
+    binning_new = similar(binning)
+    for (i, bin) in enumerate(binning)
+        binning_new[i] = bin_switch[bin]
+    end
+
+    binning_new
+end
 
 
+function split_bins!(bins_normal, formation_opacity, splits...)
+    nbins = maximum(unique(bins_normal))
+
+    # Should bins be combined or splitted?
+    for (i, split) in splits |> enumerate
+        # bin to split
+        i_bin_split = split[1]
+
+        # in how many
+        n_splits = split[2]
+        
+        # all points in that bin
+        points_bin = bins_normal .== i_bin_split
+        fopa_bin   = formation_opacity[points_bin]
+
+        new_splits = split_similar(sort(fopa_bin), n_splits)
+        k_edges = zeros(n_splits+1)
+        k_edges[1] = minimum(fopa_bin)
+        for b in 1:n_splits
+            k_edges[b+1] = last(new_splits[b])
+        end
+        k_edges[end] = maximum(fopa_bin)
+
+        l  = k_edges[1]
+        m  = k_edges[end]
+        r  = abs(m - l)
+        #l = l - 0.01*r
+        m = m + 0.01*r
+        k_edges[1] = l
+        k_edges[end] = m
+
+        new_bin_numbers = [i_bin_split, (nbins + i for i in 1:n_splits-1)...]
+        for i in eachindex(bins_normal)
+            if !points_bin[i]
+                continue
+            end
+            for j in 1:n_splits
+                if (formation_opacity[i] >= k_edges[j]) & (formation_opacity[i] < k_edges[j+1])
+                    bins_normal[i] = new_bin_numbers[j]
+                end
+            end
+        end
+
+        # make a new bin
+        nbins = maximum(unique(bins_normal)) #nbins + (n_splits-1)
+    end
+end
+
+
+function combine_bins!(bins_normal, combine...)
+    for (i, comb) in combine |> enumerate
+        new_bin_number = first(comb)
+
+        for (i, i_bin) in bins_normal |> enumerate
+            if i_bin in comb
+                bins_normal[i] = new_bin_number
+            end
+        end 
+    end
+end
 
 
 #======================= Wavelength integration weights ================================#
@@ -815,7 +970,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothi
                 χBox[ i, j, b]  += weights[k] .* opacities.κ[i, j, k]         .* bnu  
                 χRBox[i, j, b]  += weights[k] .* 1.0 ./ opacities.κ[i, j, k]  .* dbnu 
                 χ_thin[i,j, b]   = χRBox[i, j, b]
-                SBox[ i, j, b]  += weights[k] .* Bν( opacities.λ[k], Temp[i, j]) #bnu    
+                SBox[ i, j, b]  += weights[k] .* bnu #Bν( opacities.λ[k], Temp[i, j]) #bnu    
                 B[ b]           += weights[k] .* bnu  
                 δB[b]           += weights[k] .* dbnu 
                 κBox[ i, j, b]  += (!iscat) ? 
@@ -833,6 +988,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothi
         χRBox[:, j, :] ./= ρ[j]
     end
 
+    χRBox[χRBox .<= 0.0] .= 1e-30
     κ_ross = T(1.0) ./χRBox
 
     wthin, wthick = if isnothing(transition_model)
