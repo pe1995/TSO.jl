@@ -38,11 +38,12 @@ export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 export save, reload, meshgrid
 
 ## Binning 
-export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning
+export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning, DensityBinning
 export binning
 export ω_midpoint
 export lookup, lookup_function, bisect
 export tabulate
+export reset_bins
 export @binned
 
 ## EoS

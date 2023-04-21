@@ -6,7 +6,7 @@ begin
     TSO.load_wrapper()
 
     name_extension = "DIS_MARCS"
-    table_folder   = "TSO_MARCS_v0.6"
+    table_folder   = "tables/TSO_MARCS_v0.5"
 
 
     # TS quantities after post-processing
@@ -20,7 +20,7 @@ begin
     weights = ω_midpoint(opacities)
 
     # Load a model for the transition between optically thin and thick regime
-    model = Average3D(eos, "/home/eitner/shared/model_grid/examples/initial_models/t5777g44m0005_00020_av.dat")
+    model = Average3D(eos, "stagger_av.dat")
 
     # Bin edges from MURaM (obtained from Veronica at MPS)
     muram_edges = sort([99.00, 3.0, 1.5, 0.5, -99.00])
@@ -51,6 +51,9 @@ begin
                                         formation_opacity=-log10.(formOpacities.κ_ross), 
                                         binsize=1.7)   # A Tabgen styled binning
 
+    bins_tabgen = TabgenBinning(TSO.UniformTabgenBins, opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross), Nbins=7, line_bins=3)
+
+
     bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
     bins_muram = MURaMBinning(bin_edges=muram_edges);
 
@@ -58,13 +61,22 @@ begin
                                     opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross), κ_bins=3, Nbins=7)
 
+    bins_density = TSO.DensityBinning(TSO.DensityBins, opacities=opacities, 
+                                    formation_opacity=-log10.(formOpacities.κ_ross), λ_bins=4)
+
     #= End modifications =#
     
 
     # Sort the wavelength points into the bins based on the chosen bin type
-    bin   = binning(bins_muram,    opacities, -log10.(formOpacities.κ_ross)) 
-    bin12 = binning(bins_stagger,  opacities, -log10.(formOpacities.κ_ross)) 
-    bin8  = binning(bins_semistagger, opacities, -log10.(formOpacities.κ_ross)) 
+    #bin   = binning(bins_muram,    opacities, -log10.(formOpacities.κ_ross)) 
+    #bin12 = binning(bins_stagger,  opacities, -log10.(formOpacities.κ_ross)) 
+    #bin8  = binning(bins_semistagger, opacities, -log10.(formOpacities.κ_ross)) 
+
+    #bin  = binning(bins_density, opacities, -log10.(formOpacities.κ_ross), combine=[(1, 5), (6, 7, 8)], splits=[(1, 4)]);
+    bin = binning(bins_tabgen, opacities, -log10.(formOpacities.κ_ross));
+
+    #bin  = TSO.reset_bins(bin);
+
 
 
     #for i in 1:12
@@ -117,6 +129,6 @@ begin
 
 
 
-    binned_opacities8 = tabulate(bin8, weights, eos, opacities, transition_model=model)
-    save_table(binned_opacities8, "0.6.5.1", dispatch=false)
+    binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    save_table(binned_opacities, "0.5.7.1", dispatch=false)
 end

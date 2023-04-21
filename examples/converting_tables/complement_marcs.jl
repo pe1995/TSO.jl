@@ -7,9 +7,9 @@ using Serialization
 ## Expected duration for normal tables: ~20 min for square, ~20 min for complement
 begin
     ## Load an equation of state that provides the internal energy
-    eos = @axed reload(SqEoS, abspath("../../../opacity_tables/TSO_sun_Magg_v10.2/eos.hdf5"))
+    eos = @axed reload(SqEoS, abspath("../../../tests/TSO_sun_Magg_v10.2/eos.hdf5"))
 
-    paths = glob("OS_table*", "../../../create_tables/MARCS/OPAC-for-3D/Z0.0a0.0")  ## Paths to the Tables
+    paths = glob("OS_table*", "OPAC-for-3D/april23/MaggZ0.0a0.0/")  ## Paths to the Tables
     mos   = MARCSOpacity(paths...)                     ## Read the raw tables
     m_int = uniform(mos...)                            ## Interpolate to square T-rho grid
 
@@ -22,7 +22,7 @@ begin
 
 
     ## Save everything in the usual TSO format
-    dname = "TSO_MARCS_v0.6"
+    dname = "TSO_MARCS_v1.1"
 
     save(neweos,   "combined_eos_marcs.hdf5")
     save(newopa,   "combined_opacities_marcs.hdf5")

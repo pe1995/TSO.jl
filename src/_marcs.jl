@@ -11,7 +11,7 @@ Content of a MARCS Opacity sampling file. Intermediate step before converting
 to TS format.
 """
 struct MARCSOS{F<:AbstractFloat,I<:Integer,
-                NT,NPe,NPg,NR, NK}
+                NT,NPe,NPg,NR,NK}
     T         ::Array{F,NT}
     pe        ::Array{F,NPe}
     pg        ::Array{F,NPg}
@@ -363,9 +363,9 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
     save(neweos, "intermediate_eos.hdf5")
 
     ## Opacities are stored linealy so this can be done 
-    newopa_c = RegularOpacityTable(mos.κ_c,  newlnRoss, src, mos.λ, false)
-    newopa_l = RegularOpacityTable(mos.κ_la, newlnRoss, src, mos.λ, false)
-    newopa_s = RegularOpacityTable(mos.κ_s,  newlnRoss, src, mos.λ, false)
+    newopa_c  = RegularOpacityTable(mos.κ_c,              newlnRoss, src, mos.λ, false)
+    newopa_l  = RegularOpacityTable(mos.κ_la .+ mos.κ_lm, newlnRoss, src, mos.λ, false)
+    newopa_s  = RegularOpacityTable(mos.κ_s,              newlnRoss, src, mos.λ, false)
     
     neweos, newopa, newopa_c, newopa_l, newopa_s = if !unify
         no = deepcopy(newopa_c) 

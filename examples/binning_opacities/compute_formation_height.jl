@@ -8,14 +8,14 @@ TSO.load_wrapper()
 
 
 # The EoS has already been smoothed in the running process
-table_folder = "TSO_MARCS_v0.6"
+table_folder = "tables/TSO_MARCS_v1.1"
 opacities    = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"))
 eos          = reload(SqEoS,     joinpath(table_folder, "combined_eos.hdf5"))
 aos          = @axed eos
 
 
 # For any model, compute the internal energy given T, rho by bisecting using the EoS
-model = Average3D(eos, "/home/eitner/shared/model_grid/examples/initial_models/t5777g44m0005_00020_av.dat")
+model = Average3D(eos, "stagger_av.dat")
 
 
 # Recompute the rosseland optical depth scale based on the combined opacities

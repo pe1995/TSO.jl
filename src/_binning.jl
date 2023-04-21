@@ -268,13 +268,39 @@ end
 """
 Uniformly filled Tabgen bins based on opacities.
 """
-function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4, kwargs...)
-    # sort the opacities and split the array in equal pieces
-    sorted_opacities   = sort(formation_opacity)
-    splitted_opacities = TSO.split_similar(sorted_opacities, Nbins)
-    
-    edges = [b[1] for b in splitted_opacities]
-    append!(edges, splitted_opacities[end][end])
+function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4, line_bins=nothing, kwargs...)
+    edges = if isnothing(line_bins)
+        # sort the opacities and split the array in equal pieces
+        sorted_opacities   = sort(formation_opacity)
+        splitted_opacities = TSO.split_similar(sorted_opacities, Nbins)
+        
+        edges = [b[1] for b in splitted_opacities]
+        append!(edges, splitted_opacities[end][end])
+
+        edges
+    else
+        κ_edge = formation_opacity[argmax(opacities.λ)]
+
+        cont_bins = Nbins - line_bins
+        all_below = formation_opacity[formation_opacity .<= κ_edge]
+        all_above = formation_opacity[formation_opacity .> κ_edge]
+
+        sorted_opacities   = sort(all_below)
+        splitted_opacities = TSO.split_similar(sorted_opacities, cont_bins)
+        
+        edges = [b[1] for b in splitted_opacities]
+
+        sorted_opacities   = sort(all_above)
+        splitted_opacities = TSO.split_similar(sorted_opacities, line_bins)
+        
+        for b in splitted_opacities
+            append!(edges, [b[1]])
+        end
+
+        append!(edges, splitted_opacities[end][end])
+
+        edges
+    end
 
     UniformTabgenBins(edges)
 end
