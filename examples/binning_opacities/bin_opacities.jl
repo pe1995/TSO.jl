@@ -63,7 +63,6 @@ begin
 
     bins_density = TSO.DensityBinning(TSO.DensityBins, opacities=opacities, 
                                     formation_opacity=-log10.(formOpacities.κ_ross), λ_bins=4)
-
     #= End modifications =#
     
 

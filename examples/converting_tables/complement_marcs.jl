@@ -10,6 +10,9 @@ begin
     eos = @axed reload(SqEoS, abspath("../../../tests/TSO_sun_Magg_v10.2/eos.hdf5"))
 
     paths = glob("OS_table*", "OPAC-for-3D/april23/MaggZ0.0a0.0/")  ## Paths to the Tables
+    #paths = glob("OS_table*", "../../../create_tables/MARCS/OPAC-for-3D/Z0.0a0.0")  ## Paths to the Tables
+    paths = glob("OS_table*", "../../../create_tables/MARCS/OPAC-for-3D/MaggZ0.0a0.0")  ## Paths to the Tables
+
     mos   = MARCSOpacity(paths...)                     ## Read the raw tables
     m_int = uniform(mos...)                            ## Interpolate to square T-rho grid
 
@@ -42,4 +45,5 @@ end
 
 #= 
 v0.5: Use the EoS that was available on gemini at the moment. (TSO_sun_Magg_v10.2)
+v1.X: New opacities for Magg, with old EoS (TSO_sun_Magg_v10.2)
 =#

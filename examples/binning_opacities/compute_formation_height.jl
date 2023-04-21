@@ -9,6 +9,7 @@ TSO.load_wrapper()
 
 # The EoS has already been smoothed in the running process
 table_folder = "tables/TSO_MARCS_v1.1"
+table_folder = "TSO_MARCS_v1.1"
 opacities    = reload(SqOpacity, joinpath(table_folder, "combined_opacities.hdf5"))
 eos          = reload(SqEoS,     joinpath(table_folder, "combined_eos.hdf5"))
 aos          = @axed eos
