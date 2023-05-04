@@ -913,15 +913,15 @@ end
 function set_small!(aos, opa, small=1e-30)
     otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
     lsmall = log(small)
-    for j in eachindex(aos.density_axes.values)
-        for i in eachindex(aos.energy_axes.values)
+    @inbounds for j in eachindex(aos.density_axes.values)
+        @inbounds for i in eachindex(aos.energy_axes.values)
             otherV[i, j]         = check(otherV[i, j], lsmall) ? otherV[i, j] : lsmall
             aos.eos.lnPg[i, j]   = check(aos.eos.lnPg[i, j],   lsmall) ? aos.eos.lnPg[i, j]   : lsmall
             aos.eos.lnNe[i, j]   = check(aos.eos.lnNe[i, j],   lsmall) ? aos.eos.lnNe[i, j]   : lsmall
             aos.eos.lnRoss[i, j] = check(aos.eos.lnRoss[i, j], lsmall) ? aos.eos.lnRoss[i, j] : lsmall
             opa.κ_ross[i, j]     = check(opa.κ_ross[i, j],     small)  ? opa.κ_ross[i, j]     : small
 
-            for k in eachindex(opa.λ)
+            @inbounds for k in eachindex(opa.λ)
                 opa.κ[i, j, k]     = check(opa.κ[i, j, k],   small)  ? opa.κ[i, j, k]    : small
                 opa.src[i, j, k]   = check(opa.src[i, j, k], small)  ? opa.src[i, j, k]  : small
             end
@@ -932,15 +932,15 @@ end
 function set_large!(aos, opa, large=1e30)
     otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
     llarge = log(large)
-    for j in eachindex(aos.density_axes.values)
-        for i in eachindex(aos.energy_axes.values)
+    @inbounds for j in eachindex(aos.density_axes.values)
+        @inbounds for i in eachindex(aos.energy_axes.values)
             otherV[i, j]         = check_large(otherV[i, j], llarge) ? otherV[i, j] : llarge
             aos.eos.lnPg[i, j]   = check_large(aos.eos.lnPg[i, j],   llarge) ? aos.eos.lnPg[i, j]   : llarge
             aos.eos.lnNe[i, j]   = check_large(aos.eos.lnNe[i, j],   llarge) ? aos.eos.lnNe[i, j]   : llarge
             aos.eos.lnRoss[i, j] = check_large(aos.eos.lnRoss[i, j], llarge) ? aos.eos.lnRoss[i, j] : llarge
             opa.κ_ross[i, j]     = check_large(opa.κ_ross[i, j],     large)  ? opa.κ_ross[i, j]     : large
 
-            for k in eachindex(opa.λ)
+            @inbounds for k in eachindex(opa.λ)
                 opa.κ[i, j, k]     = check_large(opa.κ[i, j, k],   large)  ? opa.κ[i, j, k]    : large
                 opa.src[i, j, k]   = check_large(opa.src[i, j, k], large)  ? opa.src[i, j, k]  : large
             end
@@ -954,4 +954,5 @@ set_limits!(aos, opa; small=1e-30, large=1e30) = begin
 end
 
 check(v, small) = !isnan(v) & (v >= small)
+check_small = check
 check_large(v, large) = !isnan(v) & (v < large)
