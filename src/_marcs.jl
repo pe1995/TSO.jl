@@ -213,11 +213,103 @@ function interpolate_lnT(m::MARCSOS; new_size=length(m.T))
 end
 
 """
+    interpolate_unstructured(mos...; new_T_size, new_R_size, s=1.0, kx=1, ky=1)
+
+Interpolate unstructured 2D data. Slower, but works on any input orientation.
+"""
+function interpolate_unstructured(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing, s=1.0, kx=1, ky=1)
+    if !scipy_loaded[]
+        load_scipy_interpolate!()
+    end
+
+	x = vcat((log.(mos[i].T) for i in eachindex(mos))...)
+	y = vcat((log.(mos[i].ρ) for i in eachindex(mos))...) 
+
+    new_T_size = isnothing(new_T_size) ? length(unique(x)) : new_T_size
+    new_ρ_size = isnothing(new_ρ_size) ? length(unique(y)) : new_ρ_size
+
+    pe   = similar(mos[1].pe,  new_T_size, new_ρ_size) 
+    pg   = similar(mos[1].pe,  new_T_size, new_ρ_size)
+    κ_c  = similar(mos[1].κ_c, new_T_size, new_ρ_size, length(mos[1].λ)) 
+    κ_s  = similar(mos[1].κ_c, new_T_size, new_ρ_size, length(mos[1].λ)) 
+    κ_la = similar(mos[1].κ_c, new_T_size, new_ρ_size, length(mos[1].λ)) 
+    κ_lm = similar(mos[1].κ_c, new_T_size, new_ρ_size, length(mos[1].λ)) 
+
+    
+    @show new_T_size new_ρ_size typeof(x)
+
+
+	x_new = range(minimum(x), maximum(x), length=new_T_size)
+	y_new = range(minimum(y), maximum(y), length=new_ρ_size)
+
+    xxn, yyn = meshgrid(x_new, y_new)
+
+	z = similar(x)
+
+    z  .= vcat((log.(mos[i].pe) for i in eachindex(mos))...)
+   #sp  = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+   # evalgrid(sp, x_new, y_new)
+    pe .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+
+    z  .= vcat((log.(mos[i].pg) for i in eachindex(mos))...)
+    #sp  = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+    pg .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+
+    for k in eachindex(mos[1].λ)
+        #try
+            z .= vcat((log.(mos[i].κ_c[:, k]) for i in eachindex(mos))...)
+            #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+            κ_c[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+
+            z .= vcat((log.(mos[i].κ_s[:, k]) for i in eachindex(mos))...)
+            #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+            κ_s[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+
+            z .= vcat((log.(mos[i].κ_la[:, k]) for i in eachindex(mos))...)
+            #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+            κ_la[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+
+            z .= vcat((log.(mos[i].κ_lm[:, k]) for i in eachindex(mos))...)
+            #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
+            κ_lm[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+        #=catch 
+            @info "error in $(k)"
+            z .= vcat((log.(mos[i].κ_c[:, k]) for i in eachindex(mos))...)
+            @show any(isnan.(z)) maximum(z) minimum(z)
+
+            z .= vcat((log.(mos[i].κ_la[:, k]) for i in eachindex(mos))...)
+            @show any(isnan.(z)) maximum(z) minimum(z)
+
+            z .= vcat((log.(mos[i].κ_lm[:, k]) for i in eachindex(mos))...)
+            @show any(isnan.(z)) maximum(z) minimum(z)
+
+            error()
+        end=#
+    end
+
+    MARCSOS(x_new .|> exp, pe, pg, y_new .|> exp, κ_c, κ_s, κ_la, κ_lm, m[1].ω, m[1].abundance)
+end
+
+
+"""
 Square the given MARCSOS part tables. All of the different tables may have different sizes and grids.
 We first interpolate every sub-table to a common density grid. Then we pick a common Temp. grid 
 between all tables and interpolate 
 """
-function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing)
+function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing, structured=true, kwargs...)
+    mos = if structured
+        mos
+    else
+        ## set lower limit for opacities to avoid NaN in log
+        limit!.(mos, 1e-30, 1e30)
+        mos_int = []
+        for m in mos
+            append!(mos_int, interpolate_unstructured(m; kwargs...))
+        end
+        
+        mos_int
+    end
+
     m_rho = []
     common_rho = common_grid(log, mos..., which=:ρ, new_size=new_ρ_size)
 
@@ -226,21 +318,19 @@ function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing)
     end
 
     ## append together all tables and sort them in T
-    m_rho = append(m_rho...)
+    mos = append(m_rho...)
 
     ## interpolate the table to uniform lnT grid
     new_T_size = isnothing(new_T_size) ? length(m_rho.T) : new_T_size
-    mos_inter = interpolate_lnT(m_rho, new_size=new_T_size)
+    interpolate_lnT(mos, new_size=new_T_size)
 
     ## set lower limit for opacities to avoid NaN in log
-    lower_limit!(mos_inter, 1e-30)
-    upper_limit!(mos_inter, 1e30)
-
+    limit!(mos, 1e-30, 1e30)
 
     ## Fill in NaNs in the opacity table using linear interpolation
-    fill_nan!(mos_inter)
+    fill_nan!(mos)
 
-    mos_inter
+    mos
 end
 
 
@@ -625,44 +715,37 @@ function fill_nan!(mos::MARCSOS)
     #@assert all(.!isnan.(mos.κ_s))
 end
 
-function lower_limit!(mos::MARCSOS, lim)
-    @inbounds for k in eachindex(mos.λ)
-        @inbounds for j in eachindex(mos.ρ)
-            @inbounds for i in eachindex(mos.T)
-                if mos.κ_c[i, j, k] < lim
-                    mos.κ_c[i, j, k] = lim
+
+limit!(mos::MARCSOS, limLow, limHigh) = begin
+    limit!(mos.κ_c, limLow, limHigh)
+    limit!(mos.κ_la, limLow, limHigh)
+    limit!(mos.κ_lm, limLow, limHigh)
+    limit!(mos.κ_s, limLow, limHigh)
+end
+
+function limit!(κ::Array{T, 3}, limLow, limHigh) where {T}
+    @inbounds for k in axes(κ, 3)
+        @inbounds for j in axes(κ, 2)
+            @inbounds for i in axes(κ, 1)
+                if κ[i, j, k] < limLow
+                    κ[i, j, k] = limLow
                 end
-                if mos.κ_la[i, j, k] < lim
-                    mos.κ_la[i, j, k] = lim
-                end
-                if mos.κ_lm[i, j, k] < lim
-                    mos.κ_lm[i, j, k] = lim
-                end
-                if mos.κ_s[i, j, k] < lim
-                    mos.κ_s[i, j, k] = lim
+                if κ[i, j, k] > limHigh
+                    κ[i, j, k] = limHigh
                 end
             end
         end
     end
 end
 
-
-function upper_limit!(mos::MARCSOS, lim)
-    @inbounds for k in eachindex(mos.λ)
-        @inbounds for j in eachindex(mos.ρ)
-            @inbounds for i in eachindex(mos.T)
-                if mos.κ_c[i, j, k] > lim
-                    mos.κ_c[i, j, k] = lim
-                end
-                if mos.κ_la[i, j, k] > lim
-                    mos.κ_la[i, j, k] = lim
-                end
-                if mos.κ_lm[i, j, k] > lim
-                    mos.κ_lm[i, j, k] = lim
-                end
-                if mos.κ_s[i, j, k] > lim
-                    mos.κ_s[i, j, k] = lim
-                end
+function limit!(κ::Array{T, 2}, limLow, limHigh) where {T}
+    @inbounds for j in axes(κ, 2)
+        @inbounds for i in axes(κ, 1)
+            if κ[i, j] < limLow
+                κ[i, j] = limLow
+            end
+            if κ[i, j] > limHigh
+                κ[i, j] = limHigh
             end
         end
     end

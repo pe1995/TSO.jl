@@ -10,6 +10,7 @@ begin
 	using Pkg; Pkg.activate("."); 
 	using TSO
 	using PyPlot
+	using Dierckx
 	using Glob
 	using Serialization
 end
@@ -53,6 +54,12 @@ begin
 	gcf()
 end
 
+# ╔═╡ e379074f-997a-45a3-922d-8e57b7709502
+md"# Experiment: Dierckx"
+
+# ╔═╡ 1a353858-af6b-447b-8023-045f73c47b46
+m_int = uniform(mos..., new_T_size=104, new_ρ_size=104, structured=false)
+
 # ╔═╡ 276ea20d-ab1e-44ca-bcfc-59c34f936bdb
 md"
 # Interpolate
@@ -60,7 +67,7 @@ We can now first interpolate the unstructured data to a square T-rho table, whic
 is required for the conversion to dispatch later, and also to fit into the rest of the API."
 
 # ╔═╡ 18876950-d744-40c7-9b8c-1ec8044708f9
-m_int = uniform(mos..., new_T_size=104, new_ρ_size=104)
+#m_int = uniform(mos..., new_T_size=104, new_ρ_size=104)
 
 # ╔═╡ 772769bf-d366-4265-aa72-91ba2ee5d803
 begin
@@ -102,7 +109,7 @@ Save everything in the usual TSO.jl format
 
 # ╔═╡ fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
 begin
-	dname = "TSO_MARCS_v1.3.2"
+	dname = "TSO_MARCS_v1.5"
 	
 	save(neweos,   "combined_eos_marcs.hdf5")
 	save(newopa,   "combined_opacities_marcs.hdf5")
@@ -140,7 +147,9 @@ end
 # ╟─626c6ea3-ee30-4dbe-9e32-4b211fa559e0
 # ╠═75d03d5a-ef5f-47c6-8a5c-f14ce7cba955
 # ╟─d8634756-2bd8-4e9f-b8d0-2d45ed301495
-# ╟─f63561ff-b4e9-4ddc-b5f5-f69a24dc11b9
+# ╠═f63561ff-b4e9-4ddc-b5f5-f69a24dc11b9
+# ╟─e379074f-997a-45a3-922d-8e57b7709502
+# ╠═1a353858-af6b-447b-8023-045f73c47b46
 # ╟─276ea20d-ab1e-44ca-bcfc-59c34f936bdb
 # ╠═18876950-d744-40c7-9b8c-1ec8044708f9
 # ╟─772769bf-d366-4265-aa72-91ba2ee5d803
