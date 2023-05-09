@@ -6,7 +6,7 @@ begin
     TSO.load_wrapper()
 
     name_extension = "DIS_MARCS"
-    table_folder   = "tables/TSO_MARCS_v0.5"
+    table_folder   = "tables/TSO_MARCS_v1.3.0"
 
 
     # TS quantities after post-processing
@@ -51,7 +51,7 @@ begin
                                         formation_opacity=-log10.(formOpacities.κ_ross), 
                                         binsize=1.7)   # A Tabgen styled binning
 
-    bins_tabgen = TabgenBinning(TSO.UniformTabgenBins, opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross), Nbins=7, line_bins=3)
+    bins_tabgen = TabgenBinning(TSO.UniformTabgenBins, opacities=opacities, formation_opacity=-log10.(formOpacities.κ_ross), Nbins=5, line_bins=3)
 
 
     bins_beeck = StaggerBinning(TSO.Beeck2012StaggerBins)
@@ -129,5 +129,5 @@ begin
 
 
     binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
-    save_table(binned_opacities, "0.5.7.1", dispatch=false)
+    save_table(binned_opacities, "1.3.0.1", dispatch=false)
 end

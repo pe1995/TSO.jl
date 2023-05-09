@@ -10,6 +10,8 @@ using PyCall
 using Glob
 using HDF5
 using Statistics
+#using Dierckx
+using Clustering
 
 import Base.size
 import Base.broadcastable
@@ -38,7 +40,7 @@ export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 export save, reload, meshgrid
 
 ## Binning 
-export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning, DensityBinning
+export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning, DensityBinning, ClusterBinning
 export binning
 export ω_midpoint
 export lookup, lookup_function, bisect
@@ -54,7 +56,7 @@ export formation_height, optical_depth
 export MARCSOS, MARCSOpacity
 
 ## Intpolations
-export gridded, uniform, complement, switch_energy
+export gridded, uniform, complement, switch_energy, set_limits!
 
 ## Turbospectrum
 export load_wrapper, load_TS, move_output, import_wrapper, inTS, inWrapper

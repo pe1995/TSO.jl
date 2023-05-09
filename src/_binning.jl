@@ -55,6 +55,13 @@ struct DensityBins{F<:AbstractFloat} <:OpacityBins
     bin_edges ::Array{F,2}
 end
 
+"""
+Kmeans Clustering bins.
+"""
+struct KmeansBins <:OpacityBins
+    result
+end
+
 
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -64,6 +71,7 @@ UniformTabgenBins() = UniformTabgenBins(Float64[])
 
 ## Alias
 TabgenBins = Union{<:EqualTabgenBins, <:UniformTabgenBins, <:CustomTabgenBins}
+ClusterBins = Union{<:KmeansBins}
 TabgenBinning(t::Type{<:OpacityBins}, args...; kwargs...)           = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:StaggerBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 StaggerBinning(t::Type{<:Beeck2012StaggerBins}, args...; kwargs...) = fill(t, args...; kwargs...)
@@ -71,7 +79,7 @@ StaggerBinning(t::Type{<:SemiStaggerBins}, args...; kwargs...)      = fill(t, ar
 Co5boldBinning(t::Type{<:Co5boldBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 DensityBinning(t::Type{<:DensityBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 MURaMBinning(args...; kwargs...)                                    = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
-
+ClusterBinning(t::Type{<:ClusterBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 
 
 
@@ -250,13 +258,20 @@ end
 """
 Equal Tabgen bins based on opacities.
 """
-function fill(::Type{<:EqualTabgenBins}; opacities, formation_opacity, Nbins=4, binsize=0.0, kwargs...)
+function fill(::Type{<:EqualTabgenBins}; opacities, formation_opacity, Nbins=4, binsize=0.0, upper_limit=6.0, kwargs...)
     # Get the minimum and maximum opacity and decide on a step
     min_opacity  = minimum(formation_opacity)
-    max_opacity  = maximum(formation_opacity)
+    max_opacity  = isnothing(upper_limit) ? maximum(formation_opacity) : upper_limit
 
+    r = abs(max_opacity - min_opacity)
     return if binsize==0.0
-        EqualTabgenBins(collect(range(min_opacity, max_opacity, length=Nbins+1)))
+        if isnothing(upper_limit)
+            EqualTabgenBins(collect(range(min_opacity-0.01*r, max_opacity+0.01*r, length=Nbins+1)))
+        else
+            b = collect(range(min_opacity-0.01*r, max_opacity, length=Nbins))
+            append!(b, [maximum(formation_opacity) + 0.01*r])
+            EqualTabgenBins(b)
+        end
     else
         # Make the last bin bigger
         bins = [min_opacity+binsize*(i-1) for i in 1:Nbins]
@@ -268,7 +283,7 @@ end
 """
 Uniformly filled Tabgen bins based on opacities.
 """
-function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4, line_bins=nothing, kwargs...)
+function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4, line_bins=nothing, uniform_continuum=false, kwargs...)
     edges = if isnothing(line_bins)
         # sort the opacities and split the array in equal pieces
         sorted_opacities   = sort(formation_opacity)
@@ -286,9 +301,13 @@ function fill(::Type{<:UniformTabgenBins}; opacities, formation_opacity, Nbins=4
         all_above = formation_opacity[formation_opacity .> κ_edge]
 
         sorted_opacities   = sort(all_below)
-        splitted_opacities = TSO.split_similar(sorted_opacities, cont_bins)
-        
-        edges = [b[1] for b in splitted_opacities]
+        edges = if !uniform_continuum
+            splitted_opacities = TSO.split_similar(sorted_opacities, cont_bins)
+            [b[1] for b in splitted_opacities]
+        else
+            collect(range(minimum(sorted_opacities), maximum(sorted_opacities), length=cont_bins+1))[1:end-1]
+        end
+    
 
         sorted_opacities   = sort(all_above)
         splitted_opacities = TSO.split_similar(sorted_opacities, line_bins)
@@ -361,6 +380,14 @@ function fill(::Type{DensityBins}; opacities, formation_opacity, λ_bins=4, κ_e
 
     DensityBins(bins)
 end
+
+function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, kwargs...)
+    data = hcat(log10.(opacities.λ), formation_opacity)'
+    clusters = kmeans(data, Nbins; kwargs...)
+
+    KmeansBins(clusters)
+end
+
 
 
 
@@ -445,6 +472,14 @@ function binning(b::DensityBins, opacities, formation_opacity; splits=[], combin
 
     bins_normal
 end
+
+"""Kmeans bin assignment"""
+binning(b::T, args...; kwargs...) where {T<:ClusterBins} = assignments(b.result)
+    
+
+
+
+
 
 """Reset the bins to a simple increasing structure."""
 function reset_bins(binning)
