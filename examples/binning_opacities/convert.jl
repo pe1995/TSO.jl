@@ -70,7 +70,14 @@ end
 
 Bin opacities, based on a specific binning method, using formation opacities computed previously. Save the binned tables.
 """
-function bin_opacities(table_folder, av_path, name; logg=log10(2.75e4))
+function bin_opacities(table_folder, av_path, name; 
+                method=:uniform, 
+                use_contribution=false, 
+                logg=log10(2.75e4), 
+                Nbins=5, 
+                line_bins=3, 
+                kwargs...)
+
     eos = reload(SqEoS, 
 			joinpath(table_folder, "combined_ross_eos.hdf5")) 
 	
@@ -82,32 +89,67 @@ function bin_opacities(table_folder, av_path, name; logg=log10(2.75e4))
 			joinpath(table_folder, "combined_formation_opacities.hdf5"), 
 			mmap=true)
 
+
     weights = ω_midpoint(opacities)
-
-    model = Average3D(av_path, logg=logg)
-
-    bins_tabgen = TabgenBinning(TSO.UniformTabgenBins, 
-				opacities=opacities, 
-				formation_opacity=-log10.(formOpacities.κ_ross), 
-				Nbins=5, line_bins=3)
+    model = @optical Average3D(eos, av_path, logg=logg) eos opacities
 
 
-    bin = binning(bins_tabgen, opacities, -log10.(formOpacities.κ_ross)) 
+    TSO.Clustering.Random.seed!(42)
+
+
+    ks = if use_contribution
+        T = TSO.linear_interpolation(log10.(model.τ), model.lnT, extrapolation_bc=TSO.Line()).(log10.(formOpacities.κ_ross))
+        S = TSO.Bλ.(opacities.λ, Base.convert.(Float32, exp.(T)))
+        -log10.(formOpacities.κ_ross .* S)
+    else
+        -log10.(formOpacities.κ_ross)
+    end
+
+
+    bins = if method == :tabgen
+        TabgenBinning(TSO.UniformTabgenBins; 
+                    opacities=opacities, 
+                    formation_opacity=ks, 
+                    Nbins=Nbins, line_bins=line_bins, kwargs...)
+
+    elseif method == :equal
+        TabgenBinning(TSO.EqualTabgenBins;
+                    opacities=opacities, 
+                    formation_opacity=ks, 
+                    Nbins=Nbins, kwargs...)
+    elseif method == :kmeans
+        ClusterBinning(TSO.KmeansBins;
+                            opacities=opacities, 
+                            formation_opacity=ks, 
+                            Nbins=Nbins, kwargs...)
+    else
+        error("Chosen method not implemented.")
+    end
+
+    bin = binning(bins, opacities, ks) 
+
+
+
 
 
     function save_table(binned_opacities)
         eos_table_name = name
-        save(binned_opacities.opacities, "binned_opacities.hdf5")
 
         !isdir(eos_table_name) && mkdir(eos_table_name) 
 
         cp(joinpath(table_folder, "combined_ross_eos.hdf5"), 
 			joinpath(eos_table_name, "eos.hdf5"), force=true)
-		
-        mv("binned_opacities.hdf5", 
-			joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
-    end
 
+        save(binned_opacities.opacities, joinpath(eos_table_name, "binned_opacities.hdf5"))
+
+        fid = TSO.HDF5.h5open(joinpath(eos_table_name, "bin_assignment.hdf5"), "w")
+        fid["bins"] = bin
+        fid["lambda"] = opacities.λ
+        close(fid)
+
+        #mv("binned_opacities.hdf5", 
+		#	joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
+    end
 	
     binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
     save_table(binned_opacities)
@@ -148,23 +190,29 @@ md"## Input parameters"
 
 # ╔═╡ b45ecd12-4a70-42ac-bbee-9d6568adc214
 begin
-	eos_folder = "tables/TSO_MARCS_v1.3"
+	eos_folder = "tables/TSO_MARCS_v1.4"
 	model = "stagger_av.dat"
-	new_eos_folder = "DIS_MARCS_v1.3.1"
-	new_eosE_folder = "DIS_MARCS_E_v1.3.1"
+	new_eos_folder = "DIS_MARCS_v1.4.25"
+	new_eosE_folder = "DIS_MARCS_E_v1.4.25"
 end;
 
 # ╔═╡ 0162409f-700e-457f-bd2d-ca685a025274
 md"## Converting"
 
 # ╔═╡ 94c6f318-22be-47e9-9248-adf5877e4d8a
-formation_opacities(eos_folder, model)
+#formation_opacities(eos_folder, model)
 
 # ╔═╡ a8c93f35-2ee0-4e62-b9f2-4762d108f02e
-bin_opacities(eos_folder, model, new_eos_folder)
+bin_opacities(eos_folder, model, new_eos_folder, 
+        method=:kmeans, 
+        use_contribution=false, 
+        Nbins=12, 
+        maxiter=1000, 
+        display=:iter)
+
 
 # ╔═╡ 7ea0d77a-d854-490d-94fc-da997a00649a
-fromT_toE(new_eos_folder, new_eosE_folder)
+fromT_toE(new_eos_folder, new_eosE_folder, upsample=1024)
 
 # ╔═╡ Cell order:
 # ╟─317e3358-8512-4166-9596-23ae7bb380c6

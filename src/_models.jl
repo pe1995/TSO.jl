@@ -89,4 +89,33 @@ lnT_to_lnEi(eos::AxedEoS, lnρ, lnT) = lookup(eos, :lnEi, lnρ, lnT)
 lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ, lnT)
 
 
+
+#========================================================================== Utilities ==#
+
+upsample(model::AbstractModel, N=500) = begin
+	oldt = model.lnT
+	t = Base.convert.(eltype(oldt), 
+		range(minimum(oldt), maximum(oldt), length=N)) |> collect
+
+	is_field(model, f) = length(getfield(model, f)) == length(oldt)
+	fields = [f for f in fieldnames(typeof(model)) if is_field(model, f)]
+
+	
+	results = Dict(f=>similar(model.lnT, N) for f in fields)
+	
+	for (i, f) in enumerate(fields)
+		v = getfield(model, f)
+		results[f] .= TSO.linear_interpolation(oldt, v).(t)
+	end
+
+	args = [!is_field(model, f) ? getfield(model, f) : results[f] 
+				for f in fieldnames(typeof(model))]
+
+	typeof(model)(args...)
+end
+
+
+
+
 #=======================================================================================#
+

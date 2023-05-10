@@ -381,11 +381,27 @@ function fill(::Type{DensityBins}; opacities, formation_opacity, λ_bins=4, κ_e
     DensityBins(bins)
 end
 
-function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, kwargs...)
-    data = hcat(log10.(opacities.λ), formation_opacity)'
-    clusters = kmeans(data, Nbins; kwargs...)
+function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_split=nothing, kwargs...)
+    if isnothing(λ_split)
+        data = hcat(log10.(opacities.λ), formation_opacity)'
+        clusters = kmeans(data, Nbins; kwargs...)
 
-    KmeansBins(clusters)
+        KmeansBins([clusters])
+    else
+        nbins_split = λ_split[2]
+        ll = log10.(opacities.λ)
+
+        iend = findfirst(x->x>=λ_split[1], ll)
+        data = hcat(ll[iend+1:end], formation_opacity[iend+1:end])'
+        clusters = kmeans(data, nbins_split; kwargs...)
+    
+
+        nbins_split = Nbins - λ_split[2]
+        data = hcat(ll[1:iend], formation_opacity[1:iend])'
+        clusters2 = kmeans(data, nbins_split; kwargs...)
+
+        KmeansBins((clusters2, clusters))
+    end
 end
 
 
@@ -474,7 +490,20 @@ function binning(b::DensityBins, opacities, formation_opacity; splits=[], combin
 end
 
 """Kmeans bin assignment"""
-binning(b::T, args...; kwargs...) where {T<:ClusterBins} = assignments(b.result)
+binning(b::T, args...; kwargs...) where {T<:ClusterBins} = begin
+    if length(b.result) == 1
+        assignments(b.result |> first)
+    else
+        as = assignments.(b.result)
+        for i in eachindex(as)
+            i == 1 ? continue : nothing
+
+            as[i] .+= maximum(as[i-1])
+        end
+
+        vcat(as...)
+    end
+end
     
 
 
