@@ -19,7 +19,7 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
     t0  = exp(first(star_point.lnT))
     ρ0  = exp(first(star_point.lnρ))
     ee0 = exp(lookup(eos, :lnEi, log(ρ0), log(t0)))
-    g0  = exp10(model.logg)
+    g0  = exp10(star_point.logg)
     p0  = exp(lookup(eos, :lnPg, log(ρ0), log(ee0)))
     z0  = first(star_point.z)
 
