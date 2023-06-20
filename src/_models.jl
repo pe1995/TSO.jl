@@ -59,12 +59,18 @@ Model1D(; τ   =nothing,
     @assert any(.!isnothing.(model_arrays))
 
     i_ref = findfirst(.!isnothing.(model_arrays))
+    model_arrays = if length(size(model_arrays[i_ref]))==0
+        model_arrays = [[i] for i in model_arrays]
+    else
+        model_arrays
+    end
+
     s_ref = size(model_arrays[i_ref])
     t_ref = eltype(model_arrays[i_ref])
 
     input_arrays = [zeros(t_ref, s_ref...) for _ in names]
     for (i,para) in enumerate(names)
-        if isnothing(model_arrays[i])
+        if isnothing(model_arrays[i]) | isnothing(first(model_arrays[i]))
             continue
         else
             input_arrays[i] = Base.convert.(t_ref, model_arrays[i])
@@ -114,8 +120,35 @@ upsample(model::AbstractModel, N=500) = begin
 	typeof(model)(args...)
 end
 
+function flip!(model)
+    for f in fieldnames(typeof(model))
+        v = getfield(model, f)
+        if typeof(v) <: AbstractArray
+            reverse!(v)
+        end
+    end
+end
 
+function flip(model)
+    m = deepcopy(model)
+    flip!(m)
+
+    m
+end
+
+function pick_point(model, i)
+	args = Dict()
+	for f in fieldnames(typeof(model))
+		v = getfield(model, f)
+		if typeof(v) <: AbstractArray
+			args[f] = [v[i]]
+		else
+			args[f] = v
+		end
+	end
+
+	Model1D(;args...)
+end
 
 
 #=======================================================================================#
-
