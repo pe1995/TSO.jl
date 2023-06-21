@@ -93,7 +93,7 @@ lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ,
 #========================================================================== Utilities ==#
 
 upsample(model::AbstractModel, N=500) = begin
-	oldt = model.lnT
+	oldt = model.z
 	t = Base.convert.(eltype(oldt), 
 		range(minimum(oldt), maximum(oldt), length=N)) |> collect
 
