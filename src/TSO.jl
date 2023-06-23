@@ -90,6 +90,7 @@ include("_binning.jl")
 include("_legacy_tables.jl")
 include("_aesopus.jl")
 include("_marcs.jl")
+include("_adiabat.jl")
 
 
 #= Deprecations =#
