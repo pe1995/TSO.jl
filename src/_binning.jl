@@ -62,6 +62,15 @@ struct KmeansBins <:OpacityBins
     result
 end
 
+"""
+Binning Quadrant with quadrant edges as arguments.
+"""
+struct Quadrant
+    λ_lims
+    κ_lims
+    nbins
+end
+
 
 
 EqualTabgenBins()   = EqualTabgenBins(Float64[])
@@ -81,6 +90,8 @@ DensityBinning(t::Type{<:DensityBins}, args...; kwargs...)          = fill(t, ar
 MURaMBinning(args...; kwargs...)                                    = fill(CustomTabgenBins, bin_edges=[-99.0,0.0,2.0,4.0,99.0], args...; kwargs...)
 ClusterBinning(t::Type{<:ClusterBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 
+assignments(a::Array{T, 1}) where {T} = a
+Quadrant(; λ_lims, κ_lims, nbins) = Quadrant(λ_lims, κ_lims, nbins)
 
 
 ## Functions for filling the bins
@@ -381,13 +392,39 @@ function fill(::Type{DensityBins}; opacities, formation_opacity, λ_bins=4, κ_e
     DensityBins(bins)
 end
 
-function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_split=nothing, kwargs...)
-    if isnothing(λ_split)
-        data = hcat(log10.(opacities.λ), formation_opacity)'
-        clusters = kmeans(data, Nbins; kwargs...)
+function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_split=nothing, κ_split=nothing, quadrants=nothing, kwargs...)
+    if !isnothing(quadrants)
+        masks = []
+        clusters = []
+        ll = log10.(opacities.λ)
 
-        KmeansBins([clusters])
-    else
+        if sum([q.nbins for q in quadrants]) != Nbins
+            @warn "The sum of all quadrants does not equal Nbins! Nbins will be $(sum([q.nbins for q in quadrants]))"
+        end
+
+        for q in quadrants
+            nbins_split = q.nbins
+            llims = q.λ_lims
+            klims = q.κ_lims
+
+            mask =  (formation_opacity .<= klims[2]) .& (formation_opacity .> klims[1]) .&
+                    (ll .<= llims[2]) .& (ll .> llims[1])
+
+            data = hcat(ll[mask], formation_opacity[mask])'
+            cluster = kmeans(data, nbins_split; kwargs...)
+
+            append!(clusters, [cluster])
+            append!(masks, [mask])
+        end
+        
+        as = zeros(Int, length(ll))
+        for (i,mask) in enumerate(masks)
+            max_as = maximum(as[.!mask])
+            as[mask] = assignments(clusters[i]) .+ max_as
+        end
+
+        KmeansBins([as])
+    elseif !isnothing(λ_split)
         nbins_split = λ_split[2]
         ll = log10.(opacities.λ)
 
@@ -401,6 +438,29 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
         clusters2 = kmeans(data, nbins_split; kwargs...)
 
         KmeansBins((clusters2, clusters))
+    elseif !isnothing(κ_split)
+        nbins_split = κ_split[2]
+        ll = log10.(opacities.λ)
+
+        mask = formation_opacity .<= κ_split[1]
+        data = hcat(ll[mask], formation_opacity[mask])'
+        clusters = kmeans(data, nbins_split; kwargs...)
+    
+
+        nbins_split = Nbins - κ_split[2]
+        data = hcat(ll[.!mask], formation_opacity[.!mask])'
+        clusters2 = kmeans(data, nbins_split; kwargs...)
+
+        as = zeros(Int, length(ll))
+        as[mask]   = assignments(clusters)
+        as[.!mask] = assignments(clusters2) .+ maximum(as[mask])
+
+        KmeansBins([as])
+    else
+        data = hcat(log10.(opacities.λ), formation_opacity)'
+        clusters = kmeans(data, Nbins; kwargs...)
+
+        KmeansBins([clusters])
     end
 end
 

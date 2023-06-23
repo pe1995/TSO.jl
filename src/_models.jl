@@ -93,11 +93,11 @@ lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ,
 #========================================================================== Utilities ==#
 
 upsample(model::AbstractModel, N=500) = begin
-	oldt = model.lnT
-	t = Base.convert.(eltype(oldt), 
-		range(minimum(oldt), maximum(oldt), length=N)) |> collect
+	oldz = model.z
+	z = Base.convert.(eltype(oldz), 
+		range(minimum(oldz), maximum(oldz), length=N)) |> collect
 
-	is_field(model, f) = length(getfield(model, f)) == length(oldt)
+	is_field(model, f) = length(getfield(model, f)) == length(oldz)
 	fields = [f for f in fieldnames(typeof(model)) if is_field(model, f)]
 
 	
@@ -105,7 +105,7 @@ upsample(model::AbstractModel, N=500) = begin
 	
 	for (i, f) in enumerate(fields)
 		v = getfield(model, f)
-		results[f] .= TSO.linear_interpolation(oldt, v).(t)
+		results[f] .= TSO.linear_interpolation(oldz, v).(z)
 	end
 
 	args = [!is_field(model, f) ? getfield(model, f) : results[f] 

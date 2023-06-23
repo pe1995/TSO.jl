@@ -132,11 +132,16 @@ function interpolate_lnRho(m::MARCSOS, new_axis)
     κ_la = zeros(eltype(new_axis), nT, length(new_axis), length(m.λ))
     κ_lm = zeros(eltype(new_axis), nT, length(new_axis), length(m.λ))
 
+    lnT = log.(T)
+
     #oldV = zeros(eltype(new_axis), nPg) 
     #oldR = zeros(eltype(new_axis), nPg) 
 
     @inbounds for i in eachindex(m.T)
-        j = findfirst(T .≈ m.T[i])  ## Which grid point is this
+        j = findfirst(lnT) do lnTi  ## Which grid point is this
+            lnTi ≈ log(m.T[i])
+        end  
+
         point_assignment[i, j] = true
     end
 
@@ -166,7 +171,7 @@ function interpolate_lnRho(m::MARCSOS, new_axis)
         end
     end
     
-    MARCSOS(log.(T), pe, pg, new_axis, κ_c, κ_s, κ_la, κ_lm, m.λ, m.ω, m.abundance)
+    MARCSOS(lnT, pe, pg, new_axis, κ_c, κ_s, κ_la, κ_lm, m.λ, m.ω, m.abundance)
 end
 
 
@@ -322,7 +327,7 @@ function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing, struc
 
     ## interpolate the table to uniform lnT grid
     new_T_size = isnothing(new_T_size) ? length(m_rho.T) : new_T_size
-    interpolate_lnT(mos, new_size=new_T_size)
+    mos = interpolate_lnT(mos, new_size=new_T_size)
 
     ## set lower limit for opacities to avoid NaN in log
     limit!(mos, 1e-30, 1e30)
@@ -383,7 +388,7 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
         ross = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
-        f = lookup_table(eos, :lnRoss)
+        f = lookup_function(eos, :lnRoss)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
             ross[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
@@ -399,7 +404,7 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
-        f = lookup_table(eos, :lnPg)
+        f = lookup_function(eos, :lnPg)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
             y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
@@ -415,7 +420,7 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
         y    = zeros(T, nt, nr)
         rho  = similar(newlnT)
 
-        f = lookup_table(eos, :lnNe)
+        f = lookup_function(eos, :lnNe)
         for j in eachindex(newlnRho)
             rho .= newlnRho[j]
             y[:, j] = eaxis_new ? lookup(f, rho, newlnEi) : lookup(f, rho, newlnT)
@@ -572,6 +577,10 @@ function append(mos::MARCSOS...)
     κ_snew  = κ_snew[ mask, :, :]
     κ_lanew = κ_lanew[mask, :, :]
     κ_lmnew = κ_lmnew[mask, :, :]
+
+    for i in eachindex(mos)
+        @assert all(mos[1].λ .== mos[i].λ)
+    end
     
     MARCSOS(Tnew, penew, pgnew, ρnew, κ_cnew, κ_snew, κ_lanew, κ_lmnew, mos[1].λ, mos[1].ω, mos[1].abundance)
 end
@@ -603,7 +612,7 @@ function fill_nan!(mos::MARCSOS)
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
-                mos.κ_c[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_c, i, nmask, k)), view(xc, mask)) .|> exp
+                mos.κ_c[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_c, i, nmask, k)), view(xc, mask), bc=Flat()) .|> exp
             elseif (cm>0)
                 #@info "All nan κ_c at k,i: $(k), $(i)"
                 nothing
@@ -615,7 +624,7 @@ function fill_nan!(mos::MARCSOS)
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
-                mos.κ_la[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_la, i, nmask, k)), view(xc, mask)) .|> exp
+                mos.κ_la[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_la, i, nmask, k)), view(xc, mask), bc=Flat()) .|> exp
             elseif (cm>0)
                 #@info "All nan κ_la at k,i: $(k), $(i)"
                 nothing
@@ -625,7 +634,7 @@ function fill_nan!(mos::MARCSOS)
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
-                mos.κ_lm[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_lm, i, nmask, k)), view(xc, mask)) .|> exp
+                mos.κ_lm[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_lm, i, nmask, k)), view(xc, mask), bc=Flat()) .|> exp
             elseif (cm>0)
                 #@info "All nan κ_lm at k,i: $(k), $(i)"
                 nothing
@@ -637,7 +646,7 @@ function fill_nan!(mos::MARCSOS)
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
-                mos.κ_s[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_s, i, nmask, k)), view(xc, mask)) .|> exp
+                mos.κ_s[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(mos.κ_s, i, nmask, k)), view(xc, mask), bc=Flat()) .|> exp
             elseif (cm>0)
                 #@info "All nan κ_c at k,i: $(k), $(i)"
                 nothing
@@ -653,7 +662,7 @@ function fill_nan!(mos::MARCSOS)
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
-                mos.κ_c[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_c, nmask2, j, k)), view(xc2, mask2)) .|> exp
+                mos.κ_c[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_c, nmask2, j, k)), view(xc2, mask2), bc=Flat()) .|> exp
             elseif cm>0
                 #@info "All nan κ_c at k,j: $(k), $(j)"
                 nothing
@@ -666,7 +675,7 @@ function fill_nan!(mos::MARCSOS)
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
-                mos.κ_la[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_la, nmask2, j, k)), view(xc2, mask2)) .|> exp
+                mos.κ_la[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_la, nmask2, j, k)), view(xc2, mask2), bc=Flat()) .|> exp
             elseif cm>0
                 #@info "All nan κ_la at k,j: $(k), $(j)"
                 nothing
@@ -677,7 +686,7 @@ function fill_nan!(mos::MARCSOS)
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
-                mos.κ_lm[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_lm, nmask2, j, k)), view(xc2, mask2)) .|> exp
+                mos.κ_lm[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_lm, nmask2, j, k)), view(xc2, mask2), bc=Flat()) .|> exp
             elseif cm>0
                 #@info "All nan κ_lm at k,j: $(k), $(j)"
                 nothing
@@ -690,7 +699,7 @@ function fill_nan!(mos::MARCSOS)
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
-                mos.κ_s[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_s, nmask2, j, k)), view(xc2, mask2)) .|> exp
+                mos.κ_s[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(mos.κ_s, nmask2, j, k)), view(xc2, mask2), bc=Flat()) .|> exp
             elseif cm>0
                 #@info "All nan κ_s at k,j: $(k), $(j)"
                 nothing

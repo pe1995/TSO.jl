@@ -12,6 +12,7 @@ using HDF5
 using Statistics
 #using Dierckx
 using Clustering
+import Clustering.assignments
 
 import Base.size
 import Base.broadcastable
