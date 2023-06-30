@@ -1146,7 +1146,7 @@ function box_integrated_v3(binning, weights, aos::E, opacities, scattering=nothi
     SBox[SBox   .>= 1e30]  .= 1e30
 
 
-    @show minimum(χRBox) maximum(χRBox) minimum(χBox) maximum(χBox)
+    #@show minimum(χRBox) maximum(χRBox) minimum(χBox) maximum(χBox)
 
     κ_ross = T(1.0) ./χRBox
 
@@ -1189,6 +1189,209 @@ box_integrated_v3(binning, weights, eos::E, opacities; kwargs...) where {E<:Regu
 
 
 
+#= Faster version (v4) =#
+#= 
+This version uses precompilation and better ordering of loops
+It specifically does not incluse SIMD, because it makes it slower for some reason 
+=#
+
+
+function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
+                        ρ, λ, binning, Temp, weights, κ, κ_scat)
+    rhoBins = size(χBox, 2)
+    AxBins = size(χBox, 2)
+
+    bnu  = Ref(Float32(0.0))
+    dbnu = Ref(Float32(0.0))
+    b ::Int = 0
+
+    B  .= 0.0
+    δB .= 0.0
+    
+    @inbounds for k in eachindex(λ)
+        b = binning[k]
+        @inbounds for j in 1:rhoBins
+            @fastmath @inbounds for i in 1:AxBins
+                Bν!(bnu,   λ[k], Temp[i, j]) 
+                δBν!(dbnu, λ[k], Temp[i, j]) 
+
+                χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
+                χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
+                
+                χ_thin[i,j, b] = χRBox[i, j, b]
+                
+                SBox[ i, j, b]  += weights[k] * bnu[] 
+                B[ i, j, b]     += weights[k] * bnu[]  
+                δB[i, j, b]     += weights[k] * dbnu[]
+                κBox[ i, j, b]  += weights[k] * weights[k] * 
+                                            (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
+            end
+        end
+    end
+
+    χBox   ./= B
+    κBox   ./= B
+    χRBox  ./= δB
+    χ_thin ./= δB
+
+    @inbounds for j in 1:rhoBins
+        χBox[:,  j, :] .*= ρ[j]
+        κBox[:,  j, :] .*= ρ[j]
+        χRBox[:, j, :] ./= ρ[j]
+    end
+
+    χRBox[χRBox .<= 1e-30] .= 1e-30
+    χRBox[χRBox .>= 1e30]  .= 1e30
+    χBox[ χBox  .<= 1e-30] .= 1e-30
+    χBox[ χBox  .>= 1e30]  .= 1e30
+    SBox[SBox   .<= 1e-30] .= 1e-30
+    SBox[SBox   .>= 1e30]  .= 1e30
+end
+
+function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
+                        ρ, λ, binning, Temp, weights, κ)
+
+    rhoBins = size(χBox, 2)
+    AxBins = size(χBox, 2)
+
+    bnu  = Ref(Float32(0.0))
+    dbnu = Ref(Float32(0.0))
+    b ::Int = 0
+
+    B  .= 0.0
+    δB .= 0.0
+    
+    @inbounds for k in eachindex(λ)
+        b = binning[k]
+        @inbounds for j in 1:rhoBins
+            @fastmath @inbounds for i in 1:AxBins
+                Bν!(bnu,   λ[k], Temp[i, j]) 
+                δBν!(dbnu, λ[k], Temp[i, j]) 
+
+                χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
+                χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
+                
+                χ_thin[i,j, b] = χRBox[i, j, b]
+                
+                SBox[ i, j, b]  += weights[k] * bnu[] 
+                B[ i, j, b]     += weights[k] * bnu[]  
+                δB[i, j, b]     += weights[k] * dbnu[]
+                κBox[ i, j, b]  += weights[k] * weights[k] * κ[i, j, k] * bnu[]
+            end
+        end
+    end
+
+    χBox   ./= B
+    κBox   ./= B
+    χRBox  ./= δB
+    χ_thin ./= δB
+
+    @inbounds for j in 1:rhoBins
+        χBox[:,  j, :] .*= ρ[j]
+        κBox[:,  j, :] .*= ρ[j]
+        χRBox[:, j, :] ./= ρ[j]
+    end
+
+    χRBox[χRBox .<= 1e-30] .= 1e-30
+    χRBox[χRBox .>= 1e30]  .= 1e30
+    χBox[ χBox  .<= 1e-30] .= 1e-30
+    χBox[ χBox  .>= 1e30]  .= 1e30
+    SBox[SBox   .<= 1e-30] .= 1e-30
+    SBox[SBox   .>= 1e30]  .= 1e30
+end
+
+function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothing; 
+    transition_model=nothing) where {E<:AxedEoS}
+    eos = aos.eos
+    eaxis = is_internal_energy(aos)
+
+    iscat = isnothing(scattering)
+    remove_from_thin = !iscat
+
+    radBins = length(unique(binning))
+    rhoBins = length(eos.lnRho)
+    AxBins  = aos.energy_axes.length
+    T       = eltype(eos.lnRho)
+
+    χBox   = zeros(T, AxBins, rhoBins, radBins)    
+    χRBox  = zeros(T, AxBins, rhoBins, radBins)
+    χ_thin = similar(χRBox)
+    κBox   = zeros(T, AxBins, rhoBins, radBins)
+    SBox   = zeros(T, AxBins, rhoBins, radBins)
+    Temp   = zeros(T, AxBins, rhoBins)
+
+    if ndims(eos.lnT) == 2
+        Temp .= exp.(eos.lnT)
+    else
+        puff_up!(Temp, exp.(eos.lnT))
+    end
+
+    B  = zeros(T, AxBins, rhoBins, radBins)
+    δB = zeros(T, AxBins, rhoBins, radBins)
+
+    bnu  ::Float32  = 0.0
+    dbnu ::Float32  = 0.0
+    b    ::Int      = 0
+
+    ρ = exp.(eos.lnRho)
+
+    # None of the bins are allowed to be empty as this stage
+    @assert all(binning .!= 0)
+
+    # Do stuff
+    if (!iscat) 
+    do_binning!(
+        B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+        opacities.λ, binning, Temp, weights, 
+        opacities.κ, scattering.κ_scat
+    )
+    else
+    do_binning!(
+        B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+        opacities.λ, binning, Temp, weights, 
+        opacities.κ
+    )
+    end
+
+    κ_ross = T(1.0) ./χRBox
+
+    wthin, wthick = if isnothing(transition_model)
+        wthin_l = exp.(T(-1.5e7) .* κ_ross)
+        wthick_l = T(1.0) .- wthin_l
+        wthin_l, wthick_l
+    else
+        pure_rosseland = RegularOpacityTable(
+        κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false
+        )
+        opacity_transition(aos, pure_rosseland, transition_model)
+    end
+
+    ## Opacity
+    opacity_table = remove_from_thin ? 
+    wthin .* κBox .+ wthick .* κ_ross : 
+    wthin .* χBox .+ wthick .* κ_ross
+
+    ## ϵ table
+    ϵ_table = κBox ./ χBox
+
+    ## Source function table --> S                = x/x+s * B + s/x+s * J 
+    ##                       --> thermal emission = x/x+s * B
+    S_table = SBox
+
+    BinnedOpacities(
+        SqOpacity(
+            opacity_table, opacities.κ_ross, S_table,
+            collect(T, 1:radBins), false
+        ), 
+        ϵ_table, 
+        wthin
+    )
+end
+
+box_integrated_v4(binning, weights, eos::E, opacities, scattering; kwargs...) where {E<:RegularEoSTable} = box_integrated_v4(binning, weights, AxedEoS(eos), opacities, scattering; kwargs...)
+box_integrated_v4(binning, weights, eos::E, opacities; kwargs...) where {E<:RegularEoSTable} = box_integrated_v4(binning, weights, AxedEoS(eos), opacities; kwargs...)
+
+
 
 #================= Extensions of EoS functions for binned opacities ====================#
 
@@ -1226,7 +1429,7 @@ end
 optical_depth(aos::E, opacities::B, model::AbstractModel) where {E<:AxedEoS, B<:BinnedOpacities} = optical_depth(aos, opacities.opacites, model, binned=true)
 
 rosseland_optical_depth(eos::E,        opacities::BinnedOpacities, model::AbstractModel; binned=false) where {E<:AxedEoS} = rosseland_optical_depth(eos, opacities.opacities, model; binned=true)
-rosseland_optical_depth(eos::EoSTable, opacities::BinnedOpacities, model::AbstractModel; binned=false) where {E<:AxedEoS} = rosseland_optical_depth(@axed(eos), opacities.opacities, model; binned=true)
+rosseland_optical_depth(eos::EoSTable, opacities::BinnedOpacities, model::AbstractModel; binned=false) = rosseland_optical_depth(@axed(eos), opacities.opacities, model; binned=true)
 
 formation_height(model::AbstractModel, eos::E, opacities::BinnedOpacities, τ_ross, τ_λ) where {E<:AxedEoS     } = formation_height(model, eos, opacities.opacities, τ_ross, τ_λ)
 formation_height(model::AbstractModel, eos::E, opacities::BinnedOpacities, τ_ross, τ_λ) where {E<:OpacityTable} = formation_height(model, @axed(eos), opacities.opacities, τ_ross, τ_λ)
@@ -1260,7 +1463,7 @@ Tabulate opacity and source function for the given binning. Calls the currently
 recommended version of box_integrated, which is box_integrated_v3, which is 
 the fastest implementation, however without scattering at the moment to save memory.
 """
-tabulate(args...; kwargs...) = box_integrated_v3(args...; kwargs...)
+tabulate(args...; kwargs...) = box_integrated_v4(args...; kwargs...)
 
 
 

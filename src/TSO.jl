@@ -6,11 +6,10 @@ using Interpolations
 using Printf
 using DelimitedFiles
 using FortranFiles
-using PyCall
+using PythonCall
 using Glob
 using HDF5
 using Statistics
-#using Dierckx
 using Clustering
 import Clustering.assignments
 
@@ -74,7 +73,7 @@ export Solver, Jν, Qr
 
 
 #= Python libs =#
-const scipy_interpolate = PyNULL()
+const scipy_interpolate = PythonCall.pynew()
 const scipy_loaded      = Ref(false)
 
 

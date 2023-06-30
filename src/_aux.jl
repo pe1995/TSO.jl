@@ -88,7 +88,7 @@ zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
 function _get_help_py(mod ,dir=dirname(@__FILE__))
 	sys   = pyimport("sys")
-	dir in sys."path" ? nothing : append!(sys."path",[dir])
+	Py(dir) in sys."path" ? nothing : sys."path".append(Py(dir))
     pyimport(String(mod))
 end
 
@@ -107,7 +107,7 @@ macro pythonHelp(mod, dir)
 end
 
 load_scipy_interpolate!(mod=scipy_interpolate) = begin
-    copy!(mod, pyimport("scipy.interpolate"))
+    PythonCall.pycopy!(mod, pyimport("scipy.interpolate"))
     scipy_loaded[] = true
 end
 

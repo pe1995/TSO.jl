@@ -1,15 +1,18 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.26
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ e6969ec0-11b3-11ee-397f-dd62d15b32cb
+# ╠═╡ show_logs = false
 begin
-	using Pkg; Pkg.activate(".")
-	using PyPlot 
+	using Pkg; Pkg.activate("."); Pkg.add("LaTeXStrings")
+	using PythonPlot
 	using TSO
 	using LaTeXStrings
+
+	plt = pyplot;
 end
 
 # ╔═╡ 60354562-1c5a-43ec-bd2d-b5b848aae452
@@ -19,7 +22,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ 5dff65de-20fc-495d-b65f-1f8873c2cf8f
-binned_table = abspath("DIS_MARCS_v1.6.1")
+binned_table = abspath("DIS_MARCS_v1.6.2")
 
 # ╔═╡ d9e4f097-6ae7-4d82-a8f5-9653be33ab7a
 eos_raw = reload(
@@ -46,8 +49,9 @@ md"## Model
 For the opatical depth of the model we use the unbinned table."
 
 # ╔═╡ 0129fe06-20b5-4c85-bb15-b07cd731e413
+# ╠═╡ show_logs = false
 solar_model = upsample(
-	@optical(Average3D(eos_raw, "stagger_av.dat"), eos_raw, opa_raw), 1000
+	@optical(Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw), 1000
 )	
 
 # ╔═╡ 40facadb-ca4e-4b3b-b2de-754fa38b385a
@@ -149,7 +153,7 @@ end
 
 # ╔═╡ Cell order:
 # ╠═e6969ec0-11b3-11ee-397f-dd62d15b32cb
-# ╠═60354562-1c5a-43ec-bd2d-b5b848aae452
+# ╟─60354562-1c5a-43ec-bd2d-b5b848aae452
 # ╠═fd05c55a-32a8-44ab-82d9-d3da150b8228
 # ╠═5dff65de-20fc-495d-b65f-1f8873c2cf8f
 # ╠═d9e4f097-6ae7-4d82-a8f5-9653be33ab7a

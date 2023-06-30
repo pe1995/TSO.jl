@@ -190,10 +190,10 @@ md"## Input parameters"
 
 # ╔═╡ b45ecd12-4a70-42ac-bbee-9d6568adc214
 begin
-	eos_folder = "tables/TSO_MARCS_v1.4"
-	model = "stagger_av.dat"
-	new_eos_folder = "DIS_MARCS_v1.4.43"
-	new_eosE_folder = "DIS_MARCS_E_v1.4.43"
+	eos_folder = "tables/TSO_MARCS_v1.6"
+	model = "sun_stagger.dat"
+	new_eos_folder = "DIS_MARCS_v1.6.2"
+	new_eosE_folder = "DIS_MARCS_E_v1.6.2"
 end;
 
 # ╔═╡ 0162409f-700e-457f-bd2d-ca685a025274
@@ -206,16 +206,12 @@ md"## Converting"
 bin_opacities(eos_folder, model, new_eos_folder, 
         method=:kmeans, 
         use_contribution=false, 
-        Nbins=9, 
+        Nbins=6, 
 		quadrants=[ 
-                    TSO.Quadrant((0.0, 4.0), (-100, 0.5), 1),
-                    TSO.Quadrant((0.0, 4.0), (0.5, 4.0), 2),
-                    TSO.Quadrant((0.0, 4.0), (4.0, 100.), 2),
-                    TSO.Quadrant((4.0, 100.0), (-100, 1.0), 3),
-                    TSO.Quadrant((4.0, 100.0), (1.0, 100), 1),
-				
-					], 
-        maxiter=1000, display=:iter)
+            TSO.Quadrant((0.0, 100.0), (-100.0, 5.5), 5),
+            TSO.Quadrant((0.0, 100.0), (5.5, 100.0), 1),
+		], 
+        maxiter=1000, display=:none)
 
 
 # ╔═╡ 7ea0d77a-d854-490d-94fc-da997a00649a

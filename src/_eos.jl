@@ -1163,6 +1163,30 @@ Proxi for Bλ
 Bν(args...; kwargs...)  = Bλ(args...; kwargs...)
 δBν(args...; kwargs...) = δBλ(args...; kwargs...)
 
+@inline Bν!(B::Ref{A}, λ::A, T::A) where {A<:AbstractFloat} = begin
+    B[] = twohc2 /(λ * aa_to_cm)^5 /(exp(hc_k / ((λ * aa_to_cm)*T)) - 1.0)
+
+    B[] = if isnan(B[]) || B[]<1e-30 
+        A(1e-30)
+    else
+        B[]
+    end
+
+    B[]
+end
+
+@inline δBν!(B::Ref{A}, λ::A, T::A) where {A<:AbstractFloat} = begin
+    B[] = twohc2 * hc_k * exp(hc_k / ((λ * aa_to_cm)*T)) / (λ * aa_to_cm)^6 / T^2 / (exp(hc_k / ((λ * aa_to_cm)*T))-1)^2 
+
+    B[] = if isnan(B[]) || B[]<1e-30 
+        A(1e-30)
+    else
+        B[]
+    end
+
+    B[]
+end
+
 
 #= Model conversions =#
 

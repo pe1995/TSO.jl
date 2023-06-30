@@ -2,8 +2,8 @@
 
 const TSwrapper   = Ref("")
 const TS          = Ref("")
-const WrapperPy   = PyNULL()
-const computeOpac = PyNULL()
+const WrapperPy   = PythonCall.pynew()
+const computeOpac = PythonCall.pynew()
 const SlurmEnv    = Ref(false)
 
 """
@@ -44,8 +44,8 @@ function import_wrapper(mod="source")
         error("Could not import TS wrapper from TSWrapper path. Please call load_TS() with the appropriate location first.")
     end
 
-    copy!(WrapperPy,   _get_help_py(mod, TSwrapper[]))
-    copy!(computeOpac, _get_help_py("compute_opac", TSO.@inWrapper(mod)))
+    PythonCall.pycopy!(WrapperPy,   _get_help_py(mod, TSwrapper[]))
+    PythonCall.pycopy!(computeOpac, _get_help_py("compute_opac", TSO.@inWrapper(mod)))
 
     WrapperPy, computeOpac
 end
