@@ -22,7 +22,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ 5dff65de-20fc-495d-b65f-1f8873c2cf8f
-binned_table = abspath("DIS_MARCS_v1.6.2")
+binned_table = abspath("DIS_MARCS_v1.6.8")
 
 # ╔═╡ d9e4f097-6ae7-4d82-a8f5-9653be33ab7a
 eos_raw = reload(
@@ -33,6 +33,9 @@ eos_raw = reload(
 opa_raw = reload(
 	SqOpacity, joinpath(table, "combined_opacities.hdf5"), mmap=true
 )
+
+# ╔═╡ 96f0111b-1b07-4c4a-b92c-f2adecc809f9
+size(opa_raw.κ)
 
 # ╔═╡ fbc54d19-250a-4696-bf7a-cb3b48a680bf
 eos = reload(
@@ -51,7 +54,7 @@ For the opatical depth of the model we use the unbinned table."
 # ╔═╡ 0129fe06-20b5-4c85-bb15-b07cd731e413
 # ╠═╡ show_logs = false
 solar_model = upsample(
-	@optical(Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw), 1000
+	@optical(Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw), 2000
 )	
 
 # ╔═╡ 40facadb-ca4e-4b3b-b2de-754fa38b385a
@@ -82,6 +85,9 @@ solver = Solver(solar_model, @axed(eos), opacities=opacities)
 # ╔═╡ 09a5c20e-c790-4c0a-9f47-224461c3e41a
 md"Solve the radiative transfer using those solvers"
 
+# ╔═╡ e078b109-79af-44bd-80f3-ec29083144d5
+@show typeof(solver)
+
 # ╔═╡ 67f854f5-8afb-40ba-9d94-7339633e3843
 q = Qr(solver) 
 
@@ -96,6 +102,8 @@ z, lnT, τ = solver_raw.model[:, 1], solver_raw.model[:, 2], reverse(solar_model
 
 # ╔═╡ ae1d4866-355e-4805-b643-56937d0372e5
 begin
+	plt.close()
+	
 	ff, axf = plt.subplots(figsize=(6,6))
 
 	mask = log10.(τ) .< 5
@@ -128,11 +136,13 @@ end
 
 # ╔═╡ 1c8b521a-331d-41d5-af51-843c0bf41a27
 begin
+	plt.close()
+
 	fr, axr = plt.subplots(figsize=(6,6))
 
 	axr.plot(
 		log10.(τ[mask]), (q[mask] - q_raw[mask]) ./q_raw[mask], 
-		color="k"
+		color="k", marker="x", ls="-", markersize=5
 	)
 	
 	axr.set_ylabel(L"\rm \left(qr_{bin} - qr\right)\ /\ qr", fontsize="large")
@@ -141,7 +151,9 @@ begin
 	axr.minorticks_on()
 	axr.tick_params(top=true, right=true, direction="in", which="both")
 
-	axr.set_ylim(-0.3, 0.3)
+	axr.set_ylim(-0.5, 0.5)
+
+	axr.axvline(-4, color="k", ls=":", alpha=0.5)
 	
 	fr.savefig(
 		joinpath(binned_table, "binning_evaluation_relqr.png"), 
@@ -158,6 +170,7 @@ end
 # ╠═5dff65de-20fc-495d-b65f-1f8873c2cf8f
 # ╠═d9e4f097-6ae7-4d82-a8f5-9653be33ab7a
 # ╠═7ef8975a-3c95-41cf-8cb1-1ad76d8d2595
+# ╠═96f0111b-1b07-4c4a-b92c-f2adecc809f9
 # ╠═fbc54d19-250a-4696-bf7a-cb3b48a680bf
 # ╠═4d1f672c-b9a7-4702-9a19-33718d0a0e2e
 # ╟─ad97f52a-8d8e-4991-af93-4e19c824f0a2
@@ -171,9 +184,10 @@ end
 # ╠═43205993-2ee9-4677-980a-25852229eb99
 # ╠═fcf83b50-f378-451d-bfe1-c4b460bfd2de
 # ╟─09a5c20e-c790-4c0a-9f47-224461c3e41a
+# ╠═e078b109-79af-44bd-80f3-ec29083144d5
 # ╠═67f854f5-8afb-40ba-9d94-7339633e3843
 # ╟─b28222dd-0d9c-4eb6-af43-5dff80267af7
 # ╠═daef203a-603c-437c-82e1-bdf3f59c1f5c
 # ╠═85937574-dc04-4c8d-8c4f-828f3f587c03
 # ╟─ae1d4866-355e-4805-b643-56937d0372e5
-# ╟─1c8b521a-331d-41d5-af51-843c0bf41a27
+# ╠═1c8b521a-331d-41d5-af51-843c0bf41a27
