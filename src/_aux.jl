@@ -117,6 +117,12 @@ end
 
 
 ## Saving as HDF5
+
+"""
+    save(table, path)
+
+Save the given Table (SqEoS or SqOpacity) at the given path.
+"""
 function save(s::T, path) where {T<:AbstractTable}
     fid = HDF5.h5open(path, "w")
 
@@ -129,6 +135,13 @@ function save(s::T, path) where {T<:AbstractTable}
     path
 end
 
+"""
+    reload(Type{<:AbstractTale}, path; mmap=false)
+
+Reload the given type of table (SqEoS or SqOpacity) from the given path.
+If mmap=true, the memory intensive fields will be loaded as mmaps 
+through the HDF5 capabilities.
+"""
 function reload(s::Type{S}, path::String; mmap=false) where {S}
     fid   = HDF5.h5open(path, "r")
     fvals = Any[]
@@ -148,6 +161,34 @@ add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
+
+## Saving for Multi3D computation of heating
+
+"""
+    save(SqEoS, SqOpacity, name)
+
+Save the given Tables (SqEoS and SqOpacity) for M3D (Binary file with both).
+They will be saved at the given name with .txt and .bin extensions for 
+meta and binary data.
+"""
+save(eos::T1, opa::T2, name) where {T1<:AbstractTable, T2<:AbstractTable} = begin
+    open("$(name).txt", "w") do f
+        write(f, "$(length(eos.lnT))\n")
+        write(f, "$(length(eos.lnRho))\n")
+        write(f, "$(length(opa.λ))")
+    end
+    
+    open("$(name).bin", "w") do f
+        write(f, eos.lnT)
+        write(f, eos.lnRho)
+        write(f, opa.κ)
+        write(f, opa.src)
+    end
+
+    name
+end
+
+
 
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
