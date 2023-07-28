@@ -70,7 +70,9 @@ Model1D(; τ   =nothing,
 
     input_arrays = [zeros(t_ref, s_ref...) for _ in names]
     for (i,para) in enumerate(names)
-        if isnothing(model_arrays[i]) | isnothing(first(model_arrays[i]))
+        if isnothing(model_arrays[i])
+            continue
+        elseif isnothing(first(model_arrays[i]))
             continue
         else
             input_arrays[i] = Base.convert.(t_ref, model_arrays[i])
