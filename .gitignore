@@ -1,5 +1,16 @@
 /Manifest.toml
 
+/.CondaPkg
+examples/*/.CondaPkg
+
+
+examples/binning_opacities/slurm*
+examples/binning_opacities/DIS_MARCS*
+
+examples/creating_table/*.hdf5
+examples/binning_opacities/*.txt
+examples/binning_opacities/*.bin
+
 examples/converting_tables/*
 examples/converting_tables/Manifest.toml
 !examples/converting_tables/*.ipynb

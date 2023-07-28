@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.26
 
 using Markdown
 using InteractiveUtils
@@ -8,16 +8,18 @@ using InteractiveUtils
 # ╠═╡ show_logs = false
 begin
 	using Pkg; Pkg.activate(".")
-	using PyPlot 
+	using PythonPlot 
 	using TSO
 	using LaTeXStrings
+
+	plt = pyplot;
 end
 
 # ╔═╡ 08a2cdc7-b0b6-4a37-bdce-b427452fd187
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ c7118fd1-a8b2-4672-88ed-bf3be87f51d8
-binned_table = abspath("DIS_MARCS_v1.6.1") 
+binned_table = abspath("DIS_MARCS_v1.6.8") 
 
 # ╔═╡ bd01db62-b3d7-4180-8995-53da826112a4
 fopa = reload(
@@ -35,6 +37,8 @@ a = assignment(joinpath(binned_table, "bin_assignment.hdf5"))
 
 # ╔═╡ 9ef00b20-0707-4b34-9308-609ee898e409
 begin
+	plt.close()
+	
 	ff, axf = plt.subplots(figsize=(6,6))
 
 	im = axf.scatter(

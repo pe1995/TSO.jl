@@ -242,7 +242,7 @@ function interpolate_unstructured(mos::MARCSOS...; new_T_size=nothing, new_ρ_si
 
     
     @show new_T_size new_ρ_size typeof(x)
-
+    T_f = eltype(pe)
 
 	x_new = range(minimum(x), maximum(x), length=new_T_size)
 	y_new = range(minimum(y), maximum(y), length=new_ρ_size)
@@ -254,29 +254,29 @@ function interpolate_unstructured(mos::MARCSOS...; new_T_size=nothing, new_ρ_si
     z  .= vcat((log.(mos[i].pe) for i in eachindex(mos))...)
    #sp  = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
    # evalgrid(sp, x_new, y_new)
-    pe .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+    pe .= pyconvert(Array{T_f}, scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
 
     z  .= vcat((log.(mos[i].pg) for i in eachindex(mos))...)
     #sp  = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
-    pg .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+    pg .= pyconvert(Array{T_f},scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
 
     for k in eachindex(mos[1].λ)
         #try
             z .= vcat((log.(mos[i].κ_c[:, k]) for i in eachindex(mos))...)
             #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
-            κ_c[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+            κ_c[:, :, k] .= pyconvert(Array{T_f},scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
 
             z .= vcat((log.(mos[i].κ_s[:, k]) for i in eachindex(mos))...)
             #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
-            κ_s[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+            κ_s[:, :, k] .= pyconvert(Array{T_f},scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
 
             z .= vcat((log.(mos[i].κ_la[:, k]) for i in eachindex(mos))...)
             #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
-            κ_la[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+            κ_la[:, :, k] .= pyconvert(Array{T_f},scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
 
             z .= vcat((log.(mos[i].κ_lm[:, k]) for i in eachindex(mos))...)
             #sp = Spline2D(x, y, z, s=s, kx=kx, ky=ky)
-            κ_lm[:, :, k] .= scipy_interpolate.griddata((x, y), z, (xxn, yyn)) .|> exp
+            κ_lm[:, :, k] .= pyconvert(Array{T_f},scipy_interpolate.griddata((x, y), z, (xxn, yyn))) .|> exp
         #=catch 
             @info "error in $(k)"
             z .= vcat((log.(mos[i].κ_c[:, k]) for i in eachindex(mos))...)

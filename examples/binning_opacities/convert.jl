@@ -24,31 +24,31 @@ md"## Functionality"
 
 Compute the rosseland optical depth for the entire table. Afterwards, compute the formation height of every wavelength point in the unbinned opacity table.
 """
-function formation_opacities(table_folder, av_path; logg=log10(2.75e4))
+function formation_opacities(table_folder, av_path; logg=log10(2.75e4), extension="")
 
     opacities = reload(SqOpacity, 
-				joinpath(table_folder, "combined_opacities.hdf5"))
+				joinpath(table_folder, "combined_opacities$(extension).hdf5"))
     eos = reload(SqEoS,     
-				joinpath(table_folder, "combined_eos.hdf5"))
+				joinpath(table_folder, "combined_eos$(extension).hdf5"))
     aos = @axed eos
 
 
     model = Average3D(av_path, logg=logg)
 
   
-    if !isfile(joinpath(table_folder, "combined_ross_eos.hdf5"))
+    if !isfile(joinpath(table_folder, "combined_ross_eos$(extension).hdf5"))
         @info "computing rosseland"
         rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
 					weights=ω_midpoint(opacities))
 		
         transfer_rosseland!(aos.eos, opacities)
 		
-        save(aos.eos,   joinpath(table_folder, "combined_ross_eos.hdf5"))
-        save(opacities, joinpath(table_folder, "combined_opacities.hdf5"))
+        save(aos.eos,   joinpath(table_folder, "combined_ross_eos$(extension).hdf5"))
+        save(opacities, joinpath(table_folder, "combined_opacities$(extension).hdf5"))
     end
 
 
-    if isfile(joinpath(table_folder, "combined_formation_opacities.hdf5"))
+    if isfile(joinpath(table_folder, "combined_formation_opacities$(extension).hdf5"))
         @warn "skipping formation opacities"
         return
     end
@@ -60,7 +60,7 @@ function formation_opacities(table_folder, av_path; logg=log10(2.75e4))
     formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
 	
     save(formation_opacities, 
-			joinpath(table_folder, "combined_formation_opacities.hdf5"))
+			joinpath(table_folder, "combined_formation_opacities$(extension).hdf5"))
 
 end
 
@@ -76,17 +76,18 @@ function bin_opacities(table_folder, av_path, name;
                 logg=log10(2.75e4), 
                 Nbins=5, 
                 line_bins=3, 
+                extension="",
                 kwargs...)
 
     eos = reload(SqEoS, 
-			joinpath(table_folder, "combined_ross_eos.hdf5")) 
+			joinpath(table_folder, "combined_ross_eos$(extension).hdf5")) 
 	
     opacities = reload(SqOpacity, 
-			joinpath(table_folder, "combined_opacities.hdf5"), 
+			joinpath(table_folder, "combined_opacities$(extension).hdf5"), 
 			mmap=true)
 	
     formOpacities = reload(SqOpacity, 
-			joinpath(table_folder, "combined_formation_opacities.hdf5"), 
+			joinpath(table_folder, "combined_formation_opacities$(extension).hdf5"), 
 			mmap=true)
 
 
@@ -137,7 +138,7 @@ function bin_opacities(table_folder, av_path, name;
 
         !isdir(eos_table_name) && mkdir(eos_table_name) 
 
-        cp(joinpath(table_folder, "combined_ross_eos.hdf5"), 
+        cp(joinpath(table_folder, "combined_ross_eos$(extension).hdf5"), 
 			joinpath(eos_table_name, "eos.hdf5"), force=true)
 
         save(binned_opacities.opacities, joinpath(eos_table_name, "binned_opacities.hdf5"))
@@ -191,24 +192,35 @@ md"## Input parameters"
 # ╔═╡ b45ecd12-4a70-42ac-bbee-9d6568adc214
 begin
 	eos_folder = "tables/TSO_MARCS_v1.4"
-	model = "stagger_av.dat"
-	new_eos_folder = "DIS_MARCS_v1.4.25"
-	new_eosE_folder = "DIS_MARCS_E_v1.4.25"
+	model = "sun_stagger.dat"
+	new_eos_folder = "DIS_MARCS_v1.5.1"
+	new_eosE_folder = "DIS_MARCS_E_v1.5.1"
+    extension = "_a07"
 end;
 
 # ╔═╡ 0162409f-700e-457f-bd2d-ca685a025274
 md"## Converting"
 
 # ╔═╡ 94c6f318-22be-47e9-9248-adf5877e4d8a
-#formation_opacities(eos_folder, model)
+formation_opacities(eos_folder, model, extension=extension)
 
 # ╔═╡ a8c93f35-2ee0-4e62-b9f2-4762d108f02e
 bin_opacities(eos_folder, model, new_eos_folder, 
+        extension=extension,
         method=:kmeans, 
         use_contribution=false, 
-        Nbins=12, 
-        maxiter=1000, 
-        display=:iter)
+        Nbins=7, 
+        #quadrants=[ 
+        #    TSO.Quadrant((0.0, 4.0),   (-100, 4.5), 3),
+        #    TSO.Quadrant((0.0, 4.0),   (4.5, 100), 1),
+        #    TSO.Quadrant((4.0, 100.0), (-100, 100), 2),
+		#],  
+        quadrants=[ 
+            TSO.Quadrant((0.0, 4.5), (-100.0, 4.5), 3),
+            TSO.Quadrant((0.0, 4.5), (4.5, 100.0), 1),
+            TSO.Quadrant((4.5, 100.0), (-100, 100), 3)
+		],  
+        maxiter=1000, display=:none)
 
 
 # ╔═╡ 7ea0d77a-d854-490d-94fc-da997a00649a
