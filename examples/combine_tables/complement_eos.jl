@@ -15,13 +15,13 @@ end
 md"# Complement a given opacity table with a give EoS"
 
 # ╔═╡ 5eeb2e09-4741-4598-ae52-a5172db25d06
-extension = "_a07"
+extension = "_magg22"
 
 # ╔═╡ 521ea7cb-cd8f-43cc-a1ca-b8081a4db097
-aos = @axed reload(SqEoS, abspath("../creating_table/eos_asplund07_v5.0.hdf5"))
+aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg_v5.0.hdf5"))
 
 # ╔═╡ d0b263fd-7709-4499-b139-988022ebb851
-folderopa = abspath("../../../opacity_tables/TSO_MARCS_v1.4")
+folderopa = abspath("../../../opacity_tables/TSO_MARCS_v1.6")
 
 # ╔═╡ 69024906-96c2-4548-9a16-1ba561bfa2ee
 eos_old = reload(SqEoS, joinpath(folderopa, "combined_eos.hdf5"), mmap=true)
@@ -48,10 +48,19 @@ md"Are they both on the same energy scale?"
 is_internal_energy(@axed eos_old) == is_internal_energy(aos)
 
 # ╔═╡ 449bd01b-de51-44f7-99f9-a9eb6be1d938
-opa_new = complement(@axed(eos_old), aos, opa)
+begin
+	opa_new, opas_new = complement(@axed(eos_old), aos, opa, opas)
+	#opas_new = complement(@axed(eos_old), aos, opas)
+
+	set_limits!(aos, opa_new)
+	set_limits!(aos, opas_new)
+end
 
 # ╔═╡ 72424b05-8d9d-46d3-9f54-ed4b45e624b4
-save(opa_new, joinpath(folderopa, "combined_opacities$(extension).hdf5"))
+begin
+	save(opa_new, joinpath(folderopa, "combined_opacities$(extension).hdf5"))
+	save(opas_new, joinpath(folderopa, "combined_Sopacities$(extension).hdf5"))
+end
 
 # ╔═╡ f4e7dae8-c8c6-4963-a41a-aac6d633463e
 save(aos.eos, joinpath(folderopa, "combined_eos$(extension).hdf5"))

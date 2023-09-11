@@ -392,7 +392,7 @@ function fill(::Type{DensityBins}; opacities, formation_opacity, λ_bins=4, κ_e
     DensityBins(bins)
 end
 
-function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_split=nothing, κ_split=nothing, quadrants=nothing, kwargs...)
+function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_split=nothing, κ_split=nothing, quadrants=nothing, stripes=false, kwargs...)
     if !isnothing(quadrants)
         masks = []
         clusters = []
@@ -410,7 +410,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
             mask =  (formation_opacity .<= klims[2]) .& (formation_opacity .> klims[1]) .&
                     (ll .<= llims[2]) .& (ll .> llims[1])
 
-            data = hcat(ll[mask], formation_opacity[mask])'
+            data = stripes ? hcat(formation_opacity[mask])' : hcat(ll[mask], formation_opacity[mask])'
             cluster = kmeans(data, nbins_split; kwargs...)
 
             append!(clusters, [cluster])
@@ -429,7 +429,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
         ll = log10.(opacities.λ)
 
         iend = findfirst(x->x>=λ_split[1], ll)
-        data = hcat(ll[iend+1:end], formation_opacity[iend+1:end])'
+        data = stripes ? hcat(formation_opacity[iend+1:end])' : hcat(ll[iend+1:end], formation_opacity[iend+1:end])'
         clusters = kmeans(data, nbins_split; kwargs...)
     
 
@@ -448,7 +448,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
     
 
         nbins_split = Nbins - κ_split[2]
-        data = hcat(ll[.!mask], formation_opacity[.!mask])'
+        data = stripes ? hcat(formation_opacity[.!mask])' : hcat(ll[.!mask], formation_opacity[.!mask])'
         clusters2 = kmeans(data, nbins_split; kwargs...)
 
         as = zeros(Int, length(ll))
@@ -457,7 +457,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
 
         KmeansBins([as])
     else
-        data = hcat(log10.(opacities.λ), formation_opacity)'
+        data = stripes ? hcat(formation_opacity)' : hcat(log10.(opacities.λ), formation_opacity)'
         clusters = kmeans(data, Nbins; kwargs...)
 
         KmeansBins([clusters])
@@ -1223,7 +1223,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                 SBox[ i, j, b]  += weights[k] * bnu[] 
                 B[ i, j, b]     += weights[k] * bnu[]  
                 δB[i, j, b]     += weights[k] * dbnu[]
-                κBox[ i, j, b]  += weights[k] * weights[k] * 
+                κBox[ i, j, b]  += weights[k] * #weights[k] * 
                                             (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
             end
         end
@@ -1244,6 +1244,8 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     χRBox[χRBox .>= 1e30]  .= 1e30
     χBox[ χBox  .<= 1e-30] .= 1e-30
     χBox[ χBox  .>= 1e30]  .= 1e30
+    κBox[ κBox  .<= 1e-30] .= 1e-30
+    κBox[ κBox  .>= 1e30]  .= 1e30
     SBox[SBox   .<= 1e-30] .= 1e-30
     SBox[SBox   .>= 1e30]  .= 1e30
 end
@@ -1276,7 +1278,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                 SBox[ i, j, b]  += weights[k] * bnu[] 
                 B[ i, j, b]     += weights[k] * bnu[]  
                 δB[i, j, b]     += weights[k] * dbnu[]
-                κBox[ i, j, b]  += weights[k] * weights[k] * κ[i, j, k] * bnu[]
+                κBox[ i, j, b]  += weights[k] * κ[i, j, k] * bnu[]
             end
         end
     end
@@ -1296,6 +1298,8 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     χRBox[χRBox .>= 1e30]  .= 1e30
     χBox[ χBox  .<= 1e-30] .= 1e-30
     χBox[ χBox  .>= 1e30]  .= 1e30
+    κBox[ κBox  .<= 1e-30] .= 1e-30
+    κBox[ κBox  .>= 1e30]  .= 1e30
     SBox[SBox   .<= 1e-30] .= 1e-30
     SBox[SBox   .>= 1e30]  .= 1e30
 end
@@ -1340,36 +1344,38 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     # Do stuff
     if (!iscat) 
-    do_binning!(
-        B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-        opacities.λ, binning, Temp, weights, 
-        opacities.κ, scattering.κ_scat
-    )
+        do_binning!(
+            B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+            opacities.λ, binning, Temp, weights, 
+            opacities.κ, scattering.κ
+        )
     else
-    do_binning!(
-        B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-        opacities.λ, binning, Temp, weights, 
-        opacities.κ
-    )
+        do_binning!(
+            B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+            opacities.λ, binning, Temp, weights, 
+            opacities.κ
+        )
     end
 
     κ_ross = T(1.0) ./χRBox
 
     wthin, wthick = if isnothing(transition_model)
+        @warn "No transition model was provided to the binning. "*
+              "The binnig will only be valid for the sun!"
         wthin_l = exp.(T(-1.5e7) .* κ_ross)
         wthick_l = T(1.0) .- wthin_l
         wthin_l, wthick_l
     else
         pure_rosseland = RegularOpacityTable(
-        κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false
+            κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false
         )
         opacity_transition(aos, pure_rosseland, transition_model)
     end
 
     ## Opacity
     opacity_table = remove_from_thin ? 
-    wthin .* κBox .+ wthick .* κ_ross : 
-    wthin .* χBox .+ wthick .* κ_ross
+        wthin .* κBox .+ wthick .* κ_ross : 
+        wthin .* χBox .+ wthick .* κ_ross
 
     ## ϵ table
     ϵ_table = κBox ./ χBox

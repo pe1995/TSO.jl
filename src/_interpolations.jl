@@ -804,7 +804,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask  .= nan_or_inf.(view(opa.κ_ross, i, :))
+            mask  .= nan_or_inf.(log.(view(opa.κ_ross, i, :)))
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
@@ -812,14 +812,14 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             end
             
             for k in eachindex(opa.λ)
-                mask  .= nan_or_inf.(view(opa.κ, i, :, k))
+                mask  .= nan_or_inf.(log.(view(opa.κ, i, :, k)))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
                     opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
                 end
 
-                mask  .= nan_or_inf.(view(opa.src, i, :, k))
+                mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
@@ -875,7 +875,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask2  .= nan_or_inf.(view(opa.κ_ross, :, j))
+            mask2  .= nan_or_inf.(log.(view(opa.κ_ross, :, j)))
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
@@ -886,7 +886,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             end
             
             for k in eachindex(opa.λ)
-                mask2  .= nan_or_inf.(view(opa.κ, :, j, k))
+                mask2  .= nan_or_inf.(log.(view(opa.κ, :, j, k)))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)
@@ -896,7 +896,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
                     opa.κ[mask2, j, k] .= 1.0f-30
                 end
 
-                mask2  .= nan_or_inf.(view(opa.src, :, j, k))
+                mask2  .= nan_or_inf.(log.(view(opa.src, :, j, k)))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)

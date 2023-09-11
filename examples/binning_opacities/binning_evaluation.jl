@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ e6969ec0-11b3-11ee-397f-dd62d15b32cb
 # ╠═╡ show_logs = false
 begin
-	using Pkg; Pkg.activate("."); Pkg.add("LaTeXStrings")
+	using Pkg; Pkg.activate("."); 
 	using PythonPlot
 	using TSO
 	using LaTeXStrings
@@ -22,7 +22,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ 5dff65de-20fc-495d-b65f-1f8873c2cf8f
-binned_table = abspath("DIS_MARCS_v1.6.8")
+binned_table = abspath("DIS_MARCS_v1.7.3") 
 
 # ╔═╡ d9e4f097-6ae7-4d82-a8f5-9653be33ab7a
 eos_raw = reload(
@@ -108,14 +108,15 @@ begin
 
 	mask = log10.(τ) .< 5
 	
+
+	axf.plot(
+		log10.(τ[mask]), q_raw[mask], 
+		label="unbinned", marker=".", ls="", markersize=8
+	)
+
 	axf.plot(
 		log10.(τ[mask]), q[mask], 
 		label="binned", color="k"
-	)
-	
-	axf.plot(
-		log10.(τ[mask]), q_raw[mask], 
-		label="unbinned", marker=".", ls=""
 	)
 	
 	axf.set_ylabel(L"\rm qr", fontsize="large")
@@ -189,5 +190,5 @@ end
 # ╟─b28222dd-0d9c-4eb6-af43-5dff80267af7
 # ╠═daef203a-603c-437c-82e1-bdf3f59c1f5c
 # ╠═85937574-dc04-4c8d-8c4f-828f3f587c03
-# ╟─ae1d4866-355e-4805-b643-56937d0372e5
-# ╠═1c8b521a-331d-41d5-af51-843c0bf41a27
+# ╠═ae1d4866-355e-4805-b643-56937d0372e5
+# ╟─1c8b521a-331d-41d5-af51-843c0bf41a27

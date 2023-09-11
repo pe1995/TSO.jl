@@ -19,7 +19,7 @@ end
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ c7118fd1-a8b2-4672-88ed-bf3be87f51d8
-binned_table = abspath("DIS_MARCS_v1.6.8") 
+binned_table = abspath("DIS_MARCS_v1.7.3") 
 
 # ╔═╡ bd01db62-b3d7-4180-8995-53da826112a4
 fopa = reload(

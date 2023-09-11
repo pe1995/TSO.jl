@@ -1,7 +1,7 @@
 module TSO
 
 #= Imports =#
-using BSplineKit
+import BSplineKit
 using Interpolations
 using Printf
 using DelimitedFiles

@@ -85,10 +85,19 @@ function bin_opacities(table_folder, av_path, name;
     opacities = reload(SqOpacity, 
 			joinpath(table_folder, "combined_opacities$(extension).hdf5"), 
 			mmap=true)
+
+    sopacities = reload(SqOpacity, 
+			joinpath(table_folder, "combined_Sopacities$(extension).hdf5"), 
+			mmap=true)
 	
     formOpacities = reload(SqOpacity, 
 			joinpath(table_folder, "combined_formation_opacities$(extension).hdf5"), 
 			mmap=true)
+
+    #κ_s = sopacities.κ
+    #κ = opacities.κ
+    #@show minimum(κ_s) maximum(κ_s) any(isnan.(κ_s)) all(isfinite.(κ_s))
+    #@show minimum(κ) maximum(κ) any(isnan.(κ)) all(isfinite.(κ))
 
 
     weights = ω_midpoint(opacities)
@@ -115,6 +124,11 @@ function bin_opacities(table_folder, av_path, name;
 
     elseif method == :equal
         TabgenBinning(TSO.EqualTabgenBins;
+                    opacities=opacities, 
+                    formation_opacity=ks, 
+                    Nbins=Nbins, kwargs...)
+    elseif method == :stagger
+        StaggerBinning(TSO.StaggerBins;
                     opacities=opacities, 
                     formation_opacity=ks, 
                     Nbins=Nbins, kwargs...)
@@ -152,7 +166,9 @@ function bin_opacities(table_folder, av_path, name;
 		#	joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
     end
 	
-    binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
+    #binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    
     save_table(binned_opacities)
 end
 
@@ -191,11 +207,11 @@ md"## Input parameters"
 
 # ╔═╡ b45ecd12-4a70-42ac-bbee-9d6568adc214
 begin
-	eos_folder = "tables/TSO_MARCS_v1.4"
+	eos_folder = "tables/TSO_MARCS_v1.6"
 	model = "sun_stagger.dat"
-	new_eos_folder = "DIS_MARCS_v1.5.1"
-	new_eosE_folder = "DIS_MARCS_E_v1.5.1"
-    extension = "_a07"
+	new_eos_folder = "DIS_MARCS_v1.7.3"
+	new_eosE_folder = "DIS_MARCS_E_v1.7.3"
+    extension = "_magg22"
 end;
 
 # ╔═╡ 0162409f-700e-457f-bd2d-ca685a025274
@@ -209,22 +225,66 @@ bin_opacities(eos_folder, model, new_eos_folder,
         extension=extension,
         method=:kmeans, 
         use_contribution=false, 
+        stripes=false,
         Nbins=7, 
-        #quadrants=[ 
-        #    TSO.Quadrant((0.0, 4.0),   (-100, 4.5), 3),
-        #    TSO.Quadrant((0.0, 4.0),   (4.5, 100), 1),
-        #    TSO.Quadrant((4.0, 100.0), (-100, 100), 2),
-		#],  
-        quadrants=[ 
-            TSO.Quadrant((0.0, 4.5), (-100.0, 4.5), 3),
-            TSO.Quadrant((0.0, 4.5), (4.5, 100.0), 1),
-            TSO.Quadrant((4.5, 100.0), (-100, 100), 3)
-		],  
-        maxiter=1000, display=:none)
+        #=quadrants=[ 
+            TSO.Quadrant((0.0, 4.0), (-100, 0.75),  1),
+            TSO.Quadrant((0.0, 4.0), (0.75, 2.0),  1),
+            TSO.Quadrant((4.0, 100), (-100, 0.75),   1),
+            TSO.Quadrant((4.0, 100), (0.75, 2.0),   1),
+            TSO.Quadrant((0.0, 100), (2.0, 100),    3),
+        ],=#
+            #=
+            TSO.Quadrant((0.0, 3.6),  (-100, 0.5), 3), 
+            TSO.Quadrant((0.0, 3.6),  (0.5, 4.0),  3), 
+            TSO.Quadrant((0.0, 3.6),  (4.0, 100),  3), 
+
+            TSO.Quadrant((3.6, 4.0),  (-100, 0.5), 3), 
+            TSO.Quadrant((3.6, 4.0),  (0.5, 100), 3), 
+
+            TSO.Quadrant((4.0, 4.5),  (-100, 0.5), 3), 
+            TSO.Quadrant((4.0, 4.5),  (0.5, 100), 3),  
+
+            TSO.Quadrant((4.5, 5.0),  (-100, 100), 3), 
+
+            TSO.Quadrant((5.0, 100),  (-100, 100), 3)],
+            =#
+
+            #TSO.Quadrant((0.0, 3.55), (-100, 4.0), 5), 
+            #TSO.Quadrant((0.0, 3.55), (4.0,  100), 1), 
+            #TSO.Quadrant((3.55, 4.0), (-100, 100), 5), 
+            ##TSO.Quadrant((3.7, 4.0),  (-100, 100), 5), 
+            #TSO.Quadrant((4.0, 4.5),  (-100, 100), 5), 
+            #TSO.Quadrant((4.5, 5.0),  (-100, 100), 1), 
+            #TSO.Quadrant((5.0, 100),  (-100, 100), 1)],
+
+            #=
+            #TSO.Quadrant((0.0, 3.85),  (-100, 1.0), 3),   
+            TSO.Quadrant((0.0, 3.55),  (-100, 5.0), 5),      # very important!
+            TSO.Quadrant((0.0, 3.55),  (5.0, 100),  2),      # quite important far out
+            #TSO.Quadrant((3.55, 3.80),  (-100, 1.0),  2),    # not as important as I thought
+            #TSO.Quadrant((3.55, 3.80),  (1.0,  100),  3),    # quite important far out
+            #TSO.Quadrant((3.55, 4.05),  (-100, 100.0),  5),  # very important!
+            TSO.Quadrant((3.55, 3.70),  (-100, 100.0),  5),
+            TSO.Quadrant((3.70, 4.05),  (-100, 100.0),  5),
+            TSO.Quadrant((4.05, 4.55),  (-100, 100.0),  3),  # quite important
+            #TSO.Quadrant((4.30, 4.55),  (-100, 100.0),  1),
+            TSO.Quadrant((4.55, 4.80),  (-100, 100.0),  1),
+            TSO.Quadrant((4.80, 100),   (-100, 100.0),  1),
+            ##TSO.Quadrant((4.55, 100),  (1.0,  100),  1)
+		],
+        #=quadrants=[ 
+            TSO.Quadrant((0.0, 3.6),   (-100, 4.5), 3),
+            TSO.Quadrant((0.0, 3.6),   (4.5,  100), 1),
+            TSO.Quadrant((3.6, 4.5),   (-100, 1.0), 4),
+            TSO.Quadrant((4.5, 100.0), (-100, 1.0), 3),
+            TSO.Quadrant((3.6, 100.0), (1.0,  100), 1)
+		], =#=#
+        maxiter=5000, display=:none)
 
 
 # ╔═╡ 7ea0d77a-d854-490d-94fc-da997a00649a
-fromT_toE(new_eos_folder, new_eosE_folder, upsample=1024)
+fromT_toE(new_eos_folder, new_eosE_folder, upsample=2048)
 
 # ╔═╡ Cell order:
 # ╟─317e3358-8512-4166-9596-23ae7bb380c6

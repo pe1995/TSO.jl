@@ -269,6 +269,7 @@ size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
 #= Lookup functions =#
 
 """
+    lookup(eos, what::Symbol, rho, var, args...)
 Lookup "what" in the EoS, return the value spliced as args... indicate.
 """
 lookup(eos::E,                          what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)

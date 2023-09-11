@@ -1,0 +1,2 @@
+julia convert.jl 
+julia bin_assignment.jl
