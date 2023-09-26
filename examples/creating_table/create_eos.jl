@@ -107,8 +107,9 @@ begin
 	## Create the setup object
 	setup       = TSO.computeOpac.setup(file=setup_input, mode="MAprovided")
 	setup.jobID = "TSO"
-	
-	wvl_set = "asplund07_v5.0"
+	FeH = -1.0
+	α = 0.4
+	wvl_set = "asplund07_m1_a04_v5.0"
 end
 
 # ╔═╡ 04c77365-c905-4635-b9a2-dc5e44628a23
@@ -124,9 +125,11 @@ begin
 						for id in eachindex(TSO.atomic_number)
 							if String(TSO.id_atom(id)) in keys(TSO.asplund2007_abund) 
 	]
-		
+
     # Pick the abundances
     abundances = asplund_2007
+	TSO.scale_yields!(asplund_2007, α=α, FeH=FeH)
+
     @info "Modify the following abundances: (Species, ID, Abundance)"
     for a in abundances
         @info "$(TSO.id_atom(a[1]))-$(a[1]) -> $(a[2])"

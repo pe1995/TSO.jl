@@ -9,8 +9,8 @@ using InteractiveUtils
 begin
 	using Pkg; Pkg.activate("."); 
 	using TSO
-	using PyPlot
-	using Dierckx
+	#using PyPlot
+	#using Dierckx
 	using Glob
 	using Serialization
 end
@@ -22,13 +22,13 @@ Pick the EoS that shall provide the internal energy to the opacity table.
 "
 
 # ╔═╡ f02fbdc0-1d14-4c5e-8ce8-091b07d083da
-aos = @axed reload(SqEoS, abspath("../../../tests/TSO_sun_Magg_v10.2/eos.hdf5"))
+aos = @axed reload(SqEoS, abspath("../creating_table/eos_asplund07_m1_a04_v5.0.hdf5"))
 
 # ╔═╡ c7f9ebfc-4010-47e5-afe0-183efec4273f
 md"Folder of the Opacity tables"
 
 # ╔═╡ d5be07a6-c7bc-48ea-8337-73f445dfea1a
-paths = glob("OS_table*", "OPAC-for-3D/june23/M0.0a0.0/")
+paths = glob("OS_table*", "opacity_tables/MARCS/asplund/Z-1.0a0.4/")
 
 # ╔═╡ 626c6ea3-ee30-4dbe-9e32-4b211fa559e0
 md"Read the raw opacity tables"
@@ -41,7 +41,7 @@ md"The raw tables look like the following"
 
 # ╔═╡ f63561ff-b4e9-4ddc-b5f5-f69a24dc11b9
 begin
-	close()
+	#=close()
 
 	for i in eachindex(mos)
 		k = [minimum(mos[i].κ_c[j, :]) for j in axes(mos[i].κ_c, 1)]
@@ -51,7 +51,7 @@ begin
 	
 	c = plt.colorbar()
 	c.set_label("minimum opacity")
-	gcf()
+	gcf()=#
 end
 
 # ╔═╡ 03a23793-7af7-4e6b-9a20-33452dc5f6a8
@@ -76,7 +76,7 @@ m_int = uniform(mos..., new_T_size=104, new_ρ_size=104)
 
 # ╔═╡ 772769bf-d366-4265-aa72-91ba2ee5d803
 begin
-	close()
+	#=close()
 
 
 	tt, rr = meshgrid(m_int.T, m_int.ρ)
@@ -87,7 +87,7 @@ begin
 	c2.set_label("minimum line opacity")
 
 	
-	gcf()
+	gcf()=#
 end
 
 # ╔═╡ c6585349-3970-440d-ab58-45d82ef5943e
@@ -117,7 +117,7 @@ Save everything in the usual TSO.jl format
 
 # ╔═╡ fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
 begin
-	#=dname = "TSO_MARCS_v1.6"
+	dname = "TSO_MARCS_asplund_m1_a04_v1.6"
 
 	if !isdir(dname)
 		mkdir(dname)
@@ -130,7 +130,7 @@ begin
 	save(newopa,   joinpath(dname, "combined_opacities.hdf5"))
 	save(newopa_c, joinpath(dname, "combined_Copacities.hdf5"))
 	save(newopa_l, joinpath(dname, "combined_Lopacities.hdf5"))
-	save(newopa_s, joinpath(dname, "combined_Sopacities.hdf5"))=#
+	save(newopa_s, joinpath(dname, "combined_Sopacities.hdf5"))
 end
 
 # ╔═╡ Cell order:

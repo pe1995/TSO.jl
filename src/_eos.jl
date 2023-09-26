@@ -1217,7 +1217,7 @@ end=#
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
 function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
-    lnRoss  = similar(eos.lnRoss)
+    lnRoss = similar(eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
 end

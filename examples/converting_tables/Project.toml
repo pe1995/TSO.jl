@@ -1,9 +1,7 @@
 [deps]
-Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 TSO = "65303bd6-8358-47a4-91b9-056454446fac"

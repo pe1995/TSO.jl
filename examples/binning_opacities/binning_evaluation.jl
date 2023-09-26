@@ -12,8 +12,8 @@ begin
 	using TSO
 	using LaTeXStrings
 
-	plt = pyplot;
-end
+	plt = pyplot
+end;
 
 # ╔═╡ 60354562-1c5a-43ec-bd2d-b5b848aae452
 md"## Load tables"
@@ -22,7 +22,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ 5dff65de-20fc-495d-b65f-1f8873c2cf8f
-binned_table = abspath("DIS_MARCS_v1.7.3") 
+binned_table = abspath("DIS_MARCS_v1.7.4") 
 
 # ╔═╡ d9e4f097-6ae7-4d82-a8f5-9653be33ab7a
 eos_raw = reload(
@@ -46,6 +46,9 @@ eos = reload(
 opa = reload(
 	SqOpacity, joinpath(binned_table, "binned_opacities.hdf5")
 )
+
+# ╔═╡ 375dbb91-38de-4146-973d-aeaff5b23968
+size(opa.κ)
 
 # ╔═╡ ad97f52a-8d8e-4991-af93-4e19c824f0a2
 md"## Model
@@ -174,6 +177,7 @@ end
 # ╠═96f0111b-1b07-4c4a-b92c-f2adecc809f9
 # ╠═fbc54d19-250a-4696-bf7a-cb3b48a680bf
 # ╠═4d1f672c-b9a7-4702-9a19-33718d0a0e2e
+# ╠═375dbb91-38de-4146-973d-aeaff5b23968
 # ╟─ad97f52a-8d8e-4991-af93-4e19c824f0a2
 # ╠═0129fe06-20b5-4c85-bb15-b07cd731e413
 # ╟─40facadb-ca4e-4b3b-b2de-754fa38b385a
@@ -190,5 +194,5 @@ end
 # ╟─b28222dd-0d9c-4eb6-af43-5dff80267af7
 # ╠═daef203a-603c-437c-82e1-bdf3f59c1f5c
 # ╠═85937574-dc04-4c8d-8c4f-828f3f587c03
-# ╠═ae1d4866-355e-4805-b643-56937d0372e5
+# ╟─ae1d4866-355e-4805-b643-56937d0372e5
 # ╟─1c8b521a-331d-41d5-af51-843c0bf41a27

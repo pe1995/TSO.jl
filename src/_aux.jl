@@ -584,6 +584,57 @@ const asplund2007_abund = Dict(
 
 
 
+## Alpha elements
+
+α_elements = ["C", "O", "Ne", "Mg", "Si", "S", "Ar", "Ca"]
+primordial_elements = ["H", "He", "Li"]
+
+
+
+
+## Scale yields
+
+scale_yields(value, by) = isnothing(by) ? value : (value[1], value[2]+by)
+
+"""
+    scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
+
+Scaling yields according to the given elements. Values in kwargs and 
+α are given over Fe. Pass kwargs to scale specific elements
+"""
+function scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
+    additional_elements = String.(keys(kwargs) |> collect)
+
+    for (i, eleid) in enumerate(yields)
+        id, val = eleid
+        ele = String(id_atom(id))
+
+        @show ele val
+        # scale to alpha
+        if ele in α_elements
+            yields[i] = scale_yields(eleid, α)
+        end
+
+        # scale to FeH (only non-primordial)
+        if !(ele in primordial_elements)
+            yields[i] = scale_yields(yields[i], FeH)
+        end
+
+        # scale everything else
+        if ele in additional_elements
+            to_value = kwargs[Symbol(ele)]
+            yields[i] = scale_yields(yields[i], to_value)
+        end
+
+        @show ele yields[i]
+    end
+end
+
+
+
+
+
+
 ## Convenience functions for mass 
 
 atom_id(name)   = findfirst(atomic_number.==name)

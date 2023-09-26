@@ -209,8 +209,8 @@ md"## Input parameters"
 begin
 	eos_folder = "tables/TSO_MARCS_v1.6"
 	model = "sun_stagger.dat"
-	new_eos_folder = "DIS_MARCS_v1.7.3"
-	new_eosE_folder = "DIS_MARCS_E_v1.7.3"
+	new_eos_folder = "DIS_MARCS_v1.7.4"
+	new_eosE_folder = "DIS_MARCS_E_v1.7.4"
     extension = "_magg22"
 end;
 
@@ -226,14 +226,12 @@ bin_opacities(eos_folder, model, new_eos_folder,
         method=:kmeans, 
         use_contribution=false, 
         stripes=false,
-        Nbins=7, 
-        #=quadrants=[ 
-            TSO.Quadrant((0.0, 4.0), (-100, 0.75),  1),
-            TSO.Quadrant((0.0, 4.0), (0.75, 2.0),  1),
-            TSO.Quadrant((4.0, 100), (-100, 0.75),   1),
-            TSO.Quadrant((4.0, 100), (0.75, 2.0),   1),
-            TSO.Quadrant((0.0, 100), (2.0, 100),    3),
-        ],=#
+        Nbins=16, 
+        quadrants=[ 
+            TSO.Quadrant((0.0, 4.0),   (-100, 4.5), 4),
+            TSO.Quadrant((0.0, 4.0),   (4.5, 100), 4),
+            TSO.Quadrant((4.0, 100.0), (-100, 100), 8)
+        ],
             #=
             TSO.Quadrant((0.0, 3.6),  (-100, 0.5), 3), 
             TSO.Quadrant((0.0, 3.6),  (0.5, 4.0),  3), 
