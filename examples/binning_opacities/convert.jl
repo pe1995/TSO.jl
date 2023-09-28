@@ -161,9 +161,6 @@ function bin_opacities(table_folder, av_path, name;
         fid["bins"] = bin
         fid["lambda"] = opacities.λ
         close(fid)
-
-        #mv("binned_opacities.hdf5", 
-		#	joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
     end
 	
     binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
@@ -195,11 +192,6 @@ function fromT_toE(table_folder, folder_new; upsample=1000)
 
     save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
     save(eosE, joinpath(folder_new, "eos.hdf5"))
-
-    #mv("tabparam.in", joinpath(folder_new, "tabparam.in"), force=true)
-    #mv("eostable.dat", joinpath(folder_new, "eostable.dat"), force=true)
-    #mv("rhoei_radtab.dat", joinpath(folder_new, "rhoei_radtab.dat"), force=true);
-
 end
 
 # ╔═╡ 9fb3f203-331e-4b76-b94c-c992f625c80a

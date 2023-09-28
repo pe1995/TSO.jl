@@ -111,9 +111,37 @@ load_scipy_interpolate!(mod=scipy_interpolate) = begin
     scipy_loaded[] = true
 end
 
+include_helper(name) = joinpath(dirname(@__FILE__), name)
+
+function ingredients(path::String)
+	# this is from the Julia source code (evalfile in base/loading.jl)
+	# but with the modification that it returns the module instead of the last object
+	path = include_helper(path)
+	name = Symbol(basename(path))
+	m = Module(name)
+	Core.eval(m,
+        Expr(:toplevel,
+             :(eval(x) = $(Expr(:core, :eval))($name, x)),
+             :(include(x) = $(Expr(:top, :include))($name, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
+             :(include($path))))
+	m
+end
 
 
 
+
+join_full(arr...; with_what="_", add_start=true, kwargs...) = begin
+    a = [arr...]
+    a = a[a .!= ""]
+    if length(a) == 1
+        add_start ? join(["", first(a)], with_what) : first(a)
+    elseif length(a) == 0
+        ""
+    else
+        add_start ? join(["", a...], with_what; kwargs...) : join(a, with_what; kwargs...)
+    end
+end
 
 
 ## Saving as HDF5

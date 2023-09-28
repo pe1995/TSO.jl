@@ -754,7 +754,7 @@ end
 
 #=================================================================== NaN handling ===#
 
-@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(x, y, extrapolation_bc=bc).(x0)
+@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(x), y, extrapolation_bc=bc).(x0)
 
 nan_or_inf(a) = isnan(a) | !isfinite(a)
 
