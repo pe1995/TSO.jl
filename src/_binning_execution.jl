@@ -139,6 +139,8 @@ function bin_opacity_table(table_folder, av_path, name="";
         fid["bins"] = bin
         fid["lambda"] = opacities.λ
         close(fid)
+
+        eos_table_name
     end
 	
     binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
@@ -171,4 +173,22 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000)
 
     save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
     save(eosE, joinpath(folder_new, "eos.hdf5"))
+end
+
+function create_E_from_T(table_folder, name=""; 
+                                upsample=2048,
+                                name_extension="DIS_MARCS_E",
+                                version="v0.1")
+    new_table_name = TSO.join_full(name_extension, name, version, add_start=false)
+    convert_fromT_toE(table_folder, new_table_name, upsample=upsample)
+end
+
+
+
+
+
+
+bin_assignment(path) = begin
+	o = TSO.HDF5.h5open(path)
+	TSO.HDF5.read(o["bins"])
 end
