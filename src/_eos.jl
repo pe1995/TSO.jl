@@ -1374,8 +1374,8 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     lλ    = log.(τ_λ)
 
     t_mono = zeros(T, size(τ_λ, 1))
-    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss), lnρ, extrapolation_bc=Line(), move_knots=true)
-    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss), lnE, extrapolation_bc=Line(), move_knots=true)
+    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Line())
+    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Line())
 
     for i in axes(τ_λ, 2)
         t_mono .= lλ[:, i]
