@@ -85,12 +85,15 @@ include("_models.jl")
 include("_eos.jl")
 include("_smooth.jl")
 include("_transfer.jl")
+include("_heating.jl")
 include("_binning.jl")
 include("_legacy_tables.jl")
 include("_aesopus.jl")
 include("_marcs.jl")
 include("_adiabat.jl")
+include("_from_m3d.jl")
 include("_binning_execution.jl")
+
 
 
 #= Deprecations =#

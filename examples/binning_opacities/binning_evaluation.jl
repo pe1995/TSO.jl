@@ -56,9 +56,15 @@ For the opatical depth of the model we use the unbinned table."
 
 # ╔═╡ 0129fe06-20b5-4c85-bb15-b07cd731e413
 # ╠═╡ show_logs = false
-solar_model = upsample(
+solar_model_up = upsample(
 	@optical(Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw), 2000
 )	
+
+# ╔═╡ 832fe2a9-e7b9-4b19-8ec8-a0ded0bbefa0
+solar_model_orig = @optical(Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw)
+
+# ╔═╡ 686afb73-7cb1-4c5c-b7c1-5f11841c0669
+solar_model = solar_model_orig
 
 # ╔═╡ 40facadb-ca4e-4b3b-b2de-754fa38b385a
 md"# Radiative transfer
@@ -109,16 +115,24 @@ begin
 	
 	ff, axf = plt.subplots(figsize=(6,6))
 
-	mask = log10.(τ) .< 5
-	
+	mask = log10.(τ) .< 6
+
+	# overplot the interpolation lines
+	#=for line in solar_model_orig.τ
+		axf.axvline(log10.(line), alpha=0.3)
+	end=#
 
 	axf.plot(
-		log10.(τ[mask]), q_raw[mask], 
+		log10.(τ[mask]), 
+		#z[mask],
+		q_raw[mask], 
 		label="unbinned", marker=".", ls="", markersize=8
 	)
 
 	axf.plot(
-		log10.(τ[mask]), q[mask], 
+		log10.(τ[mask]), 
+		#z[mask],
+		q[mask], 
 		label="binned", color="k"
 	)
 	
@@ -128,6 +142,9 @@ begin
 	axf.minorticks_on()
 	axf.tick_params(top=true, right=true, direction="in", which="both")
 
+	#axf.set_xlim(0, 3)
+	#axf.set_yscale("log")
+	
 	axf.legend(framealpha=0, loc="lower left", fontsize="large")
 	
 	ff.savefig(
@@ -155,7 +172,7 @@ begin
 	axr.minorticks_on()
 	axr.tick_params(top=true, right=true, direction="in", which="both")
 
-	axr.set_ylim(-0.5, 0.5)
+	#axr.set_ylim(-0.5, 0.5)
 
 	axr.axvline(-4, color="k", ls=":", alpha=0.5)
 	
@@ -180,6 +197,8 @@ end
 # ╠═375dbb91-38de-4146-973d-aeaff5b23968
 # ╟─ad97f52a-8d8e-4991-af93-4e19c824f0a2
 # ╠═0129fe06-20b5-4c85-bb15-b07cd731e413
+# ╠═832fe2a9-e7b9-4b19-8ec8-a0ded0bbefa0
+# ╠═686afb73-7cb1-4c5c-b7c1-5f11841c0669
 # ╟─40facadb-ca4e-4b3b-b2de-754fa38b385a
 # ╠═f4e99fb7-d33e-4540-9c5a-d8192ae5a75f
 # ╟─4d9f224f-22a3-424c-b204-c8f2af42f713
@@ -194,5 +213,5 @@ end
 # ╟─b28222dd-0d9c-4eb6-af43-5dff80267af7
 # ╠═daef203a-603c-437c-82e1-bdf3f59c1f5c
 # ╠═85937574-dc04-4c8d-8c4f-828f3f587c03
-# ╟─ae1d4866-355e-4805-b643-56937d0372e5
-# ╟─1c8b521a-331d-41d5-af51-843c0bf41a27
+# ╠═ae1d4866-355e-4805-b643-56937d0372e5
+# ╠═1c8b521a-331d-41d5-af51-843c0bf41a27

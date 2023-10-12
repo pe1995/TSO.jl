@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.26
 
 using Markdown
 using InteractiveUtils
@@ -9,20 +9,27 @@ using InteractiveUtils
 begin
 	using Pkg; Pkg.activate(".")
 	using TSO
-	using Plots
+	using PythonPlot
+
+	plt = pyplot;
 end
+
+# ╔═╡ 04f9f6cd-b267-47b6-a901-6f48c6e88381
+md"# Binning of Opacities"
 
 # ╔═╡ 25f6b474-02e0-430e-98ea-dbf658b2199d
 begin
 	eos_folder = "tables/TSO_MARCS_v1.6"
 	model = "sun_stagger.dat"
-	name = "red"
-	version = "v1.7.5"
+	name = "cnt"
+	version = "v1.7.6"
     extension = "magg22"
 end;
 
 # ╔═╡ a0c3e42d-28aa-4b1e-8394-596833d53105
-TSO.compute_formation_opacities(eos_folder, model, name, extension=extension)
+fopa_path = TSO.compute_formation_opacities(
+	eos_folder, model, name, extension=extension
+)
 
 # ╔═╡ 8691f075-0d53-4672-aa15-2cdf95e83980
 new_eos_folder = TSO.bin_opacity_table(
@@ -36,9 +43,8 @@ new_eos_folder = TSO.bin_opacity_table(
 	stripes=false,
 	Nbins=7, 
 	quadrants=[ 
-		TSO.Quadrant((0.0, 4.0),   (-100, 4.5), 4),
-		TSO.Quadrant((0.0, 4.0),   (4.5, 100), 4),
-		TSO.Quadrant((4.0, 100.0), (-100, 100), 8)
+		TSO.Quadrant((0.0, 100.0), (0.5, 100), 4),
+		TSO.Quadrant((0.0, 100.0), (-100, 0.5), 3)
 	],
 	maxiter=5000, display=:none
 )
@@ -50,9 +56,63 @@ TSO.create_E_from_T(
 	version=version
 )
 
+# ╔═╡ 9b04ffb8-371d-457b-b5e3-cb360d97a4ca
+md"# Visualization"
+
+# ╔═╡ 2b79f6a7-3093-4c48-9e95-c6acdd3a2870
+a = TSO.bin_assignment(joinpath(new_eos_folder, "bin_assignment.hdf5"))
+
+# ╔═╡ d0f08fbd-503b-46dd-96b6-85b5c0879c7b
+fopa = reload(SqOpacity, fopa_path)
+
+# ╔═╡ abb97b43-be00-41fe-a7af-0d3ddabff04e
+begin
+	plt.close()
+	
+	ff, axf = plt.subplots(figsize=(6,6))
+
+	im = axf.scatter(
+		log10.(fopa.λ), -log10.(fopa.κ_ross), c=a, s=0.7, cmap="rainbow"
+	)	
+
+	axf.set_ylabel(L"\rm \log\ \tau_{ross} (\tau_{\lambda}=1)", fontsize="large")
+	axf.set_xlabel(L"\rm \lambda\ [\AA]", fontsize="large")
+	
+	axf.minorticks_on()
+	axf.tick_params(top=true, right=true, direction="in", which="both")
+
+	ff.colorbar(im, ax=axf)
+
+	ff.savefig(
+		joinpath(new_eos_folder, "formation_opacity.png"), 
+		dpi=800, bbox_inches="tight"
+	)
+	
+	gcf()
+end
+
+# ╔═╡ 3d316755-0cf6-41bc-9285-05cd2d44398e
+begin
+	plt.close()
+	
+	plt.plot(log10.(diff(fopa.λ)), ls="", marker=".")
+
+	gcf()
+end
+
+# ╔═╡ 1db59768-2117-45a0-bcb9-180da594fadd
+first(diff(log.(fopa.λ)))
+
 # ╔═╡ Cell order:
+# ╟─04f9f6cd-b267-47b6-a901-6f48c6e88381
 # ╠═80e0765c-5ecb-11ee-285f-0533135dd035
 # ╠═25f6b474-02e0-430e-98ea-dbf658b2199d
 # ╠═a0c3e42d-28aa-4b1e-8394-596833d53105
 # ╠═8691f075-0d53-4672-aa15-2cdf95e83980
 # ╠═40e3ea4c-c161-48ff-b9b6-a0736e229a5f
+# ╟─9b04ffb8-371d-457b-b5e3-cb360d97a4ca
+# ╠═2b79f6a7-3093-4c48-9e95-c6acdd3a2870
+# ╠═d0f08fbd-503b-46dd-96b6-85b5c0879c7b
+# ╠═abb97b43-be00-41fe-a7af-0d3ddabff04e
+# ╠═3d316755-0cf6-41bc-9285-05cd2d44398e
+# ╠═1db59768-2117-45a0-bcb9-180da594fadd

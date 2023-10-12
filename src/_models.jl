@@ -122,16 +122,36 @@ upsample(model::AbstractModel, N=500) = begin
 	typeof(model)(args...)
 end
 
-function flip!(model)
-    for f in fieldnames(typeof(model))
-        v = getfield(model, f)
-        if typeof(v) <: AbstractArray
-            reverse!(v)
+
+"""
+    flip!(model)
+
+Flip the box object and possibly reverse the sign of the height scale (only geometrical).
+It used the density to determine where the bottom is. It will fo from bottom to top and 
+with the lowest z value at the bottom.
+"""
+function flip!(model::AbstractModel)
+    d = exp.(model.lnρ)
+    is_upside_down = first(d) < last(d)
+
+    if is_upside_down
+        for f in fieldnames(typeof(model))
+            v = getfield(model, f)
+            if typeof(v) <: AbstractArray
+                reverse!(v)
+            end
         end
     end
+
+    # Now it is from bottom to top, so the first value in z should be the smalles value
+    if model.z[1] > model.z[end]
+        model.z .*= -1
+    end
+
+    model
 end
 
-function flip(model)
+function flip(model::AbstractModel)
     m = deepcopy(model)
     flip!(m)
 
@@ -150,6 +170,20 @@ function pick_point(model, i)
 	end
 
 	Model1D(;args...)
+end
+
+function convert_model(model::AbstractModel, tp)
+    flds = []
+    for f in fieldnames(typeof(model))
+        v = getfield(model, f)
+        if typeof(v) <: AbstractArray
+            append!(flds, [Base.convert.(tp, v)])
+        else
+            append!(flds, [Base.convert(tp, v)])
+        end
+    end
+
+    typeof(model)(flds...)
 end
 
 

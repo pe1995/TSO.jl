@@ -118,6 +118,7 @@ end
 
 
 
+
 #= General functions =#
 
 limits(aos::AxedEoS, args...; kwargs...) = limits(aos.eos, args...; kwargs...)
@@ -266,13 +267,17 @@ size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
 
 
 
+
+
+
+
 #= Lookup functions =#
 
 """
     lookup(eos, what::Symbol, rho, var, args...)
 Lookup "what" in the EoS, return the value spliced as args... indicate.
 """
-lookup(eos::E,                          what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
+lookup(eos::E, what::Symbol, rho, var, args...) where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
 lookup(eos::E, opacities::OpacityTable, what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = begin
     if (length(args) > 0) | (ndims(getfield(opacities, what))==2)
         lookup(lookup_function(eos, opacities, what, args...), rho, var)
@@ -465,8 +470,10 @@ function lookup(aos::A, opa::B, what::Symbol; iλ, lnRho, kwargs...) where {A<:A
     lookup(aos, opa, what, lnRho, givenEV, iλ)
 end
 
-
 ZeroLookup() = ZeroLookup((args...; kwargs...)->0.0)
+
+
+
 
 
 
@@ -560,6 +567,10 @@ end
 
 bisect(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = bisect(AxedEoS(eos), args...; kwargs...)
 bisect(aos::E, lnRho::F, between=limits(aos.eos, 1); kwargs...) where {E<:AxedEoS, F<:AbstractFloat} = bisect(aos; lnRho=lnRho, (aos.energy_axes.name=>between,)..., kwargs...)
+
+
+
+
 
 
 
