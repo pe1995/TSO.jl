@@ -27,9 +27,10 @@ begin
 end;
 
 # ╔═╡ a0c3e42d-28aa-4b1e-8394-596833d53105
-fopa_path = TSO.compute_formation_opacities(
+#=fopa_path = TSO.compute_formation_opacities(
 	eos_folder, model, name, extension=extension
-)
+)=#
+fopa_path = joinpath(eos_folder, "combined_formation_opacities"*TSO.join_full(name, extension)*".hdf5")
 
 # ╔═╡ 8691f075-0d53-4672-aa15-2cdf95e83980
 new_eos_folder = TSO.bin_opacity_table(
@@ -40,11 +41,10 @@ new_eos_folder = TSO.bin_opacity_table(
 	extension=extension,
 	method=:kmeans, 
 	use_contribution=false, 
-	stripes=false,
 	Nbins=7, 
 	quadrants=[ 
-		TSO.Quadrant((0.0, 100.0), (0.5, 100), 4),
-		TSO.Quadrant((0.0, 100.0), (-100, 0.5), 3)
+		TSO.Quadrant((0.0, 100.0), (1.0, 100), 3, stripes=:κ),
+		TSO.Quadrant((0.0, 100.0), (-100, 1.0), 4, stripes=:λ),
 	],
 	maxiter=5000, display=:none
 )
@@ -91,15 +91,6 @@ begin
 	gcf()
 end
 
-# ╔═╡ 3d316755-0cf6-41bc-9285-05cd2d44398e
-begin
-	plt.close()
-	
-	plt.plot(log10.(diff(fopa.λ)), ls="", marker=".")
-
-	gcf()
-end
-
 # ╔═╡ 1db59768-2117-45a0-bcb9-180da594fadd
 first(diff(log.(fopa.λ)))
 
@@ -113,6 +104,5 @@ first(diff(log.(fopa.λ)))
 # ╟─9b04ffb8-371d-457b-b5e3-cb360d97a4ca
 # ╠═2b79f6a7-3093-4c48-9e95-c6acdd3a2870
 # ╠═d0f08fbd-503b-46dd-96b6-85b5c0879c7b
-# ╠═abb97b43-be00-41fe-a7af-0d3ddabff04e
-# ╠═3d316755-0cf6-41bc-9285-05cd2d44398e
+# ╟─abb97b43-be00-41fe-a7af-0d3ddabff04e
 # ╠═1db59768-2117-45a0-bcb9-180da594fadd

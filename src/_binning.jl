@@ -69,6 +69,7 @@ struct Quadrant
     λ_lims
     κ_lims
     nbins
+    stripes
 end
 
 
@@ -91,7 +92,10 @@ MURaMBinning(args...; kwargs...)                                    = fill(Custo
 ClusterBinning(t::Type{<:ClusterBins}, args...; kwargs...)          = fill(t, args...; kwargs...)
 
 assignments(a::Array{T, 1}) where {T} = a
-Quadrant(; λ_lims, κ_lims, nbins) = Quadrant(λ_lims, κ_lims, nbins)
+
+Quadrant(; λ_lims, κ_lims, nbins, stripes=nothing) = Quadrant(λ_lims, κ_lims, nbins, stripes)
+Quadrant(λ_lims, κ_lims, nbins; stripes=nothing) = Quadrant(λ_lims, κ_lims, nbins, stripes)
+
 
 
 ## Functions for filling the bins
@@ -410,7 +414,16 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
             mask =  (formation_opacity .<= klims[2]) .& (formation_opacity .> klims[1]) .&
                     (ll .<= llims[2]) .& (ll .> llims[1])
 
-            data = stripes ? hcat(formation_opacity[mask])' : hcat(ll[mask], formation_opacity[mask])'
+            data = if isnothing(q.stripes) 
+                hcat(ll[mask], formation_opacity[mask])'
+            elseif q.stripes == :κ
+                hcat(formation_opacity[mask])' 
+            elseif q.stripes == :λ
+                hcat(ll[mask])'
+            else
+                error("Please specify quadrant.stripes as `:κ`, `:λ`, or `nothing`")
+            end
+
             cluster = kmeans(data, nbins_split; kwargs...)
 
             append!(clusters, [cluster])

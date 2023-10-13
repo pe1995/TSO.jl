@@ -122,6 +122,27 @@ upsample(model::AbstractModel, N=500) = begin
 	typeof(model)(args...)
 end
 
+function cut(m::AbstractModel; kwargs...)
+	masks = trues(length(m.z))
+	for (para, lims) in kwargs
+		v = getfield(m, para)
+		mask = first(lims) .< v .< last(lims)
+		masks .= masks .& mask
+	end
+
+	dat = []
+	for f in fieldnames(typeof(m))
+		v = getfield(m, f)
+		if typeof(v) <: AbstractArray
+			append!(dat, [v[masks]])
+		else
+			append!(dat, [v])
+		end
+	end
+
+	typeof(m)(dat...)
+end
+
 
 """
     flip!(model)

@@ -23,7 +23,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ b86e8a40-6d20-4511-b0b2-75bc0837fae9
-binned_table = abspath("DIS_MARCS_red_v1.7.5")
+binned_table = abspath("DIS_MARCS_cnt_v1.7.6")
 
 # ╔═╡ a3f3b014-8358-48c0-88ff-185a12525685
 eos_raw = TSO.reload(
@@ -55,6 +55,28 @@ size(opa.κ)
 md"## Model
 For the opatical depth of the model we use the unbinned table."
 
+# ╔═╡ 88bc870e-a6b4-4630-9ef5-d14aaf316127
+function cut(m::TSO.AbstractModel; kwargs...)
+	masks = trues(length(m.z))
+	for (para, lims) in kwargs
+		v = getfield(m, para)
+		mask = first(lims) .< v .< last(lims)
+		masks .= masks .& mask
+	end
+
+	dat = []
+	for f in fieldnames(typeof(m))
+		v = getfield(m, f)
+		if typeof(v) <: AbstractArray
+			append!(dat, [v[masks]])
+		else
+			append!(dat, [v])
+		end
+	end
+
+	typeof(m)(dat...)
+end
+
 # ╔═╡ eadda4ab-e571-4e20-aef2-f8b82f376626
 solar_model_up = TSO.upsample(
 	TSO.@optical(TSO.Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw), 2000
@@ -64,7 +86,7 @@ solar_model_up = TSO.upsample(
 solar_model_orig = TSO.@optical(TSO.Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw)
 
 # ╔═╡ 6cbe21bb-293c-4f2e-b6a6-6c02dc797a21
-solar_model = solar_model_orig
+solar_model = cut(solar_model_orig, τ=(exp10(-4.5), exp10(4)))
 
 # ╔═╡ 1e9365c2-26b1-4075-a560-5b5a09d020ca
 md"# Radiative transfer
@@ -125,14 +147,14 @@ begin
 	axf.plot(
 		log10.(τ[mask]), 
 		#z[mask],
-		TSO.heating(Q_raw)[mask] ./ exp.(TSO.model(Q_raw).lnρ[mask]), 
+		TSO.heating(Q_raw)[mask] ,#./ exp.(TSO.model(Q_raw).lnρ[mask]), 
 		label="unbinned", marker=".", ls="", markersize=8
 	)
 
 	axf.plot(
 		log10.(τ[mask]), 
 		#z[mask],
-		TSO.heating(Q)[mask] ./ exp.(TSO.model(Q).lnρ[mask]), 
+		TSO.heating(Q)[mask] ,#./ exp.(TSO.model(Q).lnρ[mask]), 
 		label="binned", color="k"
 	)
 	
@@ -142,7 +164,7 @@ begin
 	axf.minorticks_on()
 	axf.tick_params(top=true, right=true, direction="in", which="both")
 
-	axf.set_xlim(-5, 4)
+	axf.set_xlim(-4, 4)
 	#axf.set_yscale("log")
 	
 	axf.legend(framealpha=0, loc="lower left", fontsize="large")
@@ -161,8 +183,8 @@ begin
 
 	fr, axr = plt.subplots(figsize=(6,6))
 
-	xr = TSO.heating(Q)[mask] ./ exp.(TSO.model(Q).lnρ[mask])
-	yr = TSO.heating(Q_raw)[mask] ./ exp.(TSO.model(Q_raw).lnρ[mask])
+	xr = TSO.heating(Q)[mask] #./ exp.(TSO.model(Q).lnρ[mask])
+	yr = TSO.heating(Q_raw)[mask] #./ exp.(TSO.model(Q_raw).lnρ[mask])
 	m = sortperm(xr)
 
 	axr.plot(
@@ -196,8 +218,8 @@ begin
 
 	fd, axd = plt.subplots(figsize=(6,6))
 
-	xd = TSO.heating(Q)[mask] ./ exp.(TSO.model(Q).lnρ[mask])
-	yd = TSO.heating(Q_raw)[mask] ./ exp.(TSO.model(Q_raw).lnρ[mask])
+	xd = TSO.heating(Q)[mask] #./ exp.(TSO.model(Q).lnρ[mask])
+	yd = TSO.heating(Q_raw)[mask] #./ exp.(TSO.model(Q_raw).lnρ[mask])
 
 	axd.plot(
 		log10.(τ[mask]),
@@ -227,8 +249,8 @@ begin
 
 	fs, axs = plt.subplots(figsize=(6,6))
 
-	xs = TSO.heating(Q)[mask] ./ exp.(TSO.model(Q).lnρ[mask])
-	ys = TSO.heating(Q_raw)[mask] ./ exp.(TSO.model(Q_raw).lnρ[mask])
+	xs = TSO.heating(Q)[mask] #./ exp.(TSO.model(Q).lnρ[mask])
+	ys = TSO.heating(Q_raw)[mask] #./ exp.(TSO.model(Q_raw).lnρ[mask])
 	
 	ss = (xs .- ys) ./ ys
 	ms = -20 .< ss .< 20
@@ -271,6 +293,7 @@ end
 # ╠═546500e8-4d8d-46cc-9d2b-8e8590bf8310
 # ╠═5fcb0bb7-88ac-4e03-8357-63d7d4ec9cd9
 # ╟─6de74388-7d45-48e4-8982-167954b6634e
+# ╟─88bc870e-a6b4-4630-9ef5-d14aaf316127
 # ╠═eadda4ab-e571-4e20-aef2-f8b82f376626
 # ╠═0ab8865b-15a5-4c90-a69d-57c287d69d9e
 # ╠═6cbe21bb-293c-4f2e-b6a6-6c02dc797a21
