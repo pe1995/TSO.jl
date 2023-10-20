@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.26
+# v0.19.29
 
 using Markdown
 using InteractiveUtils
@@ -27,10 +27,10 @@ begin
 end;
 
 # ╔═╡ a0c3e42d-28aa-4b1e-8394-596833d53105
-#=fopa_path = TSO.compute_formation_opacities(
+fopa_path = TSO.compute_formation_opacities(
 	eos_folder, model, name, extension=extension
-)=#
-fopa_path = joinpath(eos_folder, "combined_formation_opacities"*TSO.join_full(name, extension)*".hdf5")
+)
+#fopa_path = joinpath(eos_folder, "combined_formation_opacities"*TSO.join_full(name, extension)*".hdf5")
 
 # ╔═╡ 8691f075-0d53-4672-aa15-2cdf95e83980
 new_eos_folder = TSO.bin_opacity_table(
@@ -44,25 +44,8 @@ new_eos_folder = TSO.bin_opacity_table(
 	use_contribution=false, 
 	Nbins=7, 
 	quadrants=[ 
-		#=TSO.Quadrant((0.0, 4.0),   (1.0, 4.0), 2, stripes=:κ),
-		TSO.Quadrant((0.0, 4.0),   (4.0, 100), 1, stripes=:κ),
-		TSO.Quadrant((4.0, 100.0), (1.0, 100), 1, stripes=:κ),
-		TSO.Quadrant((0.0, 100.0), (-100, 1.0), 4, stripes=:λ),=#
-		#TSO.Quadrant((0.0, 100.0), (-100, 1.25), 5, stripes=:λ)
-		#TSO.Quadrant((0.0, 3.75), (1.25, 100.0), 3, stripes=:κ)
-		#TSO.Quadrant((3.75, 100.0), (1.25, 100.0), 1, stripes=:κ)
-
-		#=TSO.Quadrant((0.0, 4.0),   (-100.0, 100.0), 5, stripes=:κ),
-		#TSO.Quadrant((0.0, 4.0),   (4.0, 100.0),  1, stripes=:κ),
-		TSO.Quadrant((4.0, 100.0), (-100.0, 1.0), 2, stripes=:κ),
-		TSO.Quadrant((4.0, 100.0), (1.0, 100.0),  1, stripes=:κ),=#
-		
-		TSO.Quadrant((0.0, 100.0), (-100.0, 1.0), 4, stripes=:λ),
-		TSO.Quadrant((0.0, 4.0),   (1.0, 5.0),    2, stripes=:κ),
-		TSO.Quadrant((0.0, 4.0),   (5.0, 100.0),  1, stripes=:κ),
-		TSO.Quadrant((4.0, 100.0), (1.0, 100.0),  1, stripes=:λ)
-
-		
+		TSO.Quadrant((0.0, 100.0), (1.25, 100), 3, stripes=:κ),
+		TSO.Quadrant((0.0, 100.0), (-100, 1.25), 4, stripes=:λ),
 	],
 	maxiter=5000, display=:none
 )
