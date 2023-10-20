@@ -40,11 +40,29 @@ new_eos_folder = TSO.bin_opacity_table(
 	version=version,
 	extension=extension,
 	method=:kmeans, 
+	stripes=false,
 	use_contribution=false, 
 	Nbins=7, 
 	quadrants=[ 
-		TSO.Quadrant((0.0, 100.0), (1.0, 100), 3, stripes=:κ),
-		TSO.Quadrant((0.0, 100.0), (-100, 1.0), 4, stripes=:λ),
+		#=TSO.Quadrant((0.0, 4.0),   (1.0, 4.0), 2, stripes=:κ),
+		TSO.Quadrant((0.0, 4.0),   (4.0, 100), 1, stripes=:κ),
+		TSO.Quadrant((4.0, 100.0), (1.0, 100), 1, stripes=:κ),
+		TSO.Quadrant((0.0, 100.0), (-100, 1.0), 4, stripes=:λ),=#
+		#TSO.Quadrant((0.0, 100.0), (-100, 1.25), 5, stripes=:λ)
+		#TSO.Quadrant((0.0, 3.75), (1.25, 100.0), 3, stripes=:κ)
+		#TSO.Quadrant((3.75, 100.0), (1.25, 100.0), 1, stripes=:κ)
+
+		#=TSO.Quadrant((0.0, 4.0),   (-100.0, 100.0), 5, stripes=:κ),
+		#TSO.Quadrant((0.0, 4.0),   (4.0, 100.0),  1, stripes=:κ),
+		TSO.Quadrant((4.0, 100.0), (-100.0, 1.0), 2, stripes=:κ),
+		TSO.Quadrant((4.0, 100.0), (1.0, 100.0),  1, stripes=:κ),=#
+		
+		TSO.Quadrant((0.0, 100.0), (-100.0, 1.0), 4, stripes=:λ),
+		TSO.Quadrant((0.0, 4.0),   (1.0, 5.0),    2, stripes=:κ),
+		TSO.Quadrant((0.0, 4.0),   (5.0, 100.0),  1, stripes=:κ),
+		TSO.Quadrant((4.0, 100.0), (1.0, 100.0),  1, stripes=:λ)
+
+		
 	],
 	maxiter=5000, display=:none
 )
@@ -94,6 +112,9 @@ end
 # ╔═╡ 1db59768-2117-45a0-bcb9-180da594fadd
 first(diff(log.(fopa.λ)))
 
+# ╔═╡ 5ca2f05b-4dcb-48d2-90f6-d454a6d6eb5b
+1 - exp(-5.0)
+
 # ╔═╡ Cell order:
 # ╟─04f9f6cd-b267-47b6-a901-6f48c6e88381
 # ╠═80e0765c-5ecb-11ee-285f-0533135dd035
@@ -106,3 +127,4 @@ first(diff(log.(fopa.λ)))
 # ╠═d0f08fbd-503b-46dd-96b6-85b5c0879c7b
 # ╟─abb97b43-be00-41fe-a7af-0d3ddabff04e
 # ╠═1db59768-2117-45a0-bcb9-180da594fadd
+# ╠═5ca2f05b-4dcb-48d2-90f6-d454a6d6eb5b

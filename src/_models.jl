@@ -143,6 +143,36 @@ function cut(m::AbstractModel; kwargs...)
 	typeof(m)(dat...)
 end
 
+function interpolate_to(m::AbstractModel; in_log=false, kwargs...)
+    @assert length(keys(kwargs)) == 1
+    
+    para, new_scale = first(keys(kwargs)), first(values(kwargs))
+    old_scale = in_log ? log10.(getfield(m, para)) : getfield(m, para)
+    mask = sortperm(old_scale)
+
+    d = []
+    for f in fieldnames(typeof(m))
+        if f == para
+            in_log ? append!(d, [exp10.(new_scale)]) : append!(d, [new_scale])
+        else
+            v = getfield(m, f)
+            if typeof(v) <: AbstractArray
+                r = linear_interpolation(
+                    Interpolations.deduplicate_knots!(old_scale[mask], move_knots=true),
+                    v[mask], 
+                    extrapolation_bc=Line()
+                ).(new_scale)
+
+                append!(d, [r])
+            else
+                append!(d, [v])
+            end
+        end
+    end
+
+    flip!(typeof(m)(d...))
+end
+
 
 """
     flip!(model)

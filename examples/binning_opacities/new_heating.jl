@@ -23,7 +23,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ b86e8a40-6d20-4511-b0b2-75bc0837fae9
-binned_table = abspath("DIS_MARCS_cnt_v1.7.6")
+binned_table = abspath("DIS_MARCS_v1.6.3") 
 
 # ╔═╡ a3f3b014-8358-48c0-88ff-185a12525685
 eos_raw = TSO.reload(
@@ -83,10 +83,15 @@ solar_model_up = TSO.upsample(
 )
 
 # ╔═╡ 0ab8865b-15a5-4c90-a69d-57c287d69d9e
-solar_model_orig = TSO.@optical(TSO.Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw)
+solar_model_orig = TSO.@optical(
+	TSO.Average3D(eos_raw, "sun_stagger.dat"), eos_raw, opa_raw
+)
 
 # ╔═╡ 6cbe21bb-293c-4f2e-b6a6-6c02dc797a21
-solar_model = cut(solar_model_orig, τ=(exp10(-4.5), exp10(4)))
+solar_model = solar_model_orig
+
+# ╔═╡ f736ebf6-3e3a-49b5-b14b-5624c272b0c0
+solar_model.z
 
 # ╔═╡ 1e9365c2-26b1-4075-a560-5b5a09d020ca
 md"# Radiative transfer
@@ -297,6 +302,7 @@ end
 # ╠═eadda4ab-e571-4e20-aef2-f8b82f376626
 # ╠═0ab8865b-15a5-4c90-a69d-57c287d69d9e
 # ╠═6cbe21bb-293c-4f2e-b6a6-6c02dc797a21
+# ╠═f736ebf6-3e3a-49b5-b14b-5624c272b0c0
 # ╟─1e9365c2-26b1-4075-a560-5b5a09d020ca
 # ╠═a9c160d6-673f-4cfa-8358-4c01be07d1e6
 # ╟─243a7aee-cd48-4e41-ad46-9e255019e020
