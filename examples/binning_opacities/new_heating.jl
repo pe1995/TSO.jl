@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.26
+# v0.19.29
 
 using Markdown
 using InteractiveUtils
@@ -23,7 +23,7 @@ md"## Load tables"
 table = abspath("tables/TSO_MARCS_v1.6")
 
 # ╔═╡ b86e8a40-6d20-4511-b0b2-75bc0837fae9
-binned_table = abspath("DIS_MARCS_cnt_v1.7.6")
+binned_table = abspath("DIS_MARCS_cnt_v1.7.6") 
 
 # ╔═╡ a3f3b014-8358-48c0-88ff-185a12525685
 eos_raw = TSO.reload(
@@ -187,6 +187,10 @@ begin
 	yr = TSO.heating(Q_raw)[mask] #./ exp.(TSO.model(Q_raw).lnρ[mask])
 	m = sortperm(xr)
 
+	qr_max = maximum(abs.(yr))
+	xr = xr ./ qr_max
+	yr = yr ./ qr_max
+	
 	axr.plot(
 		range(minimum(xr), maximum(xr), length=500) |> collect,
 		range(minimum(xr), maximum(xr), length=500) |> collect,
@@ -198,8 +202,14 @@ begin
 		color="k", marker="s", ls="", markersize=6
 	)
 	
-	axr.set_ylabel(L"\rm qr", fontsize="large")
-	axr.set_xlabel(L"\rm qr_{bin}", fontsize="large")
+	axr.set_ylabel(
+		L"\rm q_{rad}^{\lambda}\ /\ \left| q_{rad}^{\lambda,max} \right|", 
+		fontsize="large"
+	)
+	axr.set_xlabel(
+		L"\rm q_{rad}^{bin}\ /\ \left| q_{rad}^{\lambda,max} \right|",
+		fontsize="large"
+	)
 	
 	axr.minorticks_on()
 	axr.tick_params(top=true, right=true, direction="in", which="both")
@@ -223,17 +233,21 @@ begin
 
 	axd.plot(
 		log10.(τ[mask]),
-		(xd .- yd) ./ yd,
-		color="k", ls="", marker="s"
+		(xd .- yd) ./ maximum(abs.(yd)) .* 100,
+		color="k", ls="", marker="s", markersize=7, 
+		markeredgecolor="k", markerfacecolor="None"
 	)
 	
-	axd.set_ylabel(L"\rm qr_{bin}\ /\ q - 1", fontsize="large")
+	axd.set_ylabel(
+		L"\rm \left( q_{rad}^{bin} - q_{rad}^{\lambda} \right)\ /\ \left| q_{rad}^{\lambda, max} \right| \ [\%]", 
+		fontsize="large"
+	)
 	axd.set_xlabel(L"\rm \log \tau_{ross}", fontsize="large")
 	
 	axd.minorticks_on()
 	axd.tick_params(top=true, right=true, direction="in", which="both")
 
-	axd.set_ylim(-1, 1)
+	axd.set_ylim(-4, 4)
 	
 	fd.savefig(
 		joinpath(binned_table, "binning_evaluation_relqr.png"), 
