@@ -21,7 +21,7 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
     model = Average3D(av_path, logg=logg)
 
   
-    if !isfile(joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
+    if !isfile(joinpath(table_folder, "combined_ross_eos$(ext).hdf5"))
         @info "computing rosseland"
         rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
 					weights=ω_midpoint(opacities))
@@ -41,12 +41,10 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
     τ_ross, τ_λ = optical_depth(aos, opacities, model)
     d_ross, d_κ = formation_height(model, aos, opacities, τ_ross, τ_λ)
 
-
     formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
 	
     save(formation_opacities, 
 			joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
-
 end
 
 

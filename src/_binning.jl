@@ -1224,7 +1224,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     @inbounds for k in eachindex(λ)
         b = binning[k]
         @inbounds for j in 1:rhoBins
-            @fastmath @inbounds for i in 1:AxBins
+            @inbounds for i in 1:AxBins
                 Bν!(bnu,   λ[k], Temp[i, j]) 
                 δBν!(dbnu, λ[k], Temp[i, j]) 
 
@@ -1279,7 +1279,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     @inbounds for k in eachindex(λ)
         b = binning[k]
         @inbounds for j in 1:rhoBins
-            @fastmath @inbounds for i in 1:AxBins
+            @inbounds for i in 1:AxBins
                 Bν!(bnu,   λ[k], Temp[i, j]) 
                 δBν!(dbnu, λ[k], Temp[i, j]) 
 
