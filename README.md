@@ -11,6 +11,7 @@
 _______
 
 # Shortcuts
+You can jump through the documentation by using the follwing topic shortcuts. Note that less relevant sections of the documentation may not appear here.
 
 1. [Tabulated Spectral Opacities](#tabulated-spectral-opacities)
     1. [MARCS](#marcs)
