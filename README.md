@@ -25,6 +25,9 @@ You can jump through the documentation by using the follwing topic shortcuts. No
 
 -----------
 # Tabulated Spectral Opacities
+
+For creating 3D model atmospheres with DISPATCH the EoS and opcity table are of extreme significance. 3D RHD simulations have to -- due to the complexity of the problem -- rely on binned radiative transfer of pre-computed opacity tables. The tables that are eventually binned can have various sources, in `TSO.jl` a couple of these sources are implemented and can even be created throuch wrappers. In the following currently available formats are summarized. More information can be found in the `examples` folder, or directly in the doc strings of the corresponding functions.
+
 ## MARCS
 The standard EoS + Opacity table used in DISPATCH is the `MARCS` table. A table in this format lists opacities for $\rm \sim 10^5$ wavelength points from UV to infra-red and furthermore contains information about the state of the gas.
 
