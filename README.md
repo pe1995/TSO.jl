@@ -1,10 +1,11 @@
 # `TSO.jl`
 
 `TSO.jl` is a package for handling opacity + EoS tables in various formats. It is capable of reading, converting and binning monochromatic opacities on Density-Energy/Temperature grids and converting them to ouput formats, like e.g. the dispatch square gas tables. The working principle is that the code 
-  (a) Reads the table in a supported format
-  (b) converts to an easy, cross-platform, internal representation
-  (c) Does all kinds of things with it
-  (d) converts it to an output format
+
+1. Reads the table in a supported format
+2. converts to an easy, cross-platform, internal representation
+3. Does all kinds of things with it
+4. converts it to an output format
   
  It exports several top-level functions, that have specialized calls depending on the given table. Below is a start-to-end example on how to use the code.
 
@@ -20,8 +21,6 @@ You can jump through the documentation by using the follwing topic shortcuts. No
 2. [Opacity Binning](#opacity-binning)
     1. [Binning Principle](#binning-principle)
     2. [Binning Techniques](#binning-techniques)
-    3. [Binning Examples](#binning-examples)
-
 
 -----------
 # Tabulated Spectral Opacities
@@ -243,8 +242,106 @@ save(eosAESO, "combined_eos_AESOPUS_TSO.hdf5")
 The binning procedure consists of 2 steps, that can be seen in the `examples/binning_opacities` folder. First, the formation height of the different wavelength need to be computed. For this, a 1D model is needed, which should be read into the generic `Model1D` type. Afterwards, the actual binning can take place, where different binning schemes can be picked.
 
 ## Binning Principle
+
+The mathematical background of the opacity binning is described in Eitner et al. 2023. In basic terms, a large, wavelength resolved list of tabulated opacities, from whatever source, is split into a small number of wavelength bins to avoid the monochromatic solution of the radiative transfer equation during the simulation of a 3D RHD model atmosphere. This is not only a tremendous computational speed-up, but currently the only feasable way, since the RT solution is the most time consuming part in total. 
+
+There are multiple ways opacities can be grouped together. `TSO.jl` implements a variety of different techniques, such as e.g. optical depth dependend, but wavelength independent, (MURaM) or wavelength and optical depth dependent (Stagger, Co5bold). `TSO.jl` implements those specific, but also a convenient and flexible generic binning technique that can be fine tuned easily.   
+
 ## Binning Techniques
-## Binning Examples
+*Relevant examples: `examples/binning_opacities/opacity_tables/bin_table.jl`*
 
+In the given example the usage of the high-level interface is demonstrated. The example, and called functions, are designed such the tables with the right name are loaded at the right place. This is done to save RAM, because the monochromatic opacity table can be relatively expensive, even if loaded as memory map. Please note that you can of course work with the lower level functionality if this does not please you. In the following the binning is explained at a lower level. If this does not concern you, feel free to call the functions as given in the example script.
 
+Binning opacities for DISPATCH requires three steps. First, the formation height of each point in the table in the desired average atmosphere needs to be computed. This formation height is relevant for grouping opacities that form in similar regions of the atmosphere together. This step is crutial. If the binning is not perfomed well enough, the average opacity will not be representative of the entire spectrum, and your final model atmosphere will be harmed.
 
+```julia
+using TSO
+
+# the monochromatic table
+opacities = reload(SqOpacity, "combined_opacities$(ext).hdf5", mmap=true)
+aos = @axed reload(SqEoS, "combined_eos$(ext).hdf5")
+
+# 1D model that is used for the initial condition
+model = Average3D(av_path, logg=logg)
+
+# compute the optical depth
+τ_ross, τ_λ = optical_depth(aos, opacities, model)
+
+# and use this for the formation height, i.e. -τ_ross(τ_λ=1)
+d_ross, d_κ = formation_height(model, aos, opacities, τ_ross, τ_λ)
+
+# collect into a opacity table, indicate the optical depth with a true at the end
+formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
+```
+
+You can also recompute the rosseland opacity based on the monochromatic table, and add this
+to your EoS, if it comes from a different source
+
+```julia
+# compute τ_ross and overwrite it in the eos
+rosseland_opacity!(aos.eos.lnRoss, aos, opacities; weights=ω_midpoint(opacities))
+	
+# make it consistend with the opacity table
+transfer_rosseland!(aos.eos, opacities)
+```
+
+where simple midpoint integration weights for the wavelength are used to integrate the rosseland mean.
+The formation height table can now be used in the binning itself. First, the style of bins can be chosen.
+
+```julia
+# load the tables, if not done already
+eos = reload(SqEoS, "combined_ross_eos$(ext).hdf5")
+opa = reload(SqOpacity, "combined_opacities$(ext).hdf5", mmap=true)
+sopa = reload(SqOpacity, "combined_Sopacities$(ext).hdf5", mmap=true)
+fopa = reload(SqOpacity, "combined_formation_opacities$(name_ext).hdf5", mmap=true)
+
+# integration weights
+weights = ω_midpoint(opacities)
+
+# 1D model atmosphere, @optical adds τ_ross from given opacity table
+model = @optical Average3D(eos, av_path, logg=logg) eos opa
+
+# Binning style, default is generic kmeans ClusterBinning
+ClusterBinning(
+  TSO.KmeansBins; 
+  opacities=opa, 
+  formation_opacity=-log10.(fopa.κ_ross),
+  Nbins=7, 
+  kwargs...
+)
+
+# Sort wavelength points into specified bins    
+bins = binning(bins, opacities, -log10.(fopa.κ_ross)) 
+```
+
+The last step does the sorting already. The binning of corresponding opacities and source function can then be done by simply calling the `tabulate()` function.
+
+```julia
+# scattering (sopa) can be left out
+binned_opacities = tabulate(bins, weights, eos, opa, sopa, transition_model=model)
+```
+
+If no scattering opacity table is given, it is not substracted from the Planck mean and included in the opacity in the opticall thin regime (if you added it to the total opacity when creating the monochromatic table of course. If you did not, then you don't need to specify the scattering opacity here). 
+
+If the monochromatic table is on the T-rho grid (recommended!), you can convert it to the E-rho grid (while at the same time upsamping the energy axis)
+
+```julia
+aos = @axed reload(SqEoS, "eos.hdf5")
+opa = reload(SqOpacity, "binned_opacities.hdf5")
+
+# switch from T to Eint
+eosE, opaE = switch_energy(aos, opa, upsample=2048);
+aosE = @axed eosE
+
+# fill NaN values and set limits (1e±30 as default)
+TSO.fill_nan!(aosE, opaE)
+TSO.set_limits!(aosE, opaE)
+
+# create a new folder
+!isdir(folder_new) && mkdir(folder_new) 
+ 
+# save the E-rho table in the Dispatch format (square_gas_mod.f90)
+for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new)
+```
+ 
+-------
