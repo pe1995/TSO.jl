@@ -302,11 +302,18 @@ weights = ω_midpoint(opacities)
 model = @optical Average3D(eos, av_path, logg=logg) eos opa
 
 # Binning style, default is generic kmeans ClusterBinning
+# You can specify quadrants, in which bins are put as you wish
 ClusterBinning(
   TSO.KmeansBins; 
   opacities=opa, 
   formation_opacity=-log10.(fopa.κ_ross),
   Nbins=7, 
+  [     # λ region --v               v-- formation height region
+    TSO.Quadrant((0.0, 4.0), (qlim[i], 5.0), 2, stripes=:κ),    # 2 bins, stacked vertically      
+    TSO.Quadrant((0.0, 4.0), (5.0, 100), 1, stripes=:κ),        # 1 bin,  stacked vertically
+    TSO.Quadrant((4.0, 100.0), (qlim[i], 100), 1, stripes=:κ),  # 1 bin,  stacked vertically    
+    TSO.Quadrant((0.0, 100.0), (-100, qlim[i]), 4, stripes=:λ), # 4 bins, stacked horizontally    
+  ],
   kwargs...
 )
 
