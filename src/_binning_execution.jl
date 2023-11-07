@@ -12,7 +12,7 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
     name_ext = join_full(name, extension)
 
     opacities = reload(SqOpacity, 
-				joinpath(table_folder, "combined_opacities$(ext).hdf5"))
+				joinpath(table_folder, "combined_opacities$(ext).hdf5"), mmap=true)
     eos = reload(SqEoS,     
 				joinpath(table_folder, "combined_eos$(ext).hdf5"))
     aos = @axed eos
