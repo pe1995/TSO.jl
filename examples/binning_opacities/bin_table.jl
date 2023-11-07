@@ -44,11 +44,12 @@ new_eos_folder = TSO.bin_opacity_table(
 	method=:kmeans, 
 	stripes=false,
 	use_contribution=false, 
-	logg=4.438,
-	Nbins=7, 
+	Nbins=8, 
 	quadrants=[ 
-		TSO.Quadrant((0.0, 100.0), (1.25, 100.0), 3, stripes=:κ),
-		TSO.Quadrant((0.0, 100.0), (-100.0, 1.25), 4, stripes=:λ),
+		TSO.Quadrant((0.0, 4.0), (1.0, 4.5), 2, stripes=:κ),
+		TSO.Quadrant((0.0, 4.0), (4.5, 100), 1, stripes=:κ),
+		TSO.Quadrant((4.0, 100.0), (1.0, 100), 1, stripes=:κ),
+		TSO.Quadrant((0.0, 100.0), (-100, 1.0), 4, stripes=:λ),
 	],
 	maxiter=5000, display=:none
 )
