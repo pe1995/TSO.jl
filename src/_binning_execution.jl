@@ -7,7 +7,7 @@ Note: `name` will decide the name suffix under which the formation opacities wil
 If under this `extension` at the very end no table with the name `combined_formation_opacities_name_extension.hdf5` is found, it will be created.
 Also a new opacity table with updated rosseland opacities is saved.
 """
-function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(2.75e4), extension="")
+function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(2.75e4), extension="", do_ross=false)
     ext = join_full(extension)
     name_ext = join_full(name, extension)
 
@@ -17,11 +17,13 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
 				joinpath(table_folder, "combined_eos$(ext).hdf5"))
     aos = @axed eos
 
+    @show size(eos.lnPg)
+    @show size(opacities.κ)
 
     model = Average3D(av_path, logg=logg)
 
   
-    if !isfile(joinpath(table_folder, "combined_ross_eos$(ext).hdf5"))
+    if do_ross
         @info "computing rosseland"
         rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
 					weights=ω_midpoint(opacities))
@@ -141,8 +143,8 @@ function bin_opacity_table(table_folder, av_path, name="";
         eos_table_name
     end
 	
-    binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
-    #binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    #binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
+    binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
     
     save_table(binned_opacities)
 end
