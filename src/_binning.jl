@@ -432,7 +432,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
         
         as = zeros(Int, length(ll))
         for (i,mask) in enumerate(masks)
-            max_as = maximum(as[.!mask])
+            max_as = maximum(as[.!mask], init=0.0)
             as[mask] = assignments(clusters[i]) .+ max_as
         end
 
