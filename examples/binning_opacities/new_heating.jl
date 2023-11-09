@@ -24,8 +24,13 @@ md"## Load tables"
 # ╔═╡ 0ab293b6-8641-4148-aaae-6fe76d280eec
 table = abspath("tables/TSO_MARCS_v1.6")
 
+# ╔═╡ eb112e63-7440-4b94-97cf-f2f87d0cc4ac
+name = "t50g40m00"
+#name = "cnt"
+
 # ╔═╡ b86e8a40-6d20-4511-b0b2-75bc0837fae9
-binned_table = abspath("DIS_MARCS_v1.6.3") 
+binned_table = abspath("../../../../model_grid/examples/initial_models/DIS_MARCS_$(name)_v0.1")
+#binned_table = abspath("DIS_MARCS_cnt_v1.7.6") 
 
 # ╔═╡ a3f3b014-8358-48c0-88ff-185a12525685
 eos_raw = TSO.reload(
@@ -302,11 +307,77 @@ begin
 	gcf()
 end
 
+# ╔═╡ fdac8f67-3712-4a48-9041-c07f92fabc19
+md"# Assignment"
+
+# ╔═╡ 4dcf87c7-ef23-4f13-b158-dc8436937fe7
+begin
+	# the formation opacities are stored in the unbinned table
+	fopaD = TSO.reload(
+		TSO.SqOpacity, 
+		joinpath(
+			table, "combined_formation_opacities_$(name)_magg22.hdf5"
+		),
+		mmap=true
+	)
+	
+
+	# the bin assignment should be saved for this opacity table
+	fid = TSO.HDF5.h5open(
+		joinpath(binned_table, "bin_assignment.hdf5"), 
+		"r"
+	)
+	
+	binassignment = TSO.HDF5.read(fid["bins"])
+	λ = TSO.HDF5.read(fid["lambda"])
+	close(fid)
+
+
+	
+	# Figure
+	cD = plt.cm.gnuplot2
+	normD = matplotlib.colors.BoundaryNorm(
+		range(0.5, length(opa.λ)+0.5, step=1) |> collect, 
+		cD.N - 50
+	)
+	
+	plt.close()
+	fD, axD = plt.subplots(1, 1, figsize=(5,6))
+	#visual.basic_plot!(axD)
+	
+	im = axD.scatter(
+		log10.(λ), -log10.(fopaD.κ_ross), 
+		c=binassignment,
+		s=1,
+		cmap=cD,
+		norm=normD,
+	)
+	cbarD = fD.colorbar(
+		im, 
+		ax=axD, 
+		ticks=range(1, length(opa.λ), step=1) |> collect
+	)
+
+
+	axD.set_ylabel(
+		L"\rm - \log \tau_{ross}\ (\log \tau_{\lambda}=1)"
+	)
+	axD.set_xlabel(
+		L"\rm \log \lambda\ [\AA]"
+	)
+	cbarD.set_label(
+		L"\rm opacity\ bins"
+	)
+	
+	gcf()
+end
+
 # ╔═╡ Cell order:
 # ╠═2c8f86fe-68f5-11ee-1788-9f6f32429204
 # ╠═607818f0-d5a7-4644-8045-36a2c8f396cf
 # ╟─c99d2f52-9c05-4492-81b3-64b61ab52068
 # ╠═0ab293b6-8641-4148-aaae-6fe76d280eec
+# ╠═eb112e63-7440-4b94-97cf-f2f87d0cc4ac
 # ╠═b86e8a40-6d20-4511-b0b2-75bc0837fae9
 # ╠═a3f3b014-8358-48c0-88ff-185a12525685
 # ╠═fd60893c-fdcf-4ffd-8ec2-89acef5c82ee
@@ -338,3 +409,5 @@ end
 # ╟─11be2ede-35f5-445f-bdcf-24b281cf1871
 # ╟─65ec74da-3809-4194-90e8-ca0bcc20adc6
 # ╟─ba1497d9-3c4e-4bae-a7d5-46f8eaf956f8
+# ╟─fdac8f67-3712-4a48-9041-c07f92fabc19
+# ╟─4dcf87c7-ef23-4f13-b158-dc8436937fe7

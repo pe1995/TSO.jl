@@ -432,7 +432,7 @@ function fill(::Type{KmeansBins}; opacities, formation_opacity, Nbins=5, λ_spli
         
         as = zeros(Int, length(ll))
         for (i,mask) in enumerate(masks)
-            max_as = maximum(as[.!mask])
+            max_as = maximum(as[.!mask], init=0.0)
             as[mask] = assignments(clusters[i]) .+ max_as
         end
 
@@ -1224,7 +1224,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     @inbounds for k in eachindex(λ)
         b = binning[k]
         @inbounds for j in 1:rhoBins
-            @fastmath @inbounds for i in 1:AxBins
+            @inbounds for i in 1:AxBins
                 Bν!(bnu,   λ[k], Temp[i, j]) 
                 δBν!(dbnu, λ[k], Temp[i, j]) 
 
@@ -1279,7 +1279,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     @inbounds for k in eachindex(λ)
         b = binning[k]
         @inbounds for j in 1:rhoBins
-            @fastmath @inbounds for i in 1:AxBins
+            @inbounds for i in 1:AxBins
                 Bν!(bnu,   λ[k], Temp[i, j]) 
                 δBν!(dbnu, λ[k], Temp[i, j]) 
 

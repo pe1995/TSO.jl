@@ -1,4 +1,4 @@
-#=========================================================== Model Atmosphere structs ==#
+#================================================= Model Atmosphere structs ==#
 
 
 struct Model1D{T} <:AbstractModel
@@ -21,7 +21,7 @@ end
 
 
 
-#======================================================================= Constructors ==#
+#============================================================= Constructors ==#
 
 Model1D(eos, z, lnρ, lnT; logg=log10(2.75e4)) = Model1D(z, lnρ, lnT, lnT_to_lnEi(eos, lnρ, lnT), logg)
 Average3D(eos, path; logg=log10(2.75e4))      = begin
@@ -88,7 +88,7 @@ end
 
 
 
-#================================================================== Model conversions ==#
+#======================================================== Model conversions ==#
 
 """
 Convert z,T,ρ to z,E,ρ model based on EoS.
@@ -98,7 +98,7 @@ lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ,
 
 
 
-#========================================================================== Utilities ==#
+#================================================================ Utilities ==#
 
 upsample(model::AbstractModel, N=500) = begin
 	oldz = model.z
@@ -253,5 +253,4 @@ function convert_model(model::AbstractModel, tp)
     typeof(model)(flds...)
 end
 
-
-#=======================================================================================#
+#=============================================================================#

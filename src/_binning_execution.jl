@@ -7,21 +7,27 @@ Note: `name` will decide the name suffix under which the formation opacities wil
 If under this `extension` at the very end no table with the name `combined_formation_opacities_name_extension.hdf5` is found, it will be created.
 Also a new opacity table with updated rosseland opacities is saved.
 """
-function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(2.75e4), extension="")
+function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(2.75e4), extension="", do_ross=false)
     ext = join_full(extension)
     name_ext = join_full(name, extension)
 
-    opacities = reload(SqOpacity, 
-				joinpath(table_folder, "combined_opacities$(ext).hdf5"))
+    opacities = reload(
+        SqOpacity, 
+		joinpath(table_folder, "combined_opacities$(ext).hdf5"), 
+        mmap=!do_ross
+    )
+    
     eos = reload(SqEoS,     
 				joinpath(table_folder, "combined_eos$(ext).hdf5"))
     aos = @axed eos
 
+    @show size(eos.lnPg)
+    @show size(opacities.κ)
 
     model = flip(Average3D(av_path, logg=logg), depth=true)
 
   
-    if !isfile(joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
+    if do_ross
         @info "computing rosseland"
         rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
 					weights=ω_midpoint(opacities))
@@ -41,12 +47,10 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
     τ_ross, τ_λ = optical_depth(aos, opacities, model)
     d_ross, d_κ = formation_height(model, aos, opacities, τ_ross, τ_λ)
 
-
     formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
 	
     save(formation_opacities, 
 			joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
-
 end
 
 
@@ -143,8 +147,8 @@ function bin_opacity_table(table_folder, av_path, name="";
         eos_table_name
     end
 	
-    binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
-    #binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    #binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
+    binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
     
     save_table(binned_opacities)
 end
