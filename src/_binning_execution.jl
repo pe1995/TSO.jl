@@ -17,15 +17,18 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
         mmap=!do_ross
     )
     
-    eos = reload(SqEoS,     
-				joinpath(table_folder, "combined_eos$(ext).hdf5"))
+    eos = if do_ross 
+        reload(
+            SqEoS,     
+			joinpath(table_folder, "combined_eos$(ext).hdf5")
+        )
+    else
+        reload(
+            SqEoS,     
+			joinpath(table_folder, "combined_ross_eos$(ext).hdf5")
+        )
+    end
     aos = @axed eos
-
-    @show size(eos.lnPg)
-    @show size(opacities.κ)
-
-    model = Average3D(av_path, logg=logg)
-
   
     if do_ross
         @info "computing rosseland"
@@ -38,19 +41,16 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
         save(opacities, joinpath(table_folder, "combined_opacities$(ext).hdf5"))
     end
 
-
-    #if isfile(joinpath(table_folder, "combined_formation_opacities$(ext).hdf5"))
-    #    @warn "skipping formation opacities"
-    #    return
-    #end
+    model = Average3D(av_path, logg=logg)
 
     τ_ross, τ_λ = optical_depth(aos, opacities, model)
     d_ross, d_κ = formation_height(model, aos, opacities, τ_ross, τ_λ)
-
     formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
 	
-    save(formation_opacities, 
-			joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
+    save(
+        formation_opacities, 
+		joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5")
+    )
 end
 
 
