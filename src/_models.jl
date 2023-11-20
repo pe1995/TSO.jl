@@ -178,10 +178,10 @@ end
     flip!(model)
 
 Flip the box object and possibly reverse the sign of the height scale (only geometrical).
-It used the density to determine where the bottom is. It will fo from bottom to top and 
-with the lowest z value at the bottom.
+It used the density to determine where the bottom is. It will be from bottom to top and 
+with the lowest z value at the bottom. `depth` will be the other way around.
 """
-function flip!(model::AbstractModel)
+function flip!(model::AbstractModel; depth=false)
     d = exp.(model.lnρ)
     is_upside_down = first(d) < last(d)
 
@@ -199,12 +199,28 @@ function flip!(model::AbstractModel)
         model.z .*= -1
     end
 
+    # if depth, make the opposite now
+    if depth
+        # it is bottom to top
+        for f in fieldnames(typeof(model))
+            v = getfield(model, f)
+            if typeof(v) <: AbstractArray
+                reverse!(v)
+            end
+        end
+
+        # now it is top to bottom, so the first z value should be the smallest
+        if model.z[1] > model.z[end]
+            model.z .*= -1
+        end
+    end
+
     model
 end
 
-function flip(model::AbstractModel)
+function flip(model::AbstractModel; kwargs...)
     m = deepcopy(model)
-    flip!(m)
+    flip!(m; kwargs...)
 
     m
 end

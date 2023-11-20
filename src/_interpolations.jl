@@ -284,9 +284,8 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
 
     @inbounds for i in 1:nRhoBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(newAxisOldE, :, i))
-        x    .= @view(newAxisOldE[mask, i])
+        x    .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i])
         y    .= @view(oldlnV[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[:, i] .= ip.(newAxis_val)
@@ -372,7 +371,6 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
 
     @inbounds for i in 1:nEBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(r_old, i, :))
         x    .= @view r_old[i, mask]
         y    .= @view oldlnV[i, mask]

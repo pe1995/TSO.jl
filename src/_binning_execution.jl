@@ -29,6 +29,12 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
         )
     end
     aos = @axed eos
+
+    @show size(eos.lnPg)
+    @show size(opacities.κ)
+
+    model = flip(Average3D(av_path, logg=logg), depth=true)
+
   
     if do_ross
         @info "computing rosseland"
@@ -89,7 +95,7 @@ function bin_opacity_table(table_folder, av_path, name="";
 			mmap=true)
 
     weights = ω_midpoint(opacities)
-    model = @optical Average3D(eos, av_path, logg=logg) eos opacities
+    model = @optical flip(Average3D(eos, av_path, logg=logg), depth=true) eos opacities
 
     TSO.Clustering.Random.seed!(42)
 

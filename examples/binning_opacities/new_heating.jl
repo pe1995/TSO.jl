@@ -9,12 +9,14 @@ using InteractiveUtils
 begin
 	using Pkg; Pkg.activate("."); 
 	using PythonPlot
-	using Revise
-	import TSO
+	using TSO
 	using LaTeXStrings
 
 	plt = pyplot
 end;
+
+# ╔═╡ 607818f0-d5a7-4644-8045-36a2c8f396cf
+matplotlib.style.use(joinpath(dirname(pathof(TSO)), "Bergemann2023.mplstyle"))
 
 # ╔═╡ c99d2f52-9c05-4492-81b3-64b61ab52068
 md"## Load tables"
@@ -191,7 +193,7 @@ end
 begin
 	plt.close()
 
-	fr, axr = plt.subplots(figsize=(6,6))
+	fr, axr = plt.subplots(figsize=(5,6))
 
 	xr = TSO.heating(Q)[mask] #./ exp.(TSO.model(Q).lnρ[mask])
 	yr = TSO.heating(Q_raw)[mask] #./ exp.(TSO.model(Q_raw).lnρ[mask])
@@ -372,6 +374,7 @@ end
 
 # ╔═╡ Cell order:
 # ╠═2c8f86fe-68f5-11ee-1788-9f6f32429204
+# ╠═607818f0-d5a7-4644-8045-36a2c8f396cf
 # ╟─c99d2f52-9c05-4492-81b3-64b61ab52068
 # ╠═0ab293b6-8641-4148-aaae-6fe76d280eec
 # ╠═eb112e63-7440-4b94-97cf-f2f87d0cc4ac
