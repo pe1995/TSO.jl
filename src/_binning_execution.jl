@@ -29,10 +29,6 @@ function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(
         )
     end
     aos = @axed eos
-
-    @show size(eos.lnPg)
-    @show size(opacities.κ)
-
     model = flip(Average3D(av_path, logg=logg), depth=true)
 
   
