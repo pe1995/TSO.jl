@@ -4,7 +4,7 @@
 Construct a 1D adiabat just from start and end points.
 """
 function adiabat(star_point, end_point, eos_in::SqEoS; 
-                    nz=440, n_iter=30, dlnd=0.05, padding=0.05)
+                    nz=440, n_iter=30, dlnd=0.05, padding=0.05, ee_min=nothing)
     eos = @axed eos_in
     
     zbottom = first(star_point.z)
@@ -13,7 +13,13 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
     # Find the initial energy from the EoS. Assert that the EoS is in the 
     # correct units for this
     @assert is_internal_energy(eos)
-    ee_min,ee_max,_,_ = exp.(limits(eos))
+    eemin,ee_max,_,_ = exp.(limits(eos))
+
+    ee_min = if isnothing(ee_min)
+        eemin
+    else
+        ee_min
+    end
 
     # initial point
     t0  = exp(first(star_point.lnT))
