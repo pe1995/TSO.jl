@@ -88,7 +88,7 @@ zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
 function _get_help_py(mod ,dir=dirname(@__FILE__))
 	sys   = pyimport("sys")
-	dir in sys."path" ? nothing : append!(sys."path",[dir])
+	Py(dir) in sys."path" ? nothing : sys."path".append(Py(dir))
     pyimport(String(mod))
 end
 
@@ -107,14 +107,50 @@ macro pythonHelp(mod, dir)
 end
 
 load_scipy_interpolate!(mod=scipy_interpolate) = begin
-    copy!(mod, pyimport("scipy.interpolate"))
+    PythonCall.pycopy!(mod, pyimport("scipy.interpolate"))
     scipy_loaded[] = true
+end
+
+include_helper(name) = joinpath(dirname(@__FILE__), name)
+
+function ingredients(path::String)
+	# this is from the Julia source code (evalfile in base/loading.jl)
+	# but with the modification that it returns the module instead of the last object
+	path = include_helper(path)
+	name = Symbol(basename(path))
+	m = Module(name)
+	Core.eval(m,
+        Expr(:toplevel,
+             :(eval(x) = $(Expr(:core, :eval))($name, x)),
+             :(include(x) = $(Expr(:top, :include))($name, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
+             :(include($path))))
+	m
 end
 
 
 
 
+join_full(arr...; with_what="_", add_start=true, kwargs...) = begin
+    a = [arr...]
+    a = a[a .!= ""]
+    if length(a) == 1
+        add_start ? join(["", first(a)], with_what) : first(a)
+    elseif length(a) == 0
+        ""
+    else
+        add_start ? join(["", a...], with_what; kwargs...) : join(a, with_what; kwargs...)
+    end
+end
+
+
 ## Saving as HDF5
+
+"""
+    save(table, path)
+
+Save the given Table (SqEoS or SqOpacity) at the given path.
+"""
 function save(s::T, path) where {T<:AbstractTable}
     fid = HDF5.h5open(path, "w")
 
@@ -127,6 +163,13 @@ function save(s::T, path) where {T<:AbstractTable}
     path
 end
 
+"""
+    reload(Type{<:AbstractTale}, path; mmap=false)
+
+Reload the given type of table (SqEoS or SqOpacity) from the given path.
+If mmap=true, the memory intensive fields will be loaded as mmaps 
+through the HDF5 capabilities.
+"""
 function reload(s::Type{S}, path::String; mmap=false) where {S}
     fid   = HDF5.h5open(path, "r")
     fvals = Any[]
@@ -147,6 +190,34 @@ get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid[
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
 
+## Saving for Multi3D computation of heating
+
+"""
+    save(SqEoS, SqOpacity, name)
+
+Save the given Tables (SqEoS and SqOpacity) for M3D (Binary file with both).
+They will be saved at the given name with .txt and .bin extensions for 
+meta and binary data.
+"""
+save(eos::T1, opa::T2, name) where {T1<:AbstractTable, T2<:AbstractTable} = begin
+    open("$(name).txt", "w") do f
+        write(f, "$(length(eos.lnT))\n")
+        write(f, "$(length(eos.lnRho))\n")
+        write(f, "$(length(opa.λ))")
+    end
+    
+    open("$(name).bin", "w") do f
+        write(f, eos.lnT)
+        write(f, eos.lnRho)
+        write(f, opa.κ)
+        write(f, opa.src)
+    end
+
+    name
+end
+
+
+
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
 
@@ -163,7 +234,8 @@ const twohc2     = 2.0e0 *HPlanck*CLight^2
 const hc_k       = HPlanck*CLight/KBoltzmann
 const aa_to_cm   = 1.0e-8
 const σ_S        = 5.6704e-5
-const atomic_number = Symbol.(strip(i, ' ') for i in [
+const atomic_number = Symbol.(
+    strip(i, ' ') for i in [
         "H ","He","Li","Be","B ","C ","N ","O ","F ",         # |  1 -  9
         "Ne","Na","Mg","Al","Si","P ","S ","Cl","Ar",         # | 10 - 18
         "K ","Ca","Sc","Ti","V ","Cr","Mn","Fe","Co",         # | 19 - 27
@@ -174,8 +246,11 @@ const atomic_number = Symbol.(strip(i, ' ') for i in [
         "Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf",         # | 64 - 72
         "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",         # | 73 - 81
         "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",         # | 82 - 90
-        "Pa","U "]) 
-const atomic_mass = Dict(   "H"  => ("Hydrogen"	    ,1.00797),
+        "Pa","U "]
+) 
+
+const atomic_mass = Dict(   
+                            "H"  => ("Hydrogen"	    ,1.00797),
                             "He" =>	("Helium"	    ,4.00260),
                             "Li" =>	("Lithium"	    ,6.941),
                             "Be" =>	("Beryllium"	,9.01218),
@@ -283,10 +358,14 @@ const atomic_mass = Dict(   "H"  => ("Hydrogen"	    ,1.00797),
                             "Rf" =>	("Rutherfordium",261),
                             "Bh" =>	("Bohrium"	    ,262),
                             "Db" =>	("Dubnium"	    ,262),
-                            "Sg" =>	("Seaborgium"	,263))
+                            "Sg" =>	("Seaborgium"	,263)
+)
 
-## Magg 2022 abundances 
-const magg2022 = [12.000
+
+## abundances 
+
+const magg2022 = [
+        12.000
         10.930
         1.050
         1.380
@@ -346,8 +425,241 @@ const magg2022 = [12.000
         0.580
         1.450
         1.000
-        0.520]
-#####
+        0.520
+]
+
+const magg2022_abund = Dict(
+    "H" =>   12.000,
+    "He" =>  10.930,
+    "Li" =>   1.050,
+    "Be" =>   1.380,
+    "B" =>    2.700,
+    "C" =>    8.560,
+    "N" =>    7.980,
+    "O" =>    8.770,
+    "F" =>    4.670,
+    "Ne" =>   8.150,
+    "Na" =>   6.330,
+    "Mg" =>   7.580,
+    "Al" =>   6.480,
+    "Si" =>   7.567,
+    "P" =>    5.480,
+    "S" =>    7.210,
+    "Cl" =>   5.290,
+    "Ar" =>   6.500,
+    "K" =>    5.120,
+    "Ca" =>   6.320,
+    "Sc" =>   3.090,
+    "Ti" =>   4.960,
+    "V" =>    4.010,
+    "Cr" =>   5.690,
+    "Mn" =>   5.530,
+    "Fe" =>   7.500,
+    "Co" =>   4.920,
+    "Ni" =>   6.250,
+    "Cu" =>   4.210,
+    "Zn" =>   4.600,
+    "Ga" =>   2.880,
+    "Ge" =>   3.580,
+    "As" =>   2.290,
+    "Se" =>   3.330,
+    "Br" =>   2.560,
+    "Kr" =>   3.250,
+    "Rb" =>   2.600,
+    "Sr" =>   2.920,
+    "Y" =>    2.210,
+    "Zr" =>   2.580,
+    "Nb" =>   1.420,
+    "Mo" =>   1.920,
+    "Ru" =>   1.840,
+    "Rh" =>   1.120,
+    "Pd" =>   1.660,
+    "Ag" =>   0.940,
+    "Cd" =>   1.770,
+    "In" =>   1.600,
+    "Sn" =>   2.000,
+    "Sb" =>   1.000,
+    "Te" =>   2.190,
+    "I" =>    1.510,
+    "Xe" =>   2.240,
+    "Cs" =>   1.070,
+    "Ba" =>   2.170,
+    "La" =>   1.130,
+    "Ce" =>   1.700,
+    "Pr" =>   0.580,
+    "Nd" =>   1.450,
+    "Sm" =>   1.000,
+    "Eu" =>   0.520,
+    "Gd" =>   1.110,
+    "Tb" =>   0.280,
+    "Dy" =>   1.140,
+    "Ho" =>   0.510,
+    "Er" =>   0.930,
+    "Tm" =>   0.000,
+    "Yb" =>   1.080,
+    "Lu" =>   0.060,
+    "Hf" =>   0.880,
+    "Ta" =>  -0.170,
+    "W" =>    1.110,
+    "Re" =>   0.230,
+    "Os" =>   1.250,
+    "Ir" =>   1.380,
+    "Pt" =>   1.640,
+    "Au" =>   1.010,
+    "Hg" =>   1.130,
+    "Tl" =>   0.900,
+    "Pb" =>   2.000,
+    "Bi" =>   0.650,
+    "Th" =>   0.060,
+    "U" =>   -0.520
+)
+
+const asplund2007_abund = Dict(
+    "H" =>  12.000,
+    "He" => 10.930,
+    "Li" =>  1.050,
+    "Be" =>  1.380,
+    "B" =>   2.700,
+    "C" =>   8.390,
+    "N" =>   7.780,
+    "O" =>   8.660,
+    "F" =>   4.560,
+    "Ne" =>  7.840,
+    "Na" =>  6.170,
+    "Mg" =>  7.530,
+    "Al" =>  6.370,
+    "Si" =>  7.510,
+    "P" =>   5.360,
+    "S" =>   7.140,
+    "Cl" =>  5.500,
+    "Ar" =>  6.180,
+    "K" =>   5.080,
+    "Ca" =>  6.310,
+    "Sc" =>  3.170,
+    "Ti" =>  4.900,
+    "V" =>   4.000,
+    "Cr" =>  5.640,
+    "Mn" =>  5.390,
+    "Fe" =>  7.450,
+    "Co" =>  4.920,
+    "Ni" =>  6.230,
+    "Cu" =>  4.210,
+    "Zn" =>  4.600,
+    "Ga" =>  2.880,
+    "Ge" =>  3.580,
+    "As" =>  2.290,
+    "Se" =>  3.330,
+    "Br" =>  2.560,
+    "Kr" =>  3.250,
+    "Rb" =>  2.600,
+    "Sr" =>  2.920,
+    "Y" =>   2.210,
+    "Zr" =>  2.580,
+    "Nb" =>  1.420,
+    "Mo" =>  1.920,
+    "Tc" => -99.000,
+    "Ru" =>  1.840,
+    "Rh" =>  1.120,
+    "Pd" =>  1.660,
+    "Ag" =>  0.940,
+    "Cd" =>  1.770,
+    "In" =>  1.600,
+    "Sn" =>  2.000,
+    "Sb" =>  1.000,
+    "Te" =>  2.190,
+    "I" =>   1.510,
+    "Xe" =>  2.240,
+    "Cs" =>  1.070,
+    "Ba" =>  2.170,
+    "La" =>  1.130,
+    "Ce" =>  1.700,
+    "Pr" =>  0.580,
+    "Nd" =>  1.450,
+    "Pm" => -99.000,
+    "Sm" =>  1.000,
+    "Eu" =>  0.520,
+    "Gd" =>  1.110,
+    "Tb" =>  0.280,
+    "Dy" =>  1.140,
+    "Ho" =>  0.510,
+    "Er" =>  0.930,
+    "Tm" =>  0.000,
+    "Yb" =>  1.080,
+    "Lu" =>  0.060,
+    "Hf" =>  0.880,
+    "Ta" => -0.170,
+    "W" =>   1.110,
+    "Re" =>  0.230,
+    "Os" =>  1.250,
+    "Ir" =>  1.380,
+    "Pt" =>  1.640,
+    "Au" =>  1.010,
+    "Hg" =>  1.130,
+    "Tl" =>  0.900,
+    "Pb" =>  2.000,
+    "Bi" =>  0.650,
+    "Po" => -99.000,
+    "At" => -99.000,
+    "Rn" => -99.000,
+    "Fr" => -99.000,
+    "Ra" => -99.000,
+    "Ac" => -99.000,
+    "Th" =>  0.060,
+    "Pa" => -99.000,
+    "U" =>  -0.520
+)
+
+
+
+
+## Alpha elements
+
+α_elements = ["C", "O", "Ne", "Mg", "Si", "S", "Ar", "Ca"]
+primordial_elements = ["H", "He", "Li"]
+
+
+
+
+## Scale yields
+
+scale_yields(value, by) = isnothing(by) ? value : (value[1], value[2]+by)
+
+"""
+    scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
+
+Scaling yields according to the given elements. Values in kwargs and 
+α are given over Fe. Pass kwargs to scale specific elements
+"""
+function scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
+    additional_elements = String.(keys(kwargs) |> collect)
+
+    for (i, eleid) in enumerate(yields)
+        id, val = eleid
+        ele = String(id_atom(id))
+
+        @show ele val
+        # scale to alpha
+        if ele in α_elements
+            yields[i] = scale_yields(eleid, α)
+        end
+
+        # scale to FeH (only non-primordial)
+        if !(ele in primordial_elements)
+            yields[i] = scale_yields(yields[i], FeH)
+        end
+
+        # scale everything else
+        if ele in additional_elements
+            to_value = kwargs[Symbol(ele)]
+            yields[i] = scale_yields(yields[i], to_value)
+        end
+
+        @show ele yields[i]
+    end
+end
+
+
+
 
 
 

@@ -9,8 +9,8 @@ using InteractiveUtils
 begin
 	using Pkg; Pkg.activate("."); 
 	using TSO
-	using PyPlot
-	using Dierckx
+	#using PyPlot
+	#using Dierckx
 	using Glob
 	using Serialization
 end
@@ -22,13 +22,21 @@ Pick the EoS that shall provide the internal energy to the opacity table.
 "
 
 # ╔═╡ f02fbdc0-1d14-4c5e-8ce8-091b07d083da
-aos = @axed reload(SqEoS, abspath("../../../tests/TSO_sun_Magg_v10.2/eos.hdf5"))
+#aos = @axed reload(SqEoS, abspath("../creating_table/eos_asplund07_m1_a04_v5.0.hdf5"))
+#aos = @axed reload(SqEoS, abspath("../creating_table/eos_asplund07_v5.0.hdf5"))
+aos = @axed reload(
+	SqEoS, 
+	abspath("/mnt/beegfs/gemini/groups/bergemann/users/eitner/storage/opacity_tables/TSO_sun_Magg_v10.2/eos.hdf5")
+)
+#aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg_v5.0.hdf5"))
 
 # ╔═╡ c7f9ebfc-4010-47e5-afe0-183efec4273f
 md"Folder of the Opacity tables"
 
 # ╔═╡ d5be07a6-c7bc-48ea-8337-73f445dfea1a
-paths = glob("OS_table*", "OPAC-for-3D/april23/magg_update/MaggZ0.0a0.0/")
+#paths = glob("OS_table*", "opacity_tables/MARCS/asplund/Z-1.0a0.4/")
+#paths = glob("OS_table*", "/mnt/beegfs/gemini/groups/bergemann/users/eitner/TS_opacity_tables/create_tables/MARCS/OPAC-for-3D/Z0.0a0.0/")
+paths = glob("OS_table*", "M0.0a0.0/")
 
 # ╔═╡ 626c6ea3-ee30-4dbe-9e32-4b211fa559e0
 md"Read the raw opacity tables"
@@ -41,24 +49,29 @@ md"The raw tables look like the following"
 
 # ╔═╡ f63561ff-b4e9-4ddc-b5f5-f69a24dc11b9
 begin
-	close()
+	#=close()
 
 	for i in eachindex(mos)
-		k = [minimum(mos[i].κ_la[j, :]) for j in axes(mos[i].κ_la, 1)]
-	    plt.scatter(log.(mos[i].T), log.(mos[i].ρ), c=log.(mos[i].κ_la[:, 1000]), 
-			s=3, vmin=-20, vmax=7)
+		k = [minimum(mos[i].κ_c[j, :]) for j in axes(mos[i].κ_c, 1)]
+	    plt.scatter(log.(mos[i].T), log.(mos[i].ρ), c=log10.(mos[i].κ_c[:, 1000]), 
+			s=3, vmin=0.5, vmax=3.5)
 	end
 	
 	c = plt.colorbar()
-	c.set_label("minimum line opacity")
-	gcf()
+	c.set_label("minimum opacity")
+	gcf()=#
+end
+
+# ╔═╡ 03a23793-7af7-4e6b-9a20-33452dc5f6a8
+for i in eachindex(mos)
+	@show minimum(mos[i].κ_c[:, 1])
 end
 
 # ╔═╡ e379074f-997a-45a3-922d-8e57b7709502
-md"# Experiment: Dierckx"
+md"# Experiment: Unstructured Interpolation"
 
 # ╔═╡ 1a353858-af6b-447b-8023-045f73c47b46
-m_int = uniform(mos..., new_T_size=104, new_ρ_size=104, structured=false)
+#m_int = uniform(mos..., new_T_size=104, new_ρ_size=104, structured=false)
 
 # ╔═╡ 276ea20d-ab1e-44ca-bcfc-59c34f936bdb
 md"
@@ -67,23 +80,26 @@ We can now first interpolate the unstructured data to a square T-rho table, whic
 is required for the conversion to dispatch later, and also to fit into the rest of the API."
 
 # ╔═╡ 18876950-d744-40c7-9b8c-1ec8044708f9
-#m_int = uniform(mos..., new_T_size=104, new_ρ_size=104)
+m_int = uniform(mos..., new_T_size=159, new_ρ_size=159)
 
 # ╔═╡ 772769bf-d366-4265-aa72-91ba2ee5d803
 begin
-	close()
+	#=close()
 
 
 	tt, rr = meshgrid(m_int.T, m_int.ρ)
 	
-	plt.scatter(tt, rr, c=log10.(m_int.κ_la[:, :, 1000]), s=3, vmin=-20, vmax=7)
+	plt.scatter(tt, rr, c=log10.(m_int.κ_c[:, :, 1000]), s=2, vmin=0.5, vmax=3.5)
 	
 	c2 = plt.colorbar()
 	c2.set_label("minimum line opacity")
 
 	
-	gcf()
+	gcf()=#
 end
+
+# ╔═╡ c6585349-3970-440d-ab58-45d82ef5943e
+@show minimum(m_int.κ_c[:, :, 1])
 
 # ╔═╡ a1457691-0d92-45b9-b625-49dfc3a349c2
 md"Next, we add the internal energy from an external source. In this case, we add it from an independent Turbospectrum run."
@@ -96,6 +112,7 @@ md"We set the limits of the tables to be 1e±30"
 
 # ╔═╡ 2696a129-2c29-4e06-93bf-a8240a76d6c9
 begin
+	TSO.fill_nan!(@axed(neweos), newopa, newopa_c, newopa_l)
 	set_limits!(@axed(neweos), newopa)
 	set_limits!(@axed(neweos), newopa_c)
 	set_limits!(@axed(neweos), newopa_l)
@@ -109,33 +126,21 @@ Save everything in the usual TSO.jl format
 
 # ╔═╡ fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
 begin
-	dname = "TSO_MARCS_v1.5"
-	
-	save(neweos,   "combined_eos_marcs.hdf5")
-	save(newopa,   "combined_opacities_marcs.hdf5")
-	save(newopa_c, "combined_Copacities_marcs.hdf5")
-	save(newopa_l, "combined_Lopacities_marcs.hdf5")
-	save(newopa_s, "combined_Sopacities_marcs.hdf5")
-end
+	ext = "magg_m0_a0"
+	dname = "TSO_MARCS_$(ext)_v1.5"
 
-# ╔═╡ c3a8c377-655a-4478-a8b5-88e5c955fa25
-begin
-	!isdir(dname) && mkdir(dname)
+	if !isdir(dname)
+		mkdir(dname)
+	else
+		rm(dname, recursive=true)
+		mkdir(dname)
+	end
 	
-	mv("combined_eos_marcs.hdf5",        
-		joinpath(dname, "combined_eos.hdf5"), force=true)
-	
-	mv("combined_opacities_marcs.hdf5",  
-		joinpath(dname, "combined_opacities.hdf5"), force=true)
-	
-	mv("combined_Copacities_marcs.hdf5", 
-		joinpath(dname, "combined_Copacities.hdf5"), force=true)
-	
-	mv("combined_Lopacities_marcs.hdf5", 
-		joinpath(dname, "combined_Lopacities.hdf5"), force=true)
-	
-	mv("combined_Sopacities_marcs.hdf5", 
-		joinpath(dname, "combined_Sopacities.hdf5"), force=true)
+	save(neweos,   joinpath(dname, "combined_eos_$(ext).hdf5"))
+	save(newopa,   joinpath(dname, "combined_opacities_$(ext).hdf5"))
+	save(newopa_c, joinpath(dname, "combined_Copacities_$(ext).hdf5"))
+	save(newopa_l, joinpath(dname, "combined_Lopacities_$(ext).hdf5"))
+	save(newopa_s, joinpath(dname, "combined_Sopacities_$(ext).hdf5"))
 end
 
 # ╔═╡ Cell order:
@@ -148,15 +153,16 @@ end
 # ╠═75d03d5a-ef5f-47c6-8a5c-f14ce7cba955
 # ╟─d8634756-2bd8-4e9f-b8d0-2d45ed301495
 # ╠═f63561ff-b4e9-4ddc-b5f5-f69a24dc11b9
+# ╠═03a23793-7af7-4e6b-9a20-33452dc5f6a8
 # ╟─e379074f-997a-45a3-922d-8e57b7709502
 # ╠═1a353858-af6b-447b-8023-045f73c47b46
 # ╟─276ea20d-ab1e-44ca-bcfc-59c34f936bdb
 # ╠═18876950-d744-40c7-9b8c-1ec8044708f9
 # ╟─772769bf-d366-4265-aa72-91ba2ee5d803
+# ╠═c6585349-3970-440d-ab58-45d82ef5943e
 # ╟─a1457691-0d92-45b9-b625-49dfc3a349c2
 # ╠═2cf4938f-7d0e-474e-90cf-e6c7d13e3e36
 # ╟─486d3b00-b2ca-450e-ba01-6ceeac3c3ac8
 # ╠═2696a129-2c29-4e06-93bf-a8240a76d6c9
 # ╟─36d6edb6-0ec8-4169-bd17-44bb66fea284
 # ╠═fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
-# ╠═c3a8c377-655a-4478-a8b5-88e5c955fa25

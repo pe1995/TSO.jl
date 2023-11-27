@@ -1,4 +1,4 @@
-#= functionality =#
+#========================== functionality ====================================#
 
 """
 Switch between different grids of the EoS table.
@@ -413,7 +413,11 @@ end
 
 
 
-#= Unify EoS and opacities on common internal Energy grid =#
+
+
+
+
+#=========== Unify EoS and opacities on common internal Energy grid ==========#
 
 function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoSTable, O<:OpacityTable, T2<:AbstractFloat}
     nEiBin  = length(lnEi_new)
@@ -636,44 +640,6 @@ common_grid(a1, a2) = begin
     collect(range(aMin, aMax,length=aLen))
 end
 
-#=
-"""
-Interpolate eos+opacites to the new grid.
-"""
-function regrid(eos::E, opacities::O, new_rho, new_var) where {E<:EoSTable, O<:OpacityTable}
-    eaxis = ndims(eos.lnT)==1 ? false : true
-    var2  = eaxis ? :lnT : :lnEi
-
-    lnVar2_new = eaxis ? similar(eos.lnT) : similar(eos.lnEi)
-    lnPg_new   = similar(eos.lnPg)
-    lnRoss_new = similar(eos.lnRoss)
-    lnNe_new   = similar(eos.lnNe)
-    
-    k_new     = similar(opacities.κ)
-    kRoss_new = similar(opacities.κ_ross)
-    S_new     = similar(opacities.src)
-    
-    rho_input  = similar(new_var)
-
-    @inbounds for i in eachindex(new_rho)
-        rho_input .= new_rho[i]
-        lnVar2_new[:, i] .= lookup(eos, var2,    rho_input, new_var)
-        lnPg_new[  :, i] .= lookup(eos, :lnPg,   rho_input, new_var)
-        lnRoss_new[:, i] .= lookup(eos, :lnRoss, rho_input, new_var)
-        lnNe_new[  :, i] .= lookup(eos, :lnNe,   rho_input, new_var)
-
-        # kRoss_new[ :, i] .= lookup(eos, opacities, :κ_ross, rho_input, new_var)
-        @inbounds for j in eachindex(opacities.λ)
-            k_new[:, i, j] .= lookup(eos, opacities, :κ,   rho_input, new_var, j)
-            S_new[:, i, j] .= lookup(eos, opacities, :src, rho_input, new_var, j)
-        end
-    end
- 
-    return eaxis ? 
-        (RegularEoSTable(new_rho, lnVar2_new, new_var,    lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, deepcopy(opacities.λ), opacities.optical_depth)) :
-        (RegularEoSTable(new_rho, new_var,    lnVar2_new, lnPg_new, lnRoss_new, lnNe_new), RegularOpacityTable(k_new, kRoss_new, S_new, deepcopy(opacities.λ), opacities.optical_depth))
-end
-=#
 
 function cut(opacities::O, λ_lo, λ_hi) where {O<:OpacityTable}
     mask = (opacities.λ .>= λ_lo ) .& (opacities.λ .< λ_hi)
@@ -681,91 +647,12 @@ function cut(opacities::O, λ_lo, λ_hi) where {O<:OpacityTable}
 end
 
 
-#=
-"""
-    uniform_switch (eos, opacities...; upsample=-1)
-
-Switch the energy grid of the given EoS. Make the new grid uniform. Upsample if needed.
-This function used the lookup interface and should hence be compatible with any sort of
-supported grid (even scattered completely). Also interpolates the density if needed to make 
-it uniform.
-"""
-function uniform_switch(aos::E, opacities::OpacityTable...; upsample=-1, conservative=false, newEnergy=nothing) where {E<:AxedEoS}
-    newAxis, newRho = isnothing(newEnergy) ? pick_axis(aos, conservative=conservative, upsample=upsample) : newEnergy
-
-    @assert is_uniform(newAxis)
-    @assert is_uniform(newRho)
-
-    eos = aos.eos
-
-    iseaxis  = is_internal_energy(aos)
-    var_name = iseaxis ? :lnT : :lnEi
-
-    newVar  = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newPg   = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newNe   = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newRoss = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-
-    PgLook   = lookup_function(aos, :lnPg)
-    NeLook   = lookup_function(aos, :lnNe)
-    RossLook = lookup_function(aos, :lnRoss)
-    VarLook  = lookup_function(aos, var_name)
-
-    # Axis is not the one of the table!
-    # So bisect lookup that first
-    oldAxisNewGrid = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    oldAxisLF = lookup_function(aos, aos.energy_axes.name)
-
-    ref_o  = first(opacities)
-    κ_all  = [zeros(eltype(ref_o.κ), length(newAxis), length(newRho), length(ref_o.λ))]
-    s_all  = [zeros(eltype(ref_o.κ), length(newAxis), length(newRho), length(ref_o.λ))]
-    κ_rall = [zeros(eltype(ref_o.κ), length(newAxis), length(newRho))]
-
-    kLF = [lookup_function(aos, opacities[m], :κ_ross) for m in eachindex(opacities)]
-
-    @inbounds for j in eachindex(newRho)
-        @inbounds for i in eachindex(newAxis)
-            oldAxisNewGrid[i, j] = lookup(oldAxisLF, newRho[j], newAxis[i])
-            newPg[i, j]          = lookup(PgLook,    newRho[j], oldAxisNewGrid[i, j])
-            newNe[i, j]          = lookup(NeLook,    newRho[j], oldAxisNewGrid[i, j])
-            newRoss[i, j]        = lookup(RossLook,  newRho[j], oldAxisNewGrid[i, j])
-            newVar[i, j]         = lookup(VarLook,   newRho[j], oldAxisNewGrid[i, j])
-            
-            for m in eachindex(opacities)
-                κ_rall[m][i, j] = lookup(kLF[m], newRho[j], oldAxisNewGrid[i, j])
-            end
-        end
-    end
-
-
-    @inbounds for k in eachindex(ref_o.λ)
-        kLF = [lookup_function(aos, opacities[m], :κ, k)   for m in eachindex(opacities)]
-        sLF = [lookup_function(aos, opacities[m], :src, k) for m in eachindex(opacities)]
-
-        @inbounds for j in eachindex(newRho)
-            @inbounds for i in eachindex(newAxis)
-                for m in eachindex(opacities)
-                    κ_all[m][i, j, k] = lookup(kLF[m], newRho[j], oldAxisNewGrid[i, j])
-                    s_all[m][i, j, k] = lookup(sLF[m], newRho[j], oldAxisNewGrid[i, j])
-                end
-            end
-        end
-    end
-
-    newT = iseaxis ? newVar  : newAxis
-    newE = iseaxis ? newAxis : newVar
-
-    (RegularEoSTable(newRho, newT, newE, newPg, newRoss, newNe), (RegularOpacityTable(κ_all[m], κ_rall[m], s_all[m], ref_o.λ, false) for m in eachindex(opacities))...)
-end
-
-uniform_switch(eos::RegularEoSTable, args...; kwargs...) = uniform_switch(AxedEoS(eos), args...; kwargs...)
-=#
 
 
 
 
 
-#= Interaction of EoS with TS in/output =#
+#================= Interaction of EoS with TS in/output ======================#
 
 function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
     sT = length(lnT)
@@ -1051,14 +938,14 @@ function read_tables(list_of_eos_tables::AbstractVector; kwargs...)
 end
 
 read_tables(::Type{<:EoSTable}, ::Type{<:OpacityTable}, list_of_eos_tables::AbstractVector, opacity_folder=@inTS(""); kwargs...) = _read_tables_eos_op(list_of_eos_tables, opacity_folder; kwargs...)
-read_tables(::Type{<:EoSTable},                         list_of_eos_tables::AbstractVector; kwargs...)                           = _read_tables_eos(list_of_eos_tables; kwargs...)
+read_tables(::Type{<:EoSTable}, list_of_eos_tables::AbstractVector; kwargs...) = _read_tables_eos(list_of_eos_tables; kwargs...)
 
-read_tables(t::Type{<:EoSTable},                           folder::String=".", args...; kwargs...) = read_tables(t,     glob("_TSOeos_*_TSO.eos", folder), args...; kwargs...)
+read_tables(t::Type{<:EoSTable}, folder::String=".", args...; kwargs...) = read_tables(t, glob("_TSOeos_*_TSO.eos", folder), args...; kwargs...)
 read_tables(t::Type{<:EoSTable}, t2::Type{<:OpacityTable}, folder::String=".", args...; kwargs...) = read_tables(t, t2, glob("_TSOeos_*_TSO.eos", folder), args...; kwargs...)
 
 # User interface function
 load(e::Type{<:EoSTable}, o::Type{<:OpacityTable}, args...; kwargs...) = read_tables(e, o, args...; kwargs...)
-load(e::Type{<:EoSTable},                          args...; kwargs...) = read_tables(e,    args...; kwargs...)
+load(e::Type{<:EoSTable}, args...; kwargs...) = read_tables(e,    args...; kwargs...)
 load(o::Type{<:OpacityTable}, e::Type{<:EoSTable}, args...; kwargs...) = begin
     e, o = read_tables(e, o, args...; kwargs...)
     o, e
@@ -1081,7 +968,7 @@ end
 
 
 
-#= Planck function =#
+#============================ Planck function ================================#
 
 function Bλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
@@ -1163,29 +1050,35 @@ Proxi for Bλ
 Bν(args...; kwargs...)  = Bλ(args...; kwargs...)
 δBν(args...; kwargs...) = δBλ(args...; kwargs...)
 
+@inline Bν!(B::Ref{A}, λ::A, T::A) where {A<:AbstractFloat} = begin
+    B[] = twohc2 /(λ * aa_to_cm)^5 /(exp(hc_k / ((λ * aa_to_cm)*T)) - 1.0)
 
-#= Model conversions =#
-
-#="""
-Convert z,T,ρ to z,E,ρ model based on EoS.
-"""
-function lnT_to_lnEi(model::AbstractArray, eos::EoSTable)
-    z, lnρ, lnT   = model[:, 1], log.(model[:, 3]), log.(model[:, 2]) 
-
-    lnEi = similar(lnT)
-    emin,emax,_,_ = limits(eos)
-
-    for i in eachindex(z)
-        lnEi[i] = bisect(eos, lnRho=lnρ[i], lnT=lnT[i], lnEi=[emin, emax])
+    B[] = if isnan(B[]) || B[]<1e-30 
+        A(1e-30)
+    else
+        B[]
     end
-    
-    hcat(z, exp.(lnEi), exp.(lnρ))
-end=#
+
+    B[]
+end
+
+@inline δBν!(B::Ref{A}, λ::A, T::A) where {A<:AbstractFloat} = begin
+    B[] = twohc2 * hc_k * exp(hc_k / ((λ * aa_to_cm)*T)) / (λ * aa_to_cm)^6 / T^2 / (exp(hc_k / ((λ * aa_to_cm)*T))-1)^2 
+
+    B[] = if isnan(B[]) || B[]<1e-30 
+        A(1e-30)
+    else
+        B[]
+    end
+
+    B[]
+end
 
 
 
 
-#= Rosseland opacity =#
+
+#=========================== Rosseland opacity ===============================#
 
 """
     new_rosseland_opacity(eos, opacities)
@@ -1193,7 +1086,7 @@ end=#
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
 function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
-    lnRoss  = similar(eos.lnRoss)
+    lnRoss = similar(eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
 end
@@ -1255,7 +1148,9 @@ transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnR
 
 
 
-#= Optical depth related functions =#
+
+
+#===================== Optical depth related functions =======================#
 
 """
 Compute monochromatic and rosseland optical depth scales of the model 
@@ -1328,8 +1223,6 @@ end
 
 rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
 
-
-
 """
 Compute the formation height + opacity, i.e. the rosseland optical depth
 where the monochromatic optical depth is 1.
@@ -1350,12 +1243,12 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     lλ    = log.(τ_λ)
 
     t_mono = zeros(T, size(τ_λ, 1))
-    r_ross = linear_interpolation(lRoss, lnρ, extrapolation_bc=Line())
-    T_ross = linear_interpolation(lRoss, lnE, extrapolation_bc=Line())
+    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Line())
+    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Line())
 
     for i in axes(τ_λ, 2)
         t_mono .= lλ[:, i]
-        rosseland_depth[i] = exp.(linear_interpolation(t_mono, lRoss, extrapolation_bc=Line())(0.0))
+        rosseland_depth[i] = exp.(linear_interpolation(Interpolations.deduplicate_knots!(t_mono, move_knots=true), lRoss, extrapolation_bc=Line())(0.0))
         opacity_depth[i]   = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), i)
     end
 
@@ -1380,7 +1273,8 @@ end
 
 
 
-#= Shift the Energy grid by a constant =#
+
+#=================== Shift the Energy grid by a constant =====================#
 
 """
     shift_energy(eos, opacities, shift_amount)
@@ -1410,7 +1304,10 @@ e_shifted(e, offset) = log(exp(e) + offset)
 
 
 
-#= replace the EoS corresponding to a given opacity table =#
+
+
+
+#============ replace the EoS corresponding to a given opacity table =========#
 
 """
     replace(eos_old, eos_new, opacities)
@@ -1472,142 +1369,16 @@ end
     extrapolate(interpolate((x, y), z, Gridded(Linear())), Line())                                                                                     
 end
 
-#=
-"""
-    complement(opacities, eos_old, eos_new; lnRoss=:opacity)
-
-Complement a RegularOpacityTable with an Regular EoS Table. The Opacities will be interpolated
-to the EoS grid. Rosseland opacities can either be interpolated or recomputed (if lnRoss == :recompute).
-Idea:
-    New eos has rho_new + E_new axis (where E_new can be either T or Ei)
-    old eso has rho + E axis (see above)
-
-    1.) Old: T grid, New: E grid
-
-        We want to know the opacity, which is tablulated on rho,T
-        for a given rho_new,Ei_new. Since the old table is already 
-        on absolute physical quantities, we can look up directly using 
-        rho_new[j], lnT_new[i, j], lnT_new is always 2D.
-
-    2.) Old: E grid, New: E grid
-
-        Both are tabulated on E grid. Since E scales might be different. To use the 
-        lookup interface, we have to convert the new E axis to the old one, then lookup.
-        Because the old one is tablulated on E, this requires a bisect search using the 
-        rho_new and lnT_new, lnT_new is always 2D.
-
-    3.) Old: E grid, New: T grid
-        The same as 2.) needs to be done, however, the lnT_new will be 1D.
-
-    4.) Old: T grid, New: T grid
-        The same as 1.) needs to be done, however, the lnT_new will be 1D.
-
-"""
-function complement(opa::O, aos_old::E1, aos_new::E2; lnRoss=:opacity) where {O<:RegularOpacityTable, E1<:AxedEoS, E2<:AxedEoS}
-    eos_old = aos_old.eos
-    eos_new = aos_new.eos
-
-    eaxis_old = EnergyAxis(aos_old)
-    eaxis_new = EnergyAxis(aos_new)
-
-    κ  = zeros(eltype(opa.κ), size(eos_new.lnPg)..., length(opa.λ))
-    S  = zeros(eltype(opa.κ), size(eos_new.lnPg)..., length(opa.λ))
-    κR = zeros(eltype(opa.κ), size(eos_new.lnPg)...)
-
-    old_E    = is_internal_energy(aos_old)   ## Is the axis of the old table Ei?
-    lnTNew2D = ndims(eos_new.lnT) == 2       ## Is the temperature_new 2D (e.g. Energy grid)
-
-    EOldForNewEOS  = zeros(eltype(eos_new.lnEi), size(eos_new.lnPg)...)
-    emin,emax,_,_  = limits(eos_old)
-
-    
-    @info "Old Grid: $(eaxis_old.name), is uniform: $(is_uniform(eos_old))" 
-    @info "New Grid: $(eaxis_new.name), is uniform: $(is_uniform(eos_new))"
 
 
-    ## We get the lookup functions for the old table (ross)
-    κR_old = if lnRoss == :opacity
-        lookup_function(aos_old, opa, :κ_ross)
-    elseif lnRoss == :eos_old
-        lookup_function(aos_old, :lnRoss)
-    else
-        ZeroLookup()
-    end
 
 
-    @inbounds for j in eachindex(eos_new.lnRho)
-        @inbounds for i in eachindex(eaxis_new.values)
-            ## We need to know the energy or the temperature 
-            ## this point corresponds to on the old table
-            lnT = lnTNew2D ? eos_new.lnT[i, j] : eos_new.lnT[i]
+#====================== New Interpolation interface ==========================#
 
-            EOldForNewEOS[i, j] = if old_E
-                bisect(eos_old, lnRho=eos_new.lnRho[j], lnT=lnT, lnEi=[emin, emax])
-            else
-                lnT
-            end
-
-            ## Next we need to lookup the stuff we want on this new grid
-            κR[i, j] = lookup(κR_old, eos_new.lnRho[j], EOldForNewEOS[i, j])
-        end
-    end
-
-    ## Now the wavelength dependent stuff
-    @inbounds for k in eachindex(opa.λ)
-        # We get the lookup functions for the old table
-        κ_old = lookup_function(aos_old, opa, :κ, k)
-        S_old = lookup_function(aos_old, opa, :src, k)
-
-        @inbounds for j in eachindex(eos_new.lnRho)
-            @inbounds for i in eachindex(eaxis_new.values)
-                κ[i, j, k] = lookup(κ_old, eos_new.lnRho[j], EOldForNewEOS[i, j]) #lookup(κ_old, eos_new.lnRho[j], EOldForNewEOS[i, j])
-                S[i, j, k] = lookup(S_old, eos_new.lnRho[j], EOldForNewEOS[i, j]) #lookup(S_old, eos_new.lnRho[j], EOldForNewEOS[i, j])
-            end
-        end
-    end
-
-
-    if lnRoss == :eos_new
-        κR .= eos_new.lnRoss
-    elseif lnRoss == :eos_old
-        κR .= exp.(κR)
-    end
-
-    eos_ret = if (lnRoss == :eos_old) | (lnRoss == :opacity)
-        e = deepcopy(eos_new)
-        e.lnRoss .= log.(κR)
-    else
-        eos_new
-    end
-
-    eos_ret, RegularOpacityTable(κ, κR, S, opa.λ, opa.optical_depth)
-end
-
-complement(opa::O, eos_old::E1, eos_new::E2; kwargs...) where {O<:RegularOpacityTable, E1<:RegularEoSTable, E2<:RegularEoSTable} = complement(opa, AxedEoS(eos_old), AxedEoS(eos_new); kwargs...)
-=#
-
-
-#=
-"""
-    square(eos, conservative=false)
-
-Interpolate an EoS of whatever orientation to a squared, uniform grid in their axes.
-Note that if the axes are unstructured, scattered data they need to be 2D arrays. Axes
-that are 1D are assumed to be valid across the entire table and are hence not scattered.
-Axes can be chosen to be conservative, in which case there will be no extrapolation.
-"""
-function square(aos::E, conservative=false) where {E<:AxedEoS}
-    newAxis, newRho = pick_axis(aos, conservative=conservative, upsample=upsample, switch=false) 
-    replace_axis(aos; (aoes.energy_axes.name=>newAxis,)..., lnRho=newRho)
-end
-=#
-
-#= New Interpolation interface =#
-
-#= Please note that there is a new interpolation interface.           =#
-#= It does only partly rely on the lookup interface, however          =#
-#= it utilized the shape of the eos tables and should be much faster. =#
-#= It relys on dimensionwise 1D interpolation wherever possible.      =#
+#= Please note that there is a new interpolation interface.                  =#
+#= It does only partly rely on the lookup interface, however                 =#
+#= it utilized the shape of the eos tables and should be much faster.        =#
+#= It relys on dimensionwise 1D interpolation wherever possible.             =#
 
 include("_interpolations.jl")
 

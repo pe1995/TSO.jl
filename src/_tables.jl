@@ -118,6 +118,7 @@ end
 
 
 
+
 #= General functions =#
 
 limits(aos::AxedEoS, args...; kwargs...) = limits(aos.eos, args...; kwargs...)
@@ -266,12 +267,17 @@ size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
 
 
 
+
+
+
+
 #= Lookup functions =#
 
 """
+    lookup(eos, what::Symbol, rho, var, args...)
 Lookup "what" in the EoS, return the value spliced as args... indicate.
 """
-lookup(eos::E,                          what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
+lookup(eos::E, what::Symbol, rho, var, args...) where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
 lookup(eos::E, opacities::OpacityTable, what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = begin
     if (length(args) > 0) | (ndims(getfield(opacities, what))==2)
         lookup(lookup_function(eos, opacities, what, args...), rho, var)
@@ -331,7 +337,10 @@ lookup_function(eos::EA, what::Symbol, args...) where {EA<:AxedEoS} = begin
         val = view(getfield(eos.eos, what), :, :, args...)
 
         ## For now this only available using python routines, so we use scipy for this
-        ip = scipy_interpolate.LinearNDInterpolator(stretch(second_axis, rho_axis, val)...)
+        ip = (args...) -> pyconvert(
+            Array{eltype(eos.eos.lnPg)}, 
+            scipy_interpolate.LinearNDInterpolator(stretch(second_axis, rho_axis, val)...)(args...)
+        )
 
         ScatteredLookup(ip)
     else
@@ -366,7 +375,9 @@ lookup_function(eos::EA, opacities::O, what::Symbol, args...) where {EA<:AxedEoS
         val = log.(view(getfield(opacities, what), :, :, args...))
 
         ## For now this only available using python routines, so we use scipy for this
-        scipy_interpolate.LinearNDInterpolator(stretch(second_axis, rho_axis, val)...)
+        (args...) -> pyconvert(Array{eltype(eos.eos.lnPg)},
+            scipy_interpolate.LinearNDInterpolator(stretch(second_axis, rho_axis, val)...)(args...)
+        )
 
     else
         second_axis = EnergyAxis(eos).values
@@ -402,15 +413,19 @@ lookup_function(::Type{ScatteredLookup}, aos::A, what::Symbol) where {A<:AxedEoS
         load_scipy_interpolate!()
     end
 
-    ScatteredLookup(scipy_interpolate.LinearNDInterpolator(stretch(EnergyAxis(aos).values, DensityAxis(aos).values), getfield(aos.eos, which)))
-end
+    ScatteredLookup(
+        (args...)->pyconvert(Array{typeof(aos.eos.lnPg)},
+            scipy_interpolate.LinearNDInterpolator(stretch(EnergyAxis(aos).values, DensityAxis(aos).values), getfield(aos.eos, which))(args...)
+            )
+        )
+end 
 lookup_function(::Type{ScatteredLookup}, aos::A, opa::B, what::Symbol, args...) where {A<:AxedEoS, B<:OpacityTable} = begin
     if !scipy_loaded[]
         load_scipy_interpolate!()
     end
 
     ip = ScatteredLookup(scipy_interpolate.LinearNDInterpolator(stretch(EnergyAxis(aos).values, DensityAxis(aos).values), log.(view(getfield(opa, which), :, i))))
-    (x,y)->exp.(ip(x,y))
+    (x,y)->exp.(pyconvert(Array{typeof(aos.eos.lnPg)}, ip(x,y)))
 end
 
 
@@ -455,8 +470,10 @@ function lookup(aos::A, opa::B, what::Symbol; iλ, lnRho, kwargs...) where {A<:A
     lookup(aos, opa, what, lnRho, givenEV, iλ)
 end
 
-
 ZeroLookup() = ZeroLookup((args...; kwargs...)->0.0)
+
+
+
 
 
 
@@ -550,6 +567,10 @@ end
 
 bisect(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = bisect(AxedEoS(eos), args...; kwargs...)
 bisect(aos::E, lnRho::F, between=limits(aos.eos, 1); kwargs...) where {E<:AxedEoS, F<:AbstractFloat} = bisect(aos; lnRho=lnRho, (aos.energy_axes.name=>between,)..., kwargs...)
+
+
+
+
 
 
 

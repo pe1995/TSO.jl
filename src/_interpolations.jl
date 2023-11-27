@@ -284,9 +284,8 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
 
     @inbounds for i in 1:nRhoBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(newAxisOldE, :, i))
-        x    .= @view(newAxisOldE[mask, i])
+        x    .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i])
         y    .= @view(oldlnV[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[:, i] .= ip.(newAxis_val)
@@ -372,7 +371,6 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
 
     @inbounds for i in 1:nEBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(r_old, i, :))
         x    .= @view r_old[i, mask]
         y    .= @view oldlnV[i, mask]
@@ -754,7 +752,7 @@ end
 
 #=================================================================== NaN handling ===#
 
-@inline interpolate_at(x, y, x0) = linear_interpolation(x, y, extrapolation_bc=Line()).(x0)
+@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(x, move_knots=true), y, extrapolation_bc=bc).(x0)
 
 nan_or_inf(a) = isnan(a) | !isfinite(a)
 
@@ -804,7 +802,7 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask  .= nan_or_inf.(view(opa.κ_ross, i, :))
+            mask  .= nan_or_inf.(log.(view(opa.κ_ross, i, :)))
             nmask .= .!mask
             cm = count(mask)
             if (cm<=lm-2) & (cm>0)
@@ -812,14 +810,14 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             end
             
             for k in eachindex(opa.λ)
-                mask  .= nan_or_inf.(view(opa.κ, i, :, k))
+                mask  .= nan_or_inf.(log.(view(opa.κ, i, :, k)))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
                     opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
                 end
 
-                mask  .= nan_or_inf.(view(opa.src, i, :, k))
+                mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
                 nmask .= .!mask
                 cm = count(mask)
                 if (cm<=lm-2) & (cm>0)
@@ -837,7 +835,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         if (cm<=lm2-2) & (cm>0)
             var[mask2, j] .= interpolate_at(view(xc2, nmask2), view(var, nmask2, j), view(xc2, mask2))
         elseif cm>0
-            @info "All nan κ_c at k,j: $(k), $(j)"
             var[mask2, j] .= 1.0f-30
         end
 
@@ -847,7 +844,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         if (cm<=lm2-2) & (cm>0)
             eos.lnPg[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnPg, nmask2, j), view(xc2, mask2))
         elseif cm>0
-            @info "All nan κ_c at k,j: $(k), $(j)"
             eos.lnPg[mask2, j] .= 1.0f-30
         end
 
@@ -857,7 +853,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         if (cm<=lm2-2) & (cm>0)
             eos.lnNe[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnNe, nmask2, j), view(xc2, mask2))
         elseif cm>0
-            @info "All nan κ_c at k,j: $(k), $(j)"
             eos.lnNe[mask2, j] .= 1.0f-30
         end
 
@@ -867,7 +862,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         if (cm<=lm2-2) & (cm>0)
             eos.lnRoss[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnRoss, nmask2, j), view(xc2, mask2))
         elseif cm>0
-            @info "All nan κ_c at k,j: $(k), $(j)"
             eos.lnRoss[mask2, j] .= 1.0f-30
         end
 
@@ -875,34 +869,31 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         for m in eachindex(opacities)
             opa = opacities[m]
 
-            mask2  .= nan_or_inf.(view(opa.κ_ross, :, j))
+            mask2  .= nan_or_inf.(log.(view(opa.κ_ross, :, j)))
             nmask2 .= .!mask2
             cm = count(mask2)
             if (cm<=lm2-2) & (cm>0)
                 opa.κ_ross[mask2, j] .= interpolate_at(view(xc2, nmask2), log.(view(opa.κ_ross, nmask2, j)), view(xc2, mask2)) .|> exp
             elseif cm>0
-                @info "All nan κ_c at k,j: $(k), $(j)"
                 opa.κ_ross[mask2, j] .= 1.0f-30
             end
             
             for k in eachindex(opa.λ)
-                mask2  .= nan_or_inf.(view(opa.κ, :, j, k))
+                mask2  .= nan_or_inf.(log.(view(opa.κ, :, j, k)))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)
                     opa.κ[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.κ, nmask2, j, k)), view(xc2, mask2)) .|> exp
                 elseif cm>0
-                    @info "All nan κ_c at k,j: $(k), $(j)"
                     opa.κ[mask2, j, k] .= 1.0f-30
                 end
 
-                mask2  .= nan_or_inf.(view(opa.src, :, j, k))
+                mask2  .= nan_or_inf.(log.(view(opa.src, :, j, k)))
                 nmask2 .= .!mask2
                 cm = count(mask2)
                 if (cm<=lm2-2) & (cm>0)
                     opa.src[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.src, nmask2, j, k)), view(xc2, mask2)) .|> exp
                 elseif cm>0
-                    @info "All nan κ_c at k,j: $(k), $(j)"
                     opa.src[mask2, j, k] .= 1.0f-30
                 end
             end

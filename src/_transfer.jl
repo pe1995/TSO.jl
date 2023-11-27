@@ -1,4 +1,4 @@
-#= Concrete types =#
+#========================= Concrete types ====================================#
 
 struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:RadiativeTransferSolver
     eos       ::A
@@ -44,7 +44,7 @@ end
 
 
 
-#= Constructors =#
+#========================== Constructors =====================================#
 
 """
 Construct a binned radiative transfer solver based on a 1D model witht the kind:
@@ -122,7 +122,7 @@ end
 
 
 
-#= Solving routines =#
+#=========================== Solving routines ================================#
 
 function chat_transfer1d!(intensity, S, k, z, angles)
     n_points = length(z)
@@ -173,7 +173,6 @@ chat_transfer1d!(solver::BinnedTransferSolver) = chat_transfer1d!(solver.I, solv
 Solve the 1D radiative transfer in a given direction μ=cos(θ).
 """
 function transfer1d!(solver) 
-
     # Check in which direction we are going
     down = solver.μ[] .< 0.0
 
@@ -193,26 +192,7 @@ function transfer1d!(solver)
         end
     end
 
-    #solver.z      .= solver.model[:, 1]
-    #solver.S_temp .= solver.S
-    #solver.χ_temp .= solver.χ
-    #
-    #if down
-    #    solver.z      .= reverse(solver.z) 
-    #    solver.S_temp .= reverse(solver.S)
-    #    solver.χ_temp .= reverse(solver.χ)
-    #end
-    #
-    #S = solver.S_temp
-    #χ = solver.χ_temp
-    #z = solver.z
-    #
-    #solver.dt .= 0.5 ./ solver.μ[] .* (z[2:end] .- z[1:end-1]) .* ( χ[2:end] + χ[1:end-1] ) 
-
-
     S = solver.S_temp
-
-    #@assert all(solver.dt .> 0.0)
 
     @inbounds for i in eachindex(solver.dt)
         solver.ex[i] = exp(-solver.dt[i]) 
@@ -235,7 +215,7 @@ function transfer1d!(solver)
 
     end
 
-    solver.I_temp[1] = first(S) 
+    solver.I_temp[1] = first(S) *solver.ex[1]
     solver.Q_temp[1] = 0.0
 
     lI = length(solver.I_temp)
@@ -364,7 +344,7 @@ end
 
 
 
-#= Commputation of mean intensity =#
+#=======================  Commputation of mean intensity =====================#
 
 """
 Compute the mean intensity using the given Solver.
@@ -430,7 +410,7 @@ end
 
 
 
-#= Commputation of heating rate =#
+#==================== Commputation of heating rate ===========================#
 
 Qr(solver::BinnedTransferSolver) = begin
     I = binned_radiation(solver, mean_intensity=true)
@@ -471,7 +451,8 @@ heating(solver, I; weights=ones(solver.bins)) = begin
         #    end
         #end
 
-        Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- solver.S)
+        #Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- solver.S)
+        Q .+= solver.χ .* weights[i] .* (I[:, i] .- solver.S)
     end
 
     Q .* 4 .*π 
@@ -481,7 +462,8 @@ end
 
 
 
-#= Source function integration for testing =#
+
+#================ Source function integration for testing ====================#
 
 S(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -510,7 +492,7 @@ end
 
 
 
-#= Opacity integration for testing =#
+#================== Opacity integration for testing ==========================#
 
 κ(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -531,7 +513,7 @@ end
 
 
 
-#= Interpolation API =#
+#========================== Interpolation API ================================#
 
 evaluate_radiation(r::InterpolatedRadiationField, bin_index, values...) = r.interpolation_function[bin_index](values...)
 broadcastable(r::InterpolatedRadiationField) = Ref(r)
@@ -541,7 +523,7 @@ broadcastable(r::InterpolatedRadiationField) = Ref(r)
 
 
 
-#= General methods =#
+#======================== General methods ====================================#
 
 effective_temperature(F) = (F/σ_S)^(1/4)
 @inline angle_index(solver) = findfirst(solver.angles .≈ solver.μ[])
@@ -551,7 +533,7 @@ J_weights(angles) = ω_midpoint(sort(angles), -1, 1) ./ 2
 
 
 
-#= General global variables =#
+#====================== General global variables =============================#
 const debug = Ref(true)
 const debug_index = Ref(0)
 

@@ -1,17 +1,17 @@
 module TSO
 
 #= Imports =#
-using BSplineKit
+import BSplineKit
 using Interpolations
 using Printf
 using DelimitedFiles
 using FortranFiles
-using PyCall
+using PythonCall
 using Glob
 using HDF5
 using Statistics
-#using Dierckx
 using Clustering
+import Clustering.assignments
 
 import Base.size
 import Base.broadcastable
@@ -73,7 +73,7 @@ export Solver, Jν, Qr
 
 
 #= Python libs =#
-const scipy_interpolate = PyNULL()
+const scipy_interpolate = PythonCall.pynew()
 const scipy_loaded      = Ref(false)
 
 
@@ -85,10 +85,15 @@ include("_models.jl")
 include("_eos.jl")
 include("_smooth.jl")
 include("_transfer.jl")
+include("_heating.jl")
 include("_binning.jl")
 include("_legacy_tables.jl")
 include("_aesopus.jl")
 include("_marcs.jl")
+include("_adiabat.jl")
+include("_from_m3d.jl")
+include("_binning_execution.jl")
+
 
 
 #= Deprecations =#

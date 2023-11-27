@@ -2,8 +2,8 @@
 
 const TSwrapper   = Ref("")
 const TS          = Ref("")
-const WrapperPy   = PyNULL()
-const computeOpac = PyNULL()
+const WrapperPy   = PythonCall.pynew()
+const computeOpac = PythonCall.pynew()
 const SlurmEnv    = Ref(false)
 
 """
@@ -44,8 +44,8 @@ function import_wrapper(mod="source")
         error("Could not import TS wrapper from TSWrapper path. Please call load_TS() with the appropriate location first.")
     end
 
-    copy!(WrapperPy,   _get_help_py(mod, TSwrapper[]))
-    copy!(computeOpac, _get_help_py("compute_opac", TSO.@inWrapper(mod)))
+    PythonCall.pycopy!(WrapperPy,   _get_help_py(mod, TSwrapper[]))
+    PythonCall.pycopy!(computeOpac, _get_help_py("compute_opac", TSO.@inWrapper(mod)))
 
     WrapperPy, computeOpac
 end
@@ -104,10 +104,10 @@ function prepare_TS!(setup, atmFile)
     atmos = computeOpac.model_atmosphere()
     atmos.read(atmFile, setup.atmos_format)
 
-    if strip(setup.atmos_format) == "marcs'"
+    if strip(pyconvert(Any, setup.atmos_format)) == "marcs'"
         setup.ts_input["MARCS-FILE"] = ".true."
         atmos.path = atmFile
-    elseif strip(setup.atmos_format) == "stagger"
+    elseif strip(pyconvert(Any, setup.atmos_format)) == "stagger"
         setup.ts_input["MARCS-FILE"] = ".false."
         atmos.path = atmFile
     else
@@ -119,7 +119,7 @@ function prepare_TS!(setup, atmFile)
     return atmos, modelOpacFile
 end
 
-function babsma!(setup, elementalAbundances; timeout="1:00:00")
+function babsma!(setup, elementalAbundances; timeout="1:00:00", wait=false)
     jobs = Dict()
     mem  = slurm_setup()
 
@@ -129,7 +129,7 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00")
         
         id  = "$(atmos.id)_$(setup.jobID)"
         job = run_babsma(setup.ts_input, elementalAbundances, atmos, modelOpacFile, id, 
-                            quite=setup.debug,
+                            quite=setup.debug, wait=wait,
                             memMB=mem, timeout=timeout)
         
         @info "running job $(id)"
@@ -208,13 +208,13 @@ end
     quite : boolean
         controls details printout of the progress info
 """
-function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; quite=true,
+function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; quite=true, wait=false,
                         memMB=70000/40, timeout="5:00:00")
-    lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
-    lmax  = @sprintf "%.3f" ts_input["LAMBDA_MAX"]
-    lstep = @sprintf "%.3f" ts_input["LAMBDA_STEP"]
-    tm    = @sprintf "%.1f" ts_input["TMOLIM"]
-    feh   = @sprintf "%.3f" atmos.feh
+    lmin  = @sprintf "%.3f" pyconvert(Any, ts_input["LAMBDA_MIN"])
+    lmax  = @sprintf "%.3f" pyconvert(Any, ts_input["LAMBDA_MAX"])
+    lstep = @sprintf "%.3f" pyconvert(Any, ts_input["LAMBDA_STEP"])
+    tm    = @sprintf "%.1f" pyconvert(Any, ts_input["TMOLIM"])
+    feh   = @sprintf "%.3f" pyconvert(Any, atmos.feh)
 
     babsma_conf = """
     'MODELINPUT:'    '$(atmos.path)'
