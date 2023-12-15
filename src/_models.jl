@@ -1,6 +1,5 @@
 #================================================= Model Atmosphere structs ==#
 
-
 struct Model1D{T} <:AbstractModel
     z    ::Vector{T}
     lnρ  ::Vector{T}
@@ -24,17 +23,40 @@ end
 #============================================================= Constructors ==#
 
 Model1D(eos, z, lnρ, lnT; logg=log10(2.75e4)) = Model1D(z, lnρ, lnT, lnT_to_lnEi(eos, lnρ, lnT), logg)
-Average3D(eos, path; logg=log10(2.75e4))      = begin
-    model = Average3D(path)
-    e     = lnT_to_lnEi(eos, model.lnρ, model.lnT)
-    Model1D(model.z, model.lnρ, model.lnT, e, logg)
+
+"""
+    Average3D(eos, path; logg=log10(2.75e4))
+
+Construct a Model1D from 3 or 4 column delimited file. Add `lnEi` from given EoS.
+"""
+Average3D(eos, path; logg=log10(2.75e4)) = begin
+    model = Average3D(path, logg=logg)
+    e = lnT_to_lnEi(eos, model.lnρ, model.lnT)
+
+    paras = Dict(f=>getfield(model, f) for f in fieldnames(typeof(model)))
+    paras[:lnEi] .= e
+
+    Model1D(; paras...)
 end
+
+"""
+    Average3D(path; logg=log10(2.75e4))
+
+Construct a Model1D from 3 or 4 column delimited file.
+"""
 Average3D(path; logg=log10(2.75e4)) = begin
     solar_model        = reverse(readdlm(path, skipstart=0), dims=1)
     solar_model[:, 1] .= -solar_model[:, 1]
     solar_model[:, 3] .= exp.(solar_model[:, 3])
     z, lnρ, lnT        = solar_model[:, 1], log.(solar_model[:, 3]), log.(solar_model[:, 2]) 
-    Model1D(z, lnρ, lnT, zeros(length(z)), logg)
+
+    τ = if size(solar_model, 2) == 4
+        exp.(solar_model[:, 4])
+    else
+        nothing 
+    end
+
+    Model1D(z=z, lnρ=lnρ, lnT=lnT, lnEi=zeros(length(z)), logg=logg, τ=τ)
 end
 
 macro optical(model, eos, opacities)
@@ -46,6 +68,27 @@ macro optical(model, eos, opacities)
     end
 end
 
+macro optical(model, eos)
+    m = esc(model)
+    e = esc(eos)
+    quote
+        OpticalModel1D(Base.convert(typeof(getfield($m, :z)), rosseland_optical_depth($e, $m)), (getfield($m, p) for p in fieldnames(typeof($m)))...)
+    end
+end
+
+
+"""
+    Model1D(; kwargs...)
+
+Construct 1D model from keyword arrays. If `τ` given OpticalModel1D is constructed.
+
+# Examples
+
+```julia
+julia> Model1D(τ=τ, z=z, lnρ=lnρ, lnT=lnT)
+TSO.OpticalModel1D{Float64}(...)
+```
+"""
 Model1D(; τ   =nothing,
           z   =nothing,
           lnρ =nothing,
@@ -91,10 +134,35 @@ end
 #======================================================== Model conversions ==#
 
 """
+    lnT_to_lnEi(eos::AxedEoS, lnρ, lnT)
+
 Convert z,T,ρ to z,E,ρ model based on EoS.
 """
 lnT_to_lnEi(eos::AxedEoS, lnρ, lnT) = lookup(eos, :lnEi, lnρ, lnT)
 lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ, lnT)
+
+
+#=================================================================== optics ==#
+
+"""
+    optical_surface(model)
+
+Return the z coordinate of the optical surface
+"""
+function optical_surface(model::OpticalModel1D)
+    mask = sortperm(log10.(model.τ))
+    linear_interpolation(
+        Interpolations.deduplicate_knots!(log10.(model.τ[mask]), move_knots=true), 
+        model.z[mask]
+    )(0.0)
+end
+
+"""
+    optical_surface!(model)
+
+Move the 0 point to the optical surface.
+"""
+optical_surface!(model::OpticalModel1D) = model.z .= model.z .- optical_surface(model)
 
 
 
@@ -218,6 +286,13 @@ function flip!(model::AbstractModel; depth=false)
     model
 end
 
+"""
+    flip(model)
+
+Flip the box object and possibly reverse the sign of the height scale (only geometrical).
+It used the density to determine where the bottom is. It will be from bottom to top and 
+with the lowest z value at the bottom. `depth` will be the other way around.
+"""
 function flip(model::AbstractModel; kwargs...)
     m = deepcopy(model)
     flip!(m; kwargs...)
@@ -252,5 +327,9 @@ function convert_model(model::AbstractModel, tp)
 
     typeof(model)(flds...)
 end
+
+Base.length(m::AbstractModel) = length(m.z)
+Base.size(m::AbstractModel) = size(m.z)
+
 
 #=============================================================================#

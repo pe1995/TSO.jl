@@ -1168,13 +1168,13 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
     κ      = zeros(T, length(lnρ))
 
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
-    for i in eachindex(opacities.λ)
+    @inbounds for i in eachindex(opacities.λ)
         # Look up the opacity in the table
         κ  .= lookup(eos, opacities, :κ, lnρ, lnE, i)
         ρκ .= binned ? κ : exp.(lnρ) .* κ
 
         # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
-        for j in eachindex(z)
+        @inbounds for j in eachindex(z)
             if j==1 
                 τ_λ[1, i] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
             else
@@ -1221,7 +1221,91 @@ function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::Abstrac
     return τ_ross
 end
 
+function rosseland_optical_depth(eos::E, model::AbstractModel) where {E<:AxedEoS}
+    # Model z, ρ and T in cgs
+    z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
+
+    T = eltype(eos.eos.lnRoss)
+
+    τ_ross = zeros(T, length(lnρ)) 
+    ρκ     = zeros(T, length(lnρ))
+    κ      = zeros(T, length(lnρ))
+
+    # Rosseland optical depth
+    κ  .= exp.(lookup(eos, :lnRoss, lnρ, lnE))
+    ρκ .= exp.(lnρ) .* κ 
+    for j in eachindex(z)
+        if j==1 
+            τ_ross[1] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
+        else
+            τ_ross[j] = τ_ross[j-1] + (z[j] - z[j-1]) * 0.5 * (ρκ[j] + ρκ[j-1])
+        end
+    end
+
+    return τ_ross
+end
+
 rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
+rosseland_optical_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), model; kwargs...)
+
+
+
+function rosseland_depth(eos::E, opacities, model::AbstractModel) where {E<:AxedEoS}
+    # Model z, ρ and T in cgs
+    τ, lnρ, lnE = model.τ, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
+
+    T = eltype(eos.eos.lnRoss)
+
+    z      = zeros(T, length(lnρ)) 
+    ρκ     = zeros(T, length(lnρ))
+    κ      = zeros(T, length(lnρ))
+
+    # Rosseland optical depth
+    κ  .= lookup(eos, opacities, :κ_ross, lnρ, lnE)
+    ρκ .= exp.(lnρ) .* κ 
+    for j in eachindex(z)
+        if j==1 
+            z[1] = 0 + (τ[2] - τ[1]) * 0.5 * (1.0/ρκ[j])
+        else
+            z[j] = z[j-1] + (τ[j] - τ[j-1]) * 0.5 * (1.0/ρκ[j] + 1.0/ρκ[j-1])
+        end
+    end
+
+    return z
+end
+
+function rosseland_depth(eos::E, model::AbstractModel) where {E<:AxedEoS}
+    # Model z, ρ and T in cgs
+    τ, lnρ, lnE = model.τ, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
+
+    T = eltype(eos.eos.lnRoss)
+
+    z      = zeros(T, length(lnρ)) 
+    ρκ     = zeros(T, length(lnρ))
+    κ      = zeros(T, length(lnρ))
+
+    # Rosseland optical depth
+    κ  .= exp.(lookup(eos, :lnRoss, lnρ, lnE))
+    ρκ .= exp.(lnρ) .* κ 
+    for j in eachindex(z)
+        if j==1 
+            z[1] = 0 + (τ[2] - τ[1]) * 0.5 * (1.0/ρκ[j])
+        else
+            z[j] = z[j-1] + (τ[j] - τ[j-1]) * 0.5 * (1.0/ρκ[j] + 1.0/ρκ[j-1])
+        end
+    end
+
+    return z
+end
+
+rosseland_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_depth(@axed(eos), opacities, model; kwargs...)
+rosseland_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_depth(@axed(eos), model; kwargs...)
+
+
+
+
+
+
 
 """
 Compute the formation height + opacity, i.e. the rosseland optical depth
@@ -1246,10 +1330,10 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Line())
     T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Line())
 
-    for i in axes(τ_λ, 2)
+    @inbounds for i in axes(τ_λ, 2)
         t_mono .= lλ[:, i]
         rosseland_depth[i] = exp.(linear_interpolation(Interpolations.deduplicate_knots!(t_mono, move_knots=true), lRoss, extrapolation_bc=Line())(0.0))
-        opacity_depth[i]   = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), i)
+        opacity_depth[i] = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), i)
     end
 
     rosseland_depth, opacity_depth
