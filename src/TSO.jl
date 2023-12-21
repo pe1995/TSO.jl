@@ -15,6 +15,7 @@ import Clustering.assignments
 
 import Base.size
 import Base.broadcastable
+import Base.length
 
 
 #= Abstract Interface =#
