@@ -55,6 +55,8 @@ function compute_rosseland_opacities(table_folder, eos_path, opa_path)
     eos_ross_name = "ross_"*eos_path
     save(aos.eos,   joinpath(table_folder, eos_ross_name))
     save(opacities, joinpath(table_folder, opa_path))
+
+    eos_ross_name
 end
 
 
