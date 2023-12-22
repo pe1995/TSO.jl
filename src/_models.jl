@@ -300,18 +300,23 @@ function flip(model::AbstractModel; kwargs...)
     m
 end
 
-function pick_point(model, i)
-	args = Dict()
+_pick_point(model, pick_index) = begin
+    args = Dict()
 	for f in fieldnames(typeof(model))
 		v = getfield(model, f)
 		if typeof(v) <: AbstractArray
-			args[f] = [v[i]]
+			args[f] = [pick_index(v)]
 		else
 			args[f] = v
 		end
 	end
 
-	Model1D(;args...)
+	Model1D(; args...)
+end
+
+function pick_point(model, i)
+    pick_index = (typeof(i)<:Function) ? i : a -> a[i]
+	_pick_point(model, pick_index)
 end
 
 function convert_model(model::AbstractModel, tp)

@@ -117,20 +117,11 @@ executed for max. nz points in both directions. When the bottom
 of the average3D model is reached, it stops automatically.
 """
 function adiabat(model_in, eos::SqEoS; kwargs...)
-    model = deepcopy(model_in)
-
     # First make sure the z scale is oriented in the correct direction
-    if first(model.lnT) < last(model.lnT)
-        @warn "Flipping z axis..."
-        flip!(model)
-    end
-
-    if first(model.z) > last(model.z)
-        model.z .= - model.z
-    end
+    model = flip(model_in)
 
     start_point = pick_point(model, 1)
-    end_point = pick_point(model, length(model.z))
+    end_point = pick_point(model, length(model))
     
     adiabat(start_point, end_point, eos; kwargs...)
 end
