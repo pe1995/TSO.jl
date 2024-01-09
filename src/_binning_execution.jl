@@ -176,9 +176,12 @@ Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the r
 function convert_fromT_toE(table_folder, folder_new; upsample=1000)
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
-
     aos = @axed eos
-    eosE, opaE = switch_energy(aos, opa, upsample=upsample);
+
+    # Before switching energy sources, make sure that everything is monotonic
+    TSO.smoothAccumulate!(aos, spline=true)
+
+    eosE, opaE = switch_energy(aos, opa, upsample=upsample, conservative=false);
     aosE = @axed eosE
 
     TSO.fill_nan!(aosE, opaE)
