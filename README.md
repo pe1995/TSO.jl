@@ -1,4 +1,4 @@
-# `TSO.jl`
+<a href="url"><img src="tso_logo.png" height=100% width=100%/></a> 
 
 `TSO.jl` is a package for handling opacity + EoS tables in various formats. It is capable of reading, converting and binning monochromatic opacities on Density-Energy/Temperature grids and converting them to ouput formats, like e.g. the dispatch square gas tables. The working principle is that the code 
 

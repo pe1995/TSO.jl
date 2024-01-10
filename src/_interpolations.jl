@@ -284,9 +284,8 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
 
     @inbounds for i in 1:nRhoBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(newAxisOldE, :, i))
-        x    .= @view(newAxisOldE[mask, i])
+        x    .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i], move_knots=true)
         y    .= @view(oldlnV[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[:, i] .= ip.(newAxis_val)
@@ -372,7 +371,6 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
 
     @inbounds for i in 1:nEBin
         # This is a column of the table, interpolate it and evaluate at the right position
-
         mask .= sortperm(view(r_old, i, :))
         x    .= @view r_old[i, mask]
         y    .= @view oldlnV[i, mask]
@@ -646,16 +644,16 @@ replace_axis(eos::E; kwargs...) where {E<:RegularEoSTable} = replace_axis(AxedEo
 
 conservative_axis(mat::Vector) = default_axis(mat)
 conservative_axis(mat::Matrix) = begin
-    mirow = zeros(size(mat, 1))
-    marow = zeros(size(mat, 1))
+    mirow = zeros(eltype(mat), size(mat, 1))
+    marow = zeros(eltype(mat), size(mat, 1))
 
     for j in axes(mat, 1)
         mirow[j] = minimum(view(mat, j, :))
         marow[j] = maximum(view(mat, j, :))
     end
 
-    micol = zeros(size(mat, 2))
-    macol = zeros(size(mat, 2))
+    micol = zeros(eltype(mat), size(mat, 2))
+    macol = zeros(eltype(mat), size(mat, 2))
 
     for j in axes(mat, 2)
         micol[j] = minimum(view(mat, :, j))
@@ -944,6 +942,46 @@ end
 set_limits!(aos, opa; small=1e-30, large=1e30) = begin
     set_small!(aos, opa, small)
     set_large!(aos, opa, large)
+end
+
+"""
+    smoothAccumulate(eos)
+
+Smooth maxima in EoS lnT-lnEi relation that cause problems when interpolating 
+by reverse accumulating the minima and fitting a smoothing spline (optional).
+This should leave monotonic arrays unchanged and make others monotonically increasing.
+"""
+smoothAccumulate!(aos; spline=true) = begin
+    @assert !is_internal_energy(aos)
+
+    eos = aos.eos
+
+    x = copy(eos.lnT)
+	y = similar(eos.lnT)
+
+    for i in axes(eos.lnEi, 2)
+        y .= reverse(eos.lnEi[:, i])
+        y .= reverse(accumulate(min, y))
+
+        eos.lnEi[:, i] .= if spline
+            ip = Interpolations.extrapolate(
+                Interpolations.interpolate(
+                    Interpolations.deduplicate_knots!(
+                        x, 
+                        move_knots=true
+                    ), 
+                    y, 
+                    Interpolations.SteffenMonotonicInterpolation()
+                ), 
+                Interpolations.Flat()
+            )
+	        ip.(x) 
+        else
+            y
+        end
+    end
+
+    aos
 end
 
 check(v, small) = !isnan(v) & (v >= small)

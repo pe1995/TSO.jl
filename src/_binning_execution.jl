@@ -7,50 +7,56 @@ Note: `name` will decide the name suffix under which the formation opacities wil
 If under this `extension` at the very end no table with the name `combined_formation_opacities_name_extension.hdf5` is found, it will be created.
 Also a new opacity table with updated rosseland opacities is saved.
 """
-function compute_formation_opacities(table_folder, av_path, name=""; logg=log10(2.75e4), extension="", do_ross=false)
-    ext = join_full(extension)
-    name_ext = join_full(name, extension)
-
+function compute_formation_opacities(name, table_folder, eos_path, opa_path, av_path; logg=log10(2.75e4))
     opacities = reload(
         SqOpacity, 
-		joinpath(table_folder, "combined_opacities$(ext).hdf5"), 
-        mmap=!do_ross
+		joinpath(table_folder, opa_path), 
+        mmap=true
     )
     
-    eos = reload(SqEoS,     
-				joinpath(table_folder, "combined_eos$(ext).hdf5"))
+    eos = reload(
+        SqEoS,     
+		joinpath(table_folder, eos_path)
+    )
+    
     aos = @axed eos
-
-    @show size(eos.lnPg)
-    @show size(opacities.κ)
-
     model = flip(Average3D(av_path, logg=logg), depth=true)
-
-  
-    if do_ross
-        @info "computing rosseland"
-        rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
-					weights=ω_midpoint(opacities))
-		
-        transfer_rosseland!(aos.eos, opacities)
-		
-        save(aos.eos,   joinpath(table_folder, "combined_ross_eos$(ext).hdf5"))
-        save(opacities, joinpath(table_folder, "combined_opacities$(ext).hdf5"))
-    end
-
-
-    #if isfile(joinpath(table_folder, "combined_formation_opacities$(ext).hdf5"))
-    #    @warn "skipping formation opacities"
-    #    return
-    #end
-
     τ_ross, τ_λ = optical_depth(aos, opacities, model)
     d_ross, d_κ = formation_height(model, aos, opacities, τ_ross, τ_λ)
-
     formation_opacities = SqOpacity(d_κ, d_ross, opacities.src, opacities.λ, true)
 	
-    save(formation_opacities, 
-			joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"))
+    save(
+        formation_opacities, 
+		joinpath(table_folder, "combined_formation_opacities_$(name).hdf5")
+    )
+end
+
+
+function compute_rosseland_opacities(table_folder, eos_path, opa_path)
+    opacities = reload(
+        SqOpacity, 
+		joinpath(table_folder, opa_path), 
+        mmap=false
+    )
+    
+    eos = reload(
+        SqEoS,     
+		joinpath(table_folder, eos_path)
+    )
+    
+    aos = @axed eos
+  
+    @info "computing rosseland"
+    rosseland_opacity!(aos.eos.lnRoss, aos, opacities; 
+                weights=ω_midpoint(opacities))
+		
+    transfer_rosseland!(aos.eos, opacities)
+		
+    eos_ross_name = "ross_"*eos_path
+    save(aos.eos,   joinpath(table_folder, eos_ross_name))
+    save(opacities, joinpath(table_folder, opa_path))
+
+    eos_ross_name
 end
 
 
@@ -60,33 +66,37 @@ end
 
 Bin opacities, based on a specific binning method, using formation opacities computed previously. Save the binned tables.
 """
-function bin_opacity_table(table_folder, av_path, name=""; 
+function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path; 
                                         method=:uniform, 
                                         use_contribution=false, 
                                         logg=log10(2.75e4), 
                                         Nbins=5, 
                                         line_bins=3, 
-                                        extension="",
+                                        scattering_path=nothing,
                                         name_extension="DIS_MARCS",
                                         version="v0.1",
                                         kwargs...)
-    ext = join_full(extension)
-    name_ext = TSO.join_full(name, extension)
-
-    eos = reload(SqEoS, 
-			joinpath(table_folder, "combined_ross_eos$(ext).hdf5")) 
+    eos = reload(
+        SqEoS, 
+		joinpath(table_folder, eos_path)
+    ) 
 	
-    opacities = reload(SqOpacity, 
-			joinpath(table_folder, "combined_opacities$(ext).hdf5"), 
-			mmap=true)
+    opacities = reload(
+        SqOpacity, 
+		joinpath(table_folder, opa_path), 
+		mmap=true
+    )
 
-    sopacities = reload(SqOpacity, 
-			joinpath(table_folder, "combined_Sopacities$(ext).hdf5"), 
-			mmap=true)
+    sopacities = isnothing(scattering_path) ? nothing : reload(
+        SqOpacity, 
+		joinpath(table_folder, scattering_path), 
+		mmap=true
+    )
 	
     formOpacities = reload(SqOpacity, 
-			joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"), 
-			mmap=true)
+		joinpath(table_folder, "combined_formation_opacities_$(name).hdf5"), 
+		mmap=true
+    )
 
     weights = ω_midpoint(opacities)
     model = @optical flip(Average3D(eos, av_path, logg=logg), depth=true) eos opacities
@@ -134,7 +144,7 @@ function bin_opacity_table(table_folder, av_path, name="";
 
         !isdir(eos_table_name) && mkdir(eos_table_name) 
 
-        cp(joinpath(table_folder, "combined_ross_eos$(ext).hdf5"), 
+        cp(joinpath(table_folder, eos_path), 
 			joinpath(eos_table_name, "eos.hdf5"), force=true)
 
         save(binned_opacities.opacities, joinpath(eos_table_name, "binned_opacities.hdf5"))
@@ -147,8 +157,11 @@ function bin_opacity_table(table_folder, av_path, name="";
         eos_table_name
     end
 	
-    #binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
-    binned_opacities = tabulate(bin, weights, eos, opacities, transition_model=model)
+    binned_opacities = if isnothing(sopacities)
+        tabulate(bin, weights, eos, opacities, transition_model=model)
+    else
+        tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
+    end
     
     save_table(binned_opacities)
 end
@@ -163,9 +176,12 @@ Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the r
 function convert_fromT_toE(table_folder, folder_new; upsample=1000)
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
-
     aos = @axed eos
-    eosE, opaE = switch_energy(aos, opa, upsample=upsample);
+
+    # Before switching energy sources, make sure that everything is monotonic
+    TSO.smoothAccumulate!(aos, spline=true)
+
+    eosE, opaE = switch_energy(aos, opa, upsample=upsample, conservative=false);
     aosE = @axed eosE
 
     TSO.fill_nan!(aosE, opaE)
