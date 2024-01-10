@@ -5,7 +5,7 @@ function opacityTableInput(modelatmosfolder;
                             lnρ = range(log(1e-15), log(1e-3); length=59) |> collect)
 	!isdir(modelatmosfolder) && mkdir(modelatmosfolder)
 
-	z = range(-1, 1, length=59) |> collect
+	z = range(-1, 1, length=length(lnT)) |> collect
 	v = similar(lnT)
 
 	paths = String[]
