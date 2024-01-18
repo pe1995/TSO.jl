@@ -35,10 +35,10 @@ end
 md"## The Grid"
 
 # ╔═╡ a128a520-895b-4f40-9fbb-6586ac25da10
-lnT = range(log(1.1e3), log(5.5e5); length=159)
+lnT = range(log(1.1e3), log(5.5e5); length=200)
 
 # ╔═╡ af66c1ea-fee0-4172-9100-88ad54993ebd
-lnρ = range(log(1e-15), log(1e-3); length=159)
+lnρ = range(log(1e-22), log(1e-3); length=200)
 
 # ╔═╡ 5a695141-8e7c-4b85-a886-9c42e0fdad55
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
@@ -107,9 +107,9 @@ begin
 	## Create the setup object
 	setup       = TSO.computeOpac.setup(file=setup_input, mode="MAprovided")
 	setup.jobID = "TSO"
-	FeH = -1.0
-	α = 0.4
-	wvl_set = "asplund07_m1_a04_v5.0"
+	FeH = 0.0
+	α = 0.0
+	wvl_set = "magg22_m0_a0_v5.1"
 end
 
 # ╔═╡ 04c77365-c905-4635-b9a2-dc5e44628a23
@@ -127,8 +127,8 @@ begin
 	]
 
     # Pick the abundances
-    abundances = asplund_2007
-	TSO.scale_yields!(asplund_2007, α=α, FeH=FeH)
+    abundances = magg_2022
+	TSO.scale_yields!(magg_2022, α=α, FeH=FeH)
 
     @info "Modify the following abundances: (Species, ID, Abundance)"
     for a in abundances
