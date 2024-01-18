@@ -30,12 +30,14 @@ struct HeatingSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:RadiativeT
     χ            ::Vector{T}
     S            ::Vector{T}
     Q            ::Array{T}
+    F            ::Array{T}
     μ_solver     ::Vector{AngleHeatingSolver{T}}
 end
 
 struct HeatingField{A<:AbstractModel, T<:AbstractFloat, N} <:AbstractRadiationField
     model::A
     values::Array{T, N}
+    flux::Array{T, N}
 end
 
 struct InterpolatedHeating{R<:RadiationField, I} <:AbstractRadiationField
@@ -90,10 +92,11 @@ Heating(
     ]
 
     Q = zeros(T2, length(model.z))
+    F = zeros(T2, length(model.z))
     χ = zeros(T2, length(model.z))
     S = zeros(T2, length(model.z))
 
-    HeatingSolver(eos, opacities, angles, weights, bins, m, χ, S, Q, angle_solver)
+    HeatingSolver(eos, opacities, angles, weights, bins, m, χ, S, Q, F, angle_solver)
 end
 
 
@@ -111,6 +114,7 @@ Frequency integration weights can be given via `weights`.
 """
 function solve(h::HeatingSolver; weights=ones(h.bins))
     h.Q .= 0.0
+    h.F .= 0.0
 
     for bin in 1:h.bins
         # Get the source function and opacity for this bin
@@ -123,17 +127,19 @@ function solve(h::HeatingSolver; weights=ones(h.bins))
                     h.μ_solver[j].ω .*
                     h.χ .*
                     weights[bin]
+            h.F .+= (h.μ_solver[j].Q .+ h.S).* 
+                    h.μ_solver[j].ω .*
+                    weights[bin]
         end
     end
 
-    HeatingField(h.model, h.Q)
+    HeatingField(h.model, h.Q, h.F)
 end
 
 """
-    solve(h::HeatingSolver)
+    solve(h::AngleHeatingSolver, z, χ, S)
 
-Solve the radiative heating equation with the given `solver`.
-Frequency integration weights can be given via `weights`.
+Solve the radiative heating equation in a given direction with given optics.
 """
 function solve!(h::AngleHeatingSolver, z, χ, S)
     boundary!(h, z, χ, S)
@@ -179,7 +185,7 @@ _solve!(
 ) = begin
     aμ = abs(μ) 
     nz = length(z)
-    for i in 2:nz-1
+    @inbounds for i in 2:nz-1
         dtau1[i] = z[i] / aμ * 0.5 * (χ[i] + χ[i-1]) 
         dtau2[i] = z[i] / aμ * 0.5 * (χ[i] + χ[i+1])
         
@@ -200,6 +206,7 @@ end
 
 """
     binoptics!(solver, bin)
+
 Compute source funtion and opacity for the given model in the given bin.
 """
 function binoptics!(solver, bin)
@@ -255,6 +262,7 @@ end
 energyvariable(solver) = is_internal_energy(solver.eos) ? solver.model.lnEi : solver.model.lnT
 
 heating(h::HeatingField) = h.values
+flux(h::HeatingField) = h.flux
 model(h::HeatingField) = h.model
 
 
