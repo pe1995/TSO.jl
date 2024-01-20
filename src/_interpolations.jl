@@ -660,7 +660,7 @@ conservative_axis(mat::Matrix) = begin
         macol[j] = maximum(view(mat, :, j))
     end
 
-    max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))
+    sort([max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))])
 end
 
 default_axis(mat) = minimum(mat), maximum(mat)
@@ -688,7 +688,7 @@ pick_axis(eos; conservative=false, upsample=-1, switch=true) = begin
         deepcopy(DensityAxis(eos).values)
     end
 
-    collect(newAxis), collect(newRho)
+    sort(collect(newAxis)), sort(collect(newRho))
 end
 
 

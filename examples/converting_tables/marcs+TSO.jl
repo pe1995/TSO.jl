@@ -28,7 +28,7 @@ Pick the EoS that shall provide the internal energy to the opacity table.
 	SqEoS, 
 	abspath("/mnt/beegfs/gemini/groups/bergemann/users/eitner/storage/opacity_tables/TSO_sun_Magg_v10.2/eos.hdf5")
 )=#
-aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg_v5.0.hdf5"))
+aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg22_m0_a0_v5.1.hdf5"))
 
 # ╔═╡ c7f9ebfc-4010-47e5-afe0-183efec4273f
 md"Folder of the Opacity tables"
@@ -127,7 +127,7 @@ Save everything in the usual TSO.jl format
 # ╔═╡ fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
 begin
 	ext = "magg_m0_a0"
-	dname = "TSO_MARCS_$(ext)_v1.7"
+	dname = "TSO_MARCS_$(ext)_v1.8"
 
 	if !isdir(dname)
 		mkdir(dname)
