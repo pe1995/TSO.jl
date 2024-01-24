@@ -241,7 +241,7 @@ function interpolate_unstructured(mos::MARCSOS...; new_T_size=nothing, new_ρ_si
     κ_lm = similar(mos[1].κ_c, new_T_size, new_ρ_size, length(mos[1].λ)) 
 
     
-    @show new_T_size new_ρ_size typeof(x)
+    #@show new_T_size new_ρ_size typeof(x)
     T_f = eltype(pe)
 
 	x_new = range(minimum(x), maximum(x), length=new_T_size)
@@ -512,7 +512,7 @@ function complement(mos::MARCSOS, eos::E1; lnEi=:eos, lnRoss=:opacity, lnPg=:opa
     end
 
     #@assert all(newopa.κ .> 0.0)
-    @show minimum(newopa.κ) maximum(newopa.κ) argmin(newopa.κ) argmax(newopa.κ)
+    #@show minimum(newopa.κ) maximum(newopa.κ) argmin(newopa.κ) argmax(newopa.κ)
 
     ## Recompute the rosseland opacity if wanted
     if lnRoss == :opacity
