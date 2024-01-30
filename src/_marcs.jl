@@ -26,6 +26,56 @@ struct MARCSOS{F<:AbstractFloat,I<:Integer,
 end
 
 
+"""
+    MARCSOSMapped(T, pe, pg, ρ, κ_c, κ_s, κ_la, κ_lm, λ, ω, abund)
+
+Create a MARCSOS type with memory mapped array fields.
+"""
+MARCSOSMapped(T, pe, pg, ρ, κ_c, κ_s, κ_la, κ_lm, λ, ω, abund) = begin
+    # create the mapped files
+    f_κ_c = tempname(pwd())
+    f_κ_s = tempname(pwd())
+    f_κ_la = tempname(pwd())
+    f_κ_lm = tempname(pwd())
+
+    o_κ_c = open(f_κ_c, "w+")
+    o_κ_s = open(f_κ_s, "w+")
+    o_κ_la = open(f_κ_la, "w+")
+    o_κ_lm = open(f_κ_lm, "w+")
+
+    write(o_κ_c, κ_c)
+    write(o_κ_s, κ_s)
+    write(o_κ_la, κ_la)
+    write(o_κ_lm, κ_lm)
+
+    close(o_κ_c)
+    close(o_κ_s)
+    close(o_κ_la)
+    close(o_κ_lm)
+
+    # load the mapped arrays
+    o_κ_c = open(f_κ_c, "r+")
+    o_κ_s = open(f_κ_s, "r+")
+    o_κ_la = open(f_κ_la, "r+")
+    o_κ_lm = open(f_κ_lm, "r+")
+
+    m_κ_c  = mmap(o_κ_c, typeof(κ_c), size(κ_c))
+    m_κ_s  = mmap(o_κ_s, typeof(κ_s), size(κ_s))
+    m_κ_la = mmap(o_κ_la, typeof(κ_la),  size(κ_la)) 
+    m_κ_lm = mmap(o_κ_lm, typeof(κ_lm), size(κ_lm))
+
+    MARCSOS(T, pe, pg, ρ, m_κ_c, m_κ_s, m_κ_la, m_κ_lm, λ, ω, abund)
+end
+
+MARCSOSTable(args...; mapped=false) = begin
+    if mapped
+        MARCSOSMapped(args...)
+    else
+        MARCSOS(args...)
+    end
+end
+
+
 
 
 #= Constructors for the Opacity tables =#
@@ -58,8 +108,11 @@ end
     MARCSOS(path)
 
 Read a single MARCS OS file and save it as an intermediate type.
+Note: This requires a lot of RAM. In the future it might be 
+advisable to save those arrays to files and reload them as memory maps.
+Most of the time they will be processed in functions one at a time.
 """
-function MARCSOS(path::String)
+function MARCSOS(path::String; mapped=false)
     f = FortranFiles.FortranFile(path, "r")
         
     ## Read the header
@@ -100,7 +153,7 @@ function MARCSOS(path::String)
     close(f)
 
     #@info "File $(path) read."
-    MARCSOS(T, pe, pg, ρ, κ_c, κ_s, κ_la, κ_lm, λ, ω, Dict(species[i] => abunds[i] for i in eachindex(species)))
+    MARCSOSTable(T, pe, pg, ρ, κ_c, κ_s, κ_la, κ_lm, λ, ω, Dict(species[i] => abunds[i] for i in eachindex(species)); mapped=mapped)
 end
 
 
@@ -118,7 +171,7 @@ are mutually exclusive. (they should be)
 
 Note also that the opacities are interpolated in log but saved linearly to fit in the API!
 """
-function interpolate_lnRho(m::MARCSOS, new_axis)
+function interpolate_lnRho(m::MARCSOS, new_axis; mapped=false)
     T    = m.T |> unique 
     nT   = T   |> length
     #nPg  = floor(Int, length(m.T) / nT)
@@ -171,7 +224,7 @@ function interpolate_lnRho(m::MARCSOS, new_axis)
         end
     end
     
-    MARCSOS(lnT, pe, pg, new_axis, κ_c, κ_s, κ_la, κ_lm, m.λ, m.ω, m.abundance)
+    MARCSOSTable(lnT, pe, pg, new_axis, κ_c, κ_s, κ_la, κ_lm, m.λ, m.ω, m.abundance; mapped=mapped)
 end
 
 
@@ -301,7 +354,7 @@ Square the given MARCSOS part tables. All of the different tables may have diffe
 We first interpolate every sub-table to a common density grid. Then we pick a common Temp. grid 
 between all tables and interpolate 
 """
-function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing, structured=true, kwargs...)
+function uniform(mos::MARCSOS...; mapped=false, new_T_size=nothing, new_ρ_size=nothing, structured=true, kwargs...)
     mos = if structured
         mos
     else
@@ -319,11 +372,11 @@ function uniform(mos::MARCSOS...; new_T_size=nothing, new_ρ_size=nothing, struc
     common_rho = common_grid(log, mos..., which=:ρ, new_size=new_ρ_size)
 
     for m in mos
-        append!(m_rho, [interpolate_lnRho(m, common_rho)])
+        append!(m_rho, [interpolate_lnRho(m, common_rho; mapped=mapped)])
     end
 
     ## append together all tables and sort them in T
-    mos = append(m_rho...)
+    mos = append(m_rho...; mapped=mapped)
 
     ## interpolate the table to uniform lnT grid
     new_T_size = isnothing(new_T_size) ? length(m_rho.T) : new_T_size
@@ -555,7 +608,7 @@ end
 """
 Append all tables together, sort by increasing T.
 """
-function append(mos::MARCSOS...)
+function append(mos::MARCSOS...; mapped=mapped)
     n_tot = [length(m.T) for m in mos] |> sum
     
     ## Append all the fields
@@ -582,7 +635,7 @@ function append(mos::MARCSOS...)
         @assert all(mos[1].λ .== mos[i].λ)
     end
     
-    MARCSOS(Tnew, penew, pgnew, ρnew, κ_cnew, κ_snew, κ_lanew, κ_lmnew, mos[1].λ, mos[1].ω, mos[1].abundance)
+    MARCSOSTable(Tnew, penew, pgnew, ρnew, κ_cnew, κ_snew, κ_lanew, κ_lmnew, mos[1].λ, mos[1].ω, mos[1].abundance; mapped=mapped)
 end
 
 """

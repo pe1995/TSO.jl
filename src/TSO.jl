@@ -10,6 +10,7 @@ using PythonCall
 using Glob
 using HDF5
 using Statistics
+using Mmap
 using Clustering
 import Clustering.assignments
 
@@ -94,6 +95,7 @@ include("_marcs.jl")
 include("_adiabat.jl")
 include("_from_m3d.jl")
 include("_binning_execution.jl")
+include("_extend.jl")
 
 
 
