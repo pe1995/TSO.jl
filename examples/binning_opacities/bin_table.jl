@@ -26,6 +26,8 @@ begin
 	name = "t48g44.00m0.000"
 	version = "v1.8"
     extension = "magg22"
+	eos_old_name = "combined_ross_eos_magg22.hdf5"
+	opa_old_name = "combined_opacities_magg22.hdf5"
 end;
 
 # ╔═╡ b78afc3c-b123-4994-96d6-aa17c392e020
@@ -33,7 +35,7 @@ isfile(model)
 
 # ╔═╡ a0c3e42d-28aa-4b1e-8394-596833d53105
 fopa_path = TSO.compute_formation_opacities(
-	eos_folder, model, name, extension=extension, logg=4.40,
+	name, eos_folder, eos_old_name, opa_old_name, model, logg=4.40,
 )
 #fopa_path = joinpath(
 #eos_folder, "combined_formation_opacities"*TSO.join_full(name, extension)*".hdf5"
@@ -64,14 +66,13 @@ ql = quadrantlimit(eos_folder, name, extension=extension, λ_lim=5.0)
 
 # ╔═╡ 8691f075-0d53-4672-aa15-2cdf95e83980
 new_eos_folder = TSO.bin_opacity_table(
-	eos_folder, 
-	model, 
-	name;
+	name,
+	eos_folder,
+	eos_old_name,
+	opa_old_name,
+	model,
 	version=version,
-	extension=extension,
 	method=:kmeans, 
-	stripes=false,
-	use_contribution=false, 
 	Nbins=8, 
 	quadrants=[ 
 		TSO.Quadrant((0.0, 4.0), (ql, 4.5), 2, stripes=:κ),
@@ -84,7 +85,7 @@ new_eos_folder = TSO.bin_opacity_table(
 
 # ╔═╡ 40e3ea4c-c161-48ff-b9b6-a0736e229a5f
 TSO.create_E_from_T(
-	new_eos_folder, name, 
+	new_eos_folder, 
 	upsample=2048, 
 	version=version
 )
