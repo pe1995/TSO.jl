@@ -492,23 +492,10 @@ function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
             kLF = [lookup_function(aos, opacities[m], :κ, k)   for m in eachindex(opacities)]
             sLF = [lookup_function(aos, opacities[m], :src, k) for m in eachindex(opacities)]
 
-            #if k == length(ref_o.λ)
-            #    @show typeof(lookup(sLF[1], rr, oldAxisNewGrid)) any(isnothing.(lookup(sLF[1], rr, oldAxisNewGrid)))
-            #end
-
             for m in eachindex(opacities)
                 κ_all[:, :, k, m] .= lookup(kLF[m], rr, oldAxisNewGrid)
                 s_all[:, :, k, m] .= lookup(sLF[m], rr, oldAxisNewGrid)
             end
-
-            #@inbounds for j in eachindex(newRho)
-            #    @inbounds for i in eachindex(newAxis)
-            #        for m in eachindex(opacities)
-            #            κ_all[i, j, k, m] = lookup(kLF[m], newRho[j], oldAxisNewGrid[i, j])
-            #            s_all[i, j, k, m] = lookup(sLF[m], newRho[j], oldAxisNewGrid[i, j])
-            #        end
-            #    end
-            #end
         end
 
         κ_all, s_all, κ_rall 
