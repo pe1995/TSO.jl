@@ -173,15 +173,22 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000)
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=true, downD=0.1, downE=0.1, upD=0.01, upE=0.01)
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
     aos = @axed eos
 
     # Before switching energy sources, make sure that everything is monotonic
     TSO.smoothAccumulate!(aos, spline=true)
+    eos_new, opa_new = if extend
+        @info "Extrapolating EoS at $(table_folder) beyond limits."
+        TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
+    else
+        aos.eos, opa
+    end
+    TSO.smoothAccumulate!(@axed(eos_new), spline=true)
 
-    eosE, opaE = switch_energy(aos, opa, upsample=upsample, conservative=false);
+    eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false);
     aosE = @axed eosE
 
     TSO.fill_nan!(aosE, opaE)
