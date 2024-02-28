@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.32
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
@@ -11,7 +11,7 @@ begin
 	using TSO
 	using PythonPlot
 
-	plt = pyplot;
+	plt = pyplot; 
 end
 
 # ╔═╡ 04f9f6cd-b267-47b6-a901-6f48c6e88381
@@ -19,15 +19,15 @@ md"# Binning of Opacities"
 
 # ╔═╡ 25f6b474-02e0-430e-98ea-dbf658b2199d
 begin
-	eos_folder = "tables/TSO_MARCS_v1.6"
+	eos_folder = "../../../opacity_tables/TSO_M3D_magg_m0_a0_v1.0"
 	model = joinpath(
-		"/u/peitner/DISPATCH/examples/initial_models/DIS_MARCS_E_t48g44.00m0.000_v0.1", "inim.dat"
+		"../../../MUST.jl/examples/initial_models/DIS_MARCS_E_t5777g44m00_v0.5", "inim.dat"
 	)
-	name = "t48g44.00m0.000"
-	version = "v1.8"
-    extension = "magg22"
-	eos_old_name = "combined_ross_eos_magg22.hdf5"
-	opa_old_name = "combined_opacities_magg22.hdf5"
+	name = "t5777g44m00"
+	version = "v1.0"
+    extension = "magg_m0_a0"
+	eos_old_name = "combined_eos_$(extension).hdf5"
+	opa_old_name = "combined_opacities_$(extension).hdf5"
 end;
 
 # ╔═╡ b78afc3c-b123-4994-96d6-aa17c392e020
@@ -54,7 +54,7 @@ quadrantlimit(table_folder, name; extension, λ_lim=5.0) = begin
 	
     fopa = reload(
         SqOpacity, 
-		joinpath(table_folder, "combined_formation_opacities$(name_ext).hdf5"), 
+		joinpath(table_folder, "combined_formation_opacities_$(name).hdf5"), 
 		mmap=true
     )
 
@@ -62,7 +62,7 @@ quadrantlimit(table_folder, name; extension, λ_lim=5.0) = begin
 end
 
 # ╔═╡ a3c1263e-be42-4eb5-a1a0-c2213e9da771
-ql = quadrantlimit(eos_folder, name, extension=extension, λ_lim=5.0)
+ql = quadrantlimit(eos_folder, name, extension=extension, λ_lim=4.8)
 
 # ╔═╡ 8691f075-0d53-4672-aa15-2cdf95e83980
 new_eos_folder = TSO.bin_opacity_table(
@@ -155,5 +155,5 @@ end
 # ╟─9b04ffb8-371d-457b-b5e3-cb360d97a4ca
 # ╠═2b79f6a7-3093-4c48-9e95-c6acdd3a2870
 # ╠═d0f08fbd-503b-46dd-96b6-85b5c0879c7b
-# ╟─abb97b43-be00-41fe-a7af-0d3ddabff04e
+# ╠═abb97b43-be00-41fe-a7af-0d3ddabff04e
 # ╟─39b1c56b-a7f8-4c05-8f72-5a792fa231c4

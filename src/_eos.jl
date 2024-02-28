@@ -979,7 +979,7 @@ function Bλ(λ::AbstractFloat, T::AbstractArray)
 end
 
 Bλ(λ::AbstractVector, T::AbstractVector) = begin
-    B = zeros(length(T), length(λ))
+    B = zeros(eltype(T), length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= Bν(λ[i], T)
     end
@@ -988,7 +988,7 @@ Bλ(λ::AbstractVector, T::AbstractVector) = begin
 end
 
 Bλ(λ::AbstractVector, T::AbstractMatrix) = begin
-    B = zeros(size(T)..., length(λ))
+    B = zeros(eltype(T), size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= Bν(λ[i], T)
     end
@@ -1005,7 +1005,7 @@ function δBλ(λ::AbstractFloat, T::AbstractArray)
 end
 
 δBλ(λ::AbstractVector, T::AbstractVector) = begin
-    B = zeros(length(T), length(λ))
+    B = zeros(eltype(T), length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= δBν(λ[i], T)
     end
@@ -1014,7 +1014,7 @@ end
 end
 
 δBλ(λ::AbstractVector, T::AbstractMatrix) = begin
-    B = zeros(size(T)..., length(λ))
+    B = zeros(eltype(T), size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= δBν(λ[i], T)
     end
@@ -1078,6 +1078,7 @@ end
 
 
 
+
 #=========================== Rosseland opacity ===============================#
 
 """
@@ -1101,33 +1102,57 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
     axis_val = aos.energy_axes.values
     eaxis    = is_internal_energy(aos)
     
-    lnRoss .= 0.0
-    T       = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
+    T = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
     if ndims(eos.lnT) == 2
         T .= exp.(eos.lnT)
     else
         puff_up!(T, exp.(eos.lnT))
     end
 
-    B::Float32 = 0.0
+    #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
 
-    @inbounds for j in eachindex(eos.lnRho)
+    _rosseland_opacity!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
+    #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
+end
+
+_rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
+    B::Float32 = 0.0
+    lnRoss .= 0.0
+    
+    @inbounds for j in eachindex(lnRho)
         @inbounds for i in eachindex(axis_val)
             B  = Float32(0.0)
-            @inbounds for k in eachindex(opacities.λ)
-                lnRoss[i, j] += weights[k] * 1 / opacities.κ[i, j, k] * δBν(opacities.λ[k], T[i, j])
-                B += weights[k] * δBν(opacities.λ[k], T[i, j])
+            @inbounds for k in eachindex(l)
+                lnRoss[i, j] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
+                B += weights[k] * δBν(l[k], T[i, j])
             end
             lnRoss[i, j] /= B
             lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
-                log(1e-30)
+                NaN
             else
                 log(1.0 / lnRoss[i, j])
             end
+        end
+    end
+    lnRoss
+end
 
-            #if isnan(lnRoss[i, j])
-            #    @warn "NaN in Ross - i:$(i), j:$(j), B:$(B), k:$(opacities.κ[i, j, 1])"
-            #end
+_rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin
+    B::Float32 = Float32(0.0)
+
+    @inbounds for j in eachindex(lnRho)
+        @inbounds for i in eachindex(axis_val)
+            B = Float32(0.0)
+
+            lnRoss[i, j] = sum(weights .* 1 ./ view(opacity, :, i, j) .* view(db, :, i, j))
+            B = sum(weights .* view(db, :, i, j))
+            
+            lnRoss[i, j] /= B
+            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
+                NaN
+            else
+                log(1.0 / lnRoss[i, j])
+            end
         end
     end
 end
@@ -1144,6 +1169,7 @@ transfer_rosseland!(eos::E, opa::OpacityTable) where {E<:EoSTable} = opa.κ_ross
 transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:EoSTable} = eos.lnRoss .= log.(opa.κ_ross);
 transfer_rosseland!(eos::E, opa::OpacityTable) where {E<:AxedEoS}  = opa.κ_ross .= exp.(eos.eos.lnRoss);
 transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnRoss .= log.(opa.κ_ross);
+
 
 
 
@@ -1173,6 +1199,8 @@ _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
 end
 
 """
+    optical_depth(eos, opacities, model; binned=false)
+
 Compute monochromatic and rosseland optical depth scales of the model 
 based on the opacity table
 """
