@@ -1,0 +1,933 @@
+  Activating project at `/mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/examples/creating_table`
+    CondaPkg Found dependencies: /home/eitner/.julia/packages/PythonCall/wXfah/CondaPkg.toml
+    CondaPkg Found dependencies: /home/eitner/.julia/packages/PythonPlot/KcWMF/CondaPkg.toml
+    CondaPkg Found dependencies: /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/CondaPkg.toml
+    CondaPkg Dependencies already up to date
+**************************************************
+ Note: all elements will be computed in LTE!
+ To set up NLTE, use 'nlte_config' flag
+ **************************************************
+Requested 250 model atmospheres
+Linelist(s) will be read from: 
+[ Info: Chosen λ step + Number of points: 0.0125, 240000.0
+[ Info: Modify the following abundances: (Species, ID, Abundance)
+[ Info: H-1 -> 12.0
+[ Info: He-2 -> 10.93
+[ Info: Li-3 -> 1.05
+[ Info: Be-4 -> 1.38
+[ Info: B-5 -> 2.7
+[ Info: C-6 -> 8.56
+[ Info: N-7 -> 7.98
+[ Info: O-8 -> 8.77
+[ Info: F-9 -> 4.67
+[ Info: Ne-10 -> 8.15
+[ Info: Na-11 -> 6.33
+[ Info: Mg-12 -> 7.58
+[ Info: Al-13 -> 6.48
+[ Info: Si-14 -> 7.567
+[ Info: P-15 -> 5.48
+[ Info: S-16 -> 7.21
+[ Info: Cl-17 -> 5.29
+[ Info: Ar-18 -> 6.5
+[ Info: K-19 -> 5.12
+[ Info: Ca-20 -> 6.32
+[ Info: Sc-21 -> 3.09
+[ Info: Ti-22 -> 4.96
+[ Info: V-23 -> 4.01
+[ Info: Cr-24 -> 5.69
+[ Info: Mn-25 -> 5.53
+[ Info: Fe-26 -> 7.5
+[ Info: Co-27 -> 4.92
+[ Info: Ni-28 -> 6.25
+[ Info: Cu-29 -> 4.21
+[ Info: Zn-30 -> 4.6
+[ Info: Ga-31 -> 2.88
+[ Info: Ge-32 -> 3.58
+[ Info: As-33 -> 2.29
+[ Info: Se-34 -> 3.33
+[ Info: Br-35 -> 2.56
+[ Info: Kr-36 -> 3.25
+[ Info: Rb-37 -> 2.6
+[ Info: Sr-38 -> 2.92
+[ Info: Y-39 -> 2.21
+[ Info: Zr-40 -> 2.58
+[ Info: Nb-41 -> 1.42
+[ Info: Mo-42 -> 1.92
+[ Info: Ru-44 -> 1.84
+[ Info: Rh-45 -> 1.12
+[ Info: Pd-46 -> 1.66
+[ Info: Ag-47 -> 0.94
+[ Info: Cd-48 -> 1.77
+[ Info: In-49 -> 1.6
+[ Info: Sn-50 -> 2.0
+[ Info: Sb-51 -> 1.0
+[ Info: Te-52 -> 2.19
+[ Info: I-53 -> 1.51
+[ Info: Xe-54 -> 2.24
+[ Info: Cs-55 -> 1.07
+[ Info: Ba-56 -> 2.17
+[ Info: La-57 -> 1.13
+[ Info: Ce-58 -> 1.7
+[ Info: Pr-59 -> 0.58
+[ Info: Nd-60 -> 1.45
+[ Info: Sm-62 -> 1.0
+[ Info: Eu-63 -> 0.52
+[ Info: Gd-64 -> 1.11
+[ Info: Tb-65 -> 0.28
+[ Info: Dy-66 -> 1.14
+[ Info: Ho-67 -> 0.51
+[ Info: Er-68 -> 0.93
+[ Info: Tm-69 -> 0.0
+[ Info: Yb-70 -> 1.08
+[ Info: Lu-71 -> 0.06
+[ Info: Hf-72 -> 0.88
+[ Info: Ta-73 -> -0.17
+[ Info: W-74 -> 1.11
+[ Info: Re-75 -> 0.23
+[ Info: Os-76 -> 1.25
+[ Info: Ir-77 -> 1.38
+[ Info: Pt-78 -> 1.64
+[ Info: Au-79 -> 1.01
+[ Info: Hg-80 -> 1.13
+[ Info: Tl-81 -> 0.9
+[ Info: Pb-82 -> 2.0
+[ Info: Bi-83 -> 0.65
+[ Info: Th-90 -> 0.06
+[ Info: U-92 -> -0.52
+┌ Warning: No slurm environment detected. Jobs will be submitted without resource management!
+└ @ TSO /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/src/_communication.jl:437
+[ Info: running job TSOeos_1-1:250.dat_TSO
+[ Info: running job TSOeos_2-1:250.dat_TSO
+[ Info: running job TSOeos_3-1:250.dat_TSO
+[ Info: running job TSOeos_4-1:250.dat_TSO
+[ Info: running job TSOeos_5-1:250.dat_TSO
+[ Info: running job TSOeos_6-1:250.dat_TSO
+[ Info: running job TSOeos_7-1:250.dat_TSO
+[ Info: running job TSOeos_8-1:250.dat_TSO
+[ Info: running job TSOeos_9-1:250.dat_TSO
+[ Info: running job TSOeos_10-1:250.dat_TSO
+[ Info: running job TSOeos_11-1:250.dat_TSO
+[ Info: running job TSOeos_12-1:250.dat_TSO
+[ Info: running job TSOeos_13-1:250.dat_TSO
+[ Info: running job TSOeos_14-1:250.dat_TSO
+[ Info: running job TSOeos_15-1:250.dat_TSO
+[ Info: running job TSOeos_16-1:250.dat_TSO
+[ Info: running job TSOeos_17-1:250.dat_TSO
+[ Info: running job TSOeos_18-1:250.dat_TSO
+[ Info: running job TSOeos_19-1:250.dat_TSO
+[ Info: running job TSOeos_20-1:250.dat_TSO
+[ Info: running job TSOeos_21-1:250.dat_TSO
+[ Info: running job TSOeos_22-1:250.dat_TSO
+[ Info: running job TSOeos_23-1:250.dat_TSO
+[ Info: running job TSOeos_24-1:250.dat_TSO
+[ Info: running job TSOeos_25-1:250.dat_TSO
+[ Info: running job TSOeos_26-1:250.dat_TSO
+[ Info: running job TSOeos_27-1:250.dat_TSO
+[ Info: running job TSOeos_28-1:250.dat_TSO
+[ Info: running job TSOeos_29-1:250.dat_TSO
+[ Info: running job TSOeos_30-1:250.dat_TSO
+[ Info: running job TSOeos_31-1:250.dat_TSO
+[ Info: running job TSOeos_32-1:250.dat_TSO
+[ Info: running job TSOeos_33-1:250.dat_TSO
+[ Info: running job TSOeos_34-1:250.dat_TSO
+[ Info: running job TSOeos_35-1:250.dat_TSO
+[ Info: running job TSOeos_36-1:250.dat_TSO
+[ Info: running job TSOeos_37-1:250.dat_TSO
+[ Info: running job TSOeos_38-1:250.dat_TSO
+[ Info: running job TSOeos_39-1:250.dat_TSO
+[ Info: running job TSOeos_40-1:250.dat_TSO
+[ Info: running job TSOeos_41-1:250.dat_TSO
+[ Info: running job TSOeos_42-1:250.dat_TSO
+[ Info: running job TSOeos_43-1:250.dat_TSO
+[ Info: running job TSOeos_44-1:250.dat_TSO
+[ Info: running job TSOeos_45-1:250.dat_TSO
+[ Info: running job TSOeos_46-1:250.dat_TSO
+[ Info: running job TSOeos_47-1:250.dat_TSO
+[ Info: running job TSOeos_48-1:250.dat_TSO
+[ Info: running job TSOeos_49-1:250.dat_TSO
+[ Info: running job TSOeos_50-1:250.dat_TSO
+[ Info: running job TSOeos_51-1:250.dat_TSO
+[ Info: running job TSOeos_52-1:250.dat_TSO
+[ Info: running job TSOeos_53-1:250.dat_TSO
+[ Info: running job TSOeos_54-1:250.dat_TSO
+[ Info: running job TSOeos_55-1:250.dat_TSO
+[ Info: running job TSOeos_56-1:250.dat_TSO
+[ Info: running job TSOeos_57-1:250.dat_TSO
+[ Info: running job TSOeos_58-1:250.dat_TSO
+[ Info: running job TSOeos_59-1:250.dat_TSO
+[ Info: running job TSOeos_60-1:250.dat_TSO
+[ Info: running job TSOeos_61-1:250.dat_TSO
+[ Info: running job TSOeos_62-1:250.dat_TSO
+[ Info: running job TSOeos_63-1:250.dat_TSO
+[ Info: running job TSOeos_64-1:250.dat_TSO
+[ Info: running job TSOeos_65-1:250.dat_TSO
+[ Info: running job TSOeos_66-1:250.dat_TSO
+[ Info: running job TSOeos_67-1:250.dat_TSO
+[ Info: running job TSOeos_68-1:250.dat_TSO
+[ Info: running job TSOeos_69-1:250.dat_TSO
+[ Info: running job TSOeos_70-1:250.dat_TSO
+[ Info: running job TSOeos_71-1:250.dat_TSO
+[ Info: running job TSOeos_72-1:250.dat_TSO
+[ Info: running job TSOeos_73-1:250.dat_TSO
+[ Info: running job TSOeos_74-1:250.dat_TSO
+[ Info: running job TSOeos_75-1:250.dat_TSO
+[ Info: running job TSOeos_76-1:250.dat_TSO
+[ Info: running job TSOeos_77-1:250.dat_TSO
+[ Info: running job TSOeos_78-1:250.dat_TSO
+[ Info: running job TSOeos_79-1:250.dat_TSO
+[ Info: running job TSOeos_80-1:250.dat_TSO
+[ Info: running job TSOeos_81-1:250.dat_TSO
+[ Info: running job TSOeos_82-1:250.dat_TSO
+[ Info: running job TSOeos_83-1:250.dat_TSO
+[ Info: running job TSOeos_84-1:250.dat_TSO
+[ Info: running job TSOeos_85-1:250.dat_TSO
+[ Info: running job TSOeos_86-1:250.dat_TSO
+[ Info: running job TSOeos_87-1:250.dat_TSO
+[ Info: running job TSOeos_88-1:250.dat_TSO
+[ Info: running job TSOeos_89-1:250.dat_TSO
+[ Info: running job TSOeos_90-1:250.dat_TSO
+[ Info: running job TSOeos_91-1:250.dat_TSO
+[ Info: running job TSOeos_92-1:250.dat_TSO
+[ Info: running job TSOeos_93-1:250.dat_TSO
+[ Info: running job TSOeos_94-1:250.dat_TSO
+[ Info: running job TSOeos_95-1:250.dat_TSO
+[ Info: running job TSOeos_96-1:250.dat_TSO
+[ Info: running job TSOeos_97-1:250.dat_TSO
+[ Info: running job TSOeos_98-1:250.dat_TSO
+[ Info: running job TSOeos_99-1:250.dat_TSO
+[ Info: running job TSOeos_100-1:250.dat_TSO
+[ Info: running job TSOeos_101-1:250.dat_TSO
+[ Info: running job TSOeos_102-1:250.dat_TSO
+[ Info: running job TSOeos_103-1:250.dat_TSO
+[ Info: running job TSOeos_104-1:250.dat_TSO
+[ Info: running job TSOeos_105-1:250.dat_TSO
+[ Info: running job TSOeos_106-1:250.dat_TSO
+[ Info: running job TSOeos_107-1:250.dat_TSO
+[ Info: running job TSOeos_108-1:250.dat_TSO
+[ Info: running job TSOeos_109-1:250.dat_TSO
+[ Info: running job TSOeos_110-1:250.dat_TSO
+[ Info: running job TSOeos_111-1:250.dat_TSO
+[ Info: running job TSOeos_112-1:250.dat_TSO
+[ Info: running job TSOeos_113-1:250.dat_TSO
+[ Info: running job TSOeos_114-1:250.dat_TSO
+[ Info: running job TSOeos_115-1:250.dat_TSO
+[ Info: running job TSOeos_116-1:250.dat_TSO
+[ Info: running job TSOeos_117-1:250.dat_TSO
+[ Info: running job TSOeos_118-1:250.dat_TSO
+[ Info: running job TSOeos_119-1:250.dat_TSO
+[ Info: running job TSOeos_120-1:250.dat_TSO
+[ Info: running job TSOeos_121-1:250.dat_TSO
+[ Info: running job TSOeos_122-1:250.dat_TSO
+[ Info: running job TSOeos_123-1:250.dat_TSO
+[ Info: running job TSOeos_124-1:250.dat_TSO
+[ Info: running job TSOeos_125-1:250.dat_TSO
+[ Info: running job TSOeos_126-1:250.dat_TSO
+[ Info: running job TSOeos_127-1:250.dat_TSO
+[ Info: running job TSOeos_128-1:250.dat_TSO
+[ Info: running job TSOeos_129-1:250.dat_TSO
+[ Info: running job TSOeos_130-1:250.dat_TSO
+[ Info: running job TSOeos_131-1:250.dat_TSO
+[ Info: running job TSOeos_132-1:250.dat_TSO
+[ Info: running job TSOeos_133-1:250.dat_TSO
+[ Info: running job TSOeos_134-1:250.dat_TSO
+[ Info: running job TSOeos_135-1:250.dat_TSO
+[ Info: running job TSOeos_136-1:250.dat_TSO
+[ Info: running job TSOeos_137-1:250.dat_TSO
+[ Info: running job TSOeos_138-1:250.dat_TSO
+[ Info: running job TSOeos_139-1:250.dat_TSO
+[ Info: running job TSOeos_140-1:250.dat_TSO
+[ Info: running job TSOeos_141-1:250.dat_TSO
+[ Info: running job TSOeos_142-1:250.dat_TSO
+[ Info: running job TSOeos_143-1:250.dat_TSO
+[ Info: running job TSOeos_144-1:250.dat_TSO
+[ Info: running job TSOeos_145-1:250.dat_TSO
+[ Info: running job TSOeos_146-1:250.dat_TSO
+[ Info: running job TSOeos_147-1:250.dat_TSO
+[ Info: running job TSOeos_148-1:250.dat_TSO
+[ Info: running job TSOeos_149-1:250.dat_TSO
+[ Info: running job TSOeos_150-1:250.dat_TSO
+[ Info: running job TSOeos_151-1:250.dat_TSO
+[ Info: running job TSOeos_152-1:250.dat_TSO
+[ Info: running job TSOeos_153-1:250.dat_TSO
+[ Info: running job TSOeos_154-1:250.dat_TSO
+[ Info: running job TSOeos_155-1:250.dat_TSO
+[ Info: running job TSOeos_156-1:250.dat_TSO
+[ Info: running job TSOeos_157-1:250.dat_TSO
+[ Info: running job TSOeos_158-1:250.dat_TSO
+[ Info: running job TSOeos_159-1:250.dat_TSO
+[ Info: running job TSOeos_160-1:250.dat_TSO
+[ Info: running job TSOeos_161-1:250.dat_TSO
+[ Info: running job TSOeos_162-1:250.dat_TSO
+[ Info: running job TSOeos_163-1:250.dat_TSO
+[ Info: running job TSOeos_164-1:250.dat_TSO
+[ Info: running job TSOeos_165-1:250.dat_TSO
+[ Info: running job TSOeos_166-1:250.dat_TSO
+[ Info: running job TSOeos_167-1:250.dat_TSO
+[ Info: running job TSOeos_168-1:250.dat_TSO
+[ Info: running job TSOeos_169-1:250.dat_TSO
+[ Info: running job TSOeos_170-1:250.dat_TSO
+[ Info: running job TSOeos_171-1:250.dat_TSO
+[ Info: running job TSOeos_172-1:250.dat_TSO
+[ Info: running job TSOeos_173-1:250.dat_TSO
+[ Info: running job TSOeos_174-1:250.dat_TSO
+[ Info: running job TSOeos_175-1:250.dat_TSO
+[ Info: running job TSOeos_176-1:250.dat_TSO
+[ Info: running job TSOeos_177-1:250.dat_TSO
+[ Info: running job TSOeos_178-1:250.dat_TSO
+[ Info: running job TSOeos_179-1:250.dat_TSO
+[ Info: running job TSOeos_180-1:250.dat_TSO
+[ Info: running job TSOeos_181-1:250.dat_TSO
+[ Info: running job TSOeos_182-1:250.dat_TSO
+[ Info: running job TSOeos_183-1:250.dat_TSO
+[ Info: running job TSOeos_184-1:250.dat_TSO
+[ Info: running job TSOeos_185-1:250.dat_TSO
+[ Info: running job TSOeos_186-1:250.dat_TSO
+[ Info: running job TSOeos_187-1:250.dat_TSO
+[ Info: running job TSOeos_188-1:250.dat_TSO
+[ Info: running job TSOeos_189-1:250.dat_TSO
+[ Info: running job TSOeos_190-1:250.dat_TSO
+[ Info: running job TSOeos_191-1:250.dat_TSO
+[ Info: running job TSOeos_192-1:250.dat_TSO
+[ Info: running job TSOeos_193-1:250.dat_TSO
+[ Info: running job TSOeos_194-1:250.dat_TSO
+[ Info: running job TSOeos_195-1:250.dat_TSO
+[ Info: running job TSOeos_196-1:250.dat_TSO
+[ Info: running job TSOeos_197-1:250.dat_TSO
+[ Info: running job TSOeos_198-1:250.dat_TSO
+[ Info: running job TSOeos_199-1:250.dat_TSO
+[ Info: running job TSOeos_200-1:250.dat_TSO
+[ Info: running job TSOeos_201-1:250.dat_TSO
+[ Info: running job TSOeos_202-1:250.dat_TSO
+[ Info: running job TSOeos_203-1:250.dat_TSO
+[ Info: running job TSOeos_204-1:250.dat_TSO
+[ Info: running job TSOeos_205-1:250.dat_TSO
+[ Info: running job TSOeos_206-1:250.dat_TSO
+[ Info: running job TSOeos_207-1:250.dat_TSO
+[ Info: running job TSOeos_208-1:250.dat_TSO
+[ Info: running job TSOeos_209-1:250.dat_TSO
+[ Info: running job TSOeos_210-1:250.dat_TSO
+[ Info: running job TSOeos_211-1:250.dat_TSO
+[ Info: running job TSOeos_212-1:250.dat_TSO
+[ Info: running job TSOeos_213-1:250.dat_TSO
+[ Info: running job TSOeos_214-1:250.dat_TSO
+[ Info: running job TSOeos_215-1:250.dat_TSO
+[ Info: running job TSOeos_216-1:250.dat_TSO
+[ Info: running job TSOeos_217-1:250.dat_TSO
+[ Info: running job TSOeos_218-1:250.dat_TSO
+[ Info: running job TSOeos_219-1:250.dat_TSO
+[ Info: running job TSOeos_220-1:250.dat_TSO
+[ Info: running job TSOeos_221-1:250.dat_TSO
+[ Info: running job TSOeos_222-1:250.dat_TSO
+[ Info: running job TSOeos_223-1:250.dat_TSO
+[ Info: running job TSOeos_224-1:250.dat_TSO
+[ Info: running job TSOeos_225-1:250.dat_TSO
+[ Info: running job TSOeos_226-1:250.dat_TSO
+[ Info: running job TSOeos_227-1:250.dat_TSO
+[ Info: running job TSOeos_228-1:250.dat_TSO
+[ Info: running job TSOeos_229-1:250.dat_TSO
+[ Info: running job TSOeos_230-1:250.dat_TSO
+[ Info: running job TSOeos_231-1:250.dat_TSO
+[ Info: running job TSOeos_232-1:250.dat_TSO
+[ Info: running job TSOeos_233-1:250.dat_TSO
+[ Info: running job TSOeos_234-1:250.dat_TSO
+[ Info: running job TSOeos_235-1:250.dat_TSO
+[ Info: running job TSOeos_236-1:250.dat_TSO
+[ Info: running job TSOeos_237-1:250.dat_TSO
+[ Info: running job TSOeos_238-1:250.dat_TSO
+[ Info: running job TSOeos_239-1:250.dat_TSO
+[ Info: running job TSOeos_240-1:250.dat_TSO
+[ Info: running job TSOeos_241-1:250.dat_TSO
+[ Info: running job TSOeos_242-1:250.dat_TSO
+[ Info: running job TSOeos_243-1:250.dat_TSO
+[ Info: running job TSOeos_244-1:250.dat_TSO
+[ Info: running job TSOeos_245-1:250.dat_TSO
+[ Info: running job TSOeos_246-1:250.dat_TSO
+[ Info: running job TSOeos_247-1:250.dat_TSO
+[ Info: running job TSOeos_248-1:250.dat_TSO
+[ Info: running job TSOeos_249-1:250.dat_TSO
+[ Info: running job TSOeos_250-1:250.dat_TSO
+[ Info:    --> Babsma Job TSOeos_102-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_113-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_132-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_126-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_134-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_17-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_214-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_116-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_152-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_154-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_13-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_98-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_199-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_208-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_111-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_176-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_114-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_194-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_97-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_186-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_79-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_108-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_242-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_159-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_201-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_213-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_110-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_250-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_6-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_101-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_195-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_219-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_149-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_106-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_96-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_20-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_220-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_243-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_157-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_55-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_70-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_109-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_33-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_162-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_247-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_120-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_189-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_246-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_66-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_235-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_38-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_212-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_53-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_91-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_92-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_71-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_100-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_129-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_51-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_240-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_52-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_58-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_123-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_226-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_245-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_175-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_172-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_237-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_4-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_198-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_105-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_217-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_178-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_170-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_124-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_34-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_197-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_216-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_83-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_137-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_69-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_44-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_167-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_8-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_135-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_85-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_174-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_9-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_68-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_94-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_210-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_22-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_203-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_138-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_187-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_141-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_7-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_18-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_46-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_82-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_107-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_23-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_56-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_215-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_148-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_173-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_238-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_72-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_64-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_221-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_144-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_77-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_244-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_84-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_78-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_150-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_200-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_90-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_211-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_158-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_147-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_143-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_142-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_229-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_103-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_232-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_65-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_93-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_190-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_139-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_59-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_2-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_202-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_95-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_177-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_223-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_231-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_60-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_73-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_228-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_164-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_193-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_222-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_48-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_227-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_67-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_196-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_63-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_86-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_136-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_19-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_42-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_45-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_40-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_166-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_87-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_128-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_233-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_35-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_133-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_76-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_29-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_12-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_24-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_54-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_224-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_155-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_184-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_43-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_28-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_180-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_239-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_104-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_115-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_57-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_236-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_185-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_171-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_168-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_80-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_121-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_75-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_156-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_112-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_3-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_41-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_191-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_163-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_140-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_62-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_1-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_99-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_25-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_27-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_218-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_32-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_169-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_183-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_145-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_230-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_26-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_205-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_165-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_119-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_234-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_10-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_49-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_88-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_21-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_74-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_36-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_206-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_39-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_179-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_204-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_15-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_50-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_182-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_160-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_225-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_127-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_30-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_181-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_117-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_16-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_153-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_125-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_31-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_61-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_192-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_118-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_14-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_161-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_81-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_11-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_248-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_146-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_122-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_37-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_249-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_89-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_209-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_151-1:250.dat_TSO finished. Success: true
+[ Info:    --> Babsma Job TSOeos_241-1:250.dat_TSO finished. Success: false
+ERROR: LoadError: AssertionError: s
+Stacktrace:
+ [1] babsma!(setup::PythonCall.Py, elementalAbundances::Vector{Tuple{Int64, Float64}}; timeout::String, wait::Bool)
+   @ TSO /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/src/_communication.jl:146
+ [2] babsma!(setup::PythonCall.Py, elementalAbundances::Vector{Tuple{Int64, Float64}})
+   @ TSO /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/src/_communication.jl:122
+ [3] top-level scope
+   @ /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/examples/creating_table/create_eos.jl:144
+in expression starting at /mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/TSO.jl/examples/creating_table/create_eos.jl:144
+ele = "H"
+val = 12.0
+ele = "H"
+yields[i] = (1, 12.0)
+ele = "He"
+val = 10.93
+ele = "He"
+yields[i] = (2, 10.93)
+ele = "Li"
+val = 1.05
+ele = "Li"
+yields[i] = (3, 1.05)
+ele = "Be"
+val = 1.38
+ele = "Be"
+yields[i] = (4, 1.38)
+ele = "B"
+val = 2.7
+ele = "B"
+yields[i] = (5, 2.7)
+ele = "C"
+val = 8.56
+ele = "C"
+yields[i] = (6, 8.56)
+ele = "N"
+val = 7.98
+ele = "N"
+yields[i] = (7, 7.98)
+ele = "O"
+val = 8.77
+ele = "O"
+yields[i] = (8, 8.77)
+ele = "F"
+val = 4.67
+ele = "F"
+yields[i] = (9, 4.67)
+ele = "Ne"
+val = 8.15
+ele = "Ne"
+yields[i] = (10, 8.15)
+ele = "Na"
+val = 6.33
+ele = "Na"
+yields[i] = (11, 6.33)
+ele = "Mg"
+val = 7.58
+ele = "Mg"
+yields[i] = (12, 7.58)
+ele = "Al"
+val = 6.48
+ele = "Al"
+yields[i] = (13, 6.48)
+ele = "Si"
+val = 7.567
+ele = "Si"
+yields[i] = (14, 7.567)
+ele = "P"
+val = 5.48
+ele = "P"
+yields[i] = (15, 5.48)
+ele = "S"
+val = 7.21
+ele = "S"
+yields[i] = (16, 7.21)
+ele = "Cl"
+val = 5.29
+ele = "Cl"
+yields[i] = (17, 5.29)
+ele = "Ar"
+val = 6.5
+ele = "Ar"
+yields[i] = (18, 6.5)
+ele = "K"
+val = 5.12
+ele = "K"
+yields[i] = (19, 5.12)
+ele = "Ca"
+val = 6.32
+ele = "Ca"
+yields[i] = (20, 6.32)
+ele = "Sc"
+val = 3.09
+ele = "Sc"
+yields[i] = (21, 3.09)
+ele = "Ti"
+val = 4.96
+ele = "Ti"
+yields[i] = (22, 4.96)
+ele = "V"
+val = 4.01
+ele = "V"
+yields[i] = (23, 4.01)
+ele = "Cr"
+val = 5.69
+ele = "Cr"
+yields[i] = (24, 5.69)
+ele = "Mn"
+val = 5.53
+ele = "Mn"
+yields[i] = (25, 5.53)
+ele = "Fe"
+val = 7.5
+ele = "Fe"
+yields[i] = (26, 7.5)
+ele = "Co"
+val = 4.92
+ele = "Co"
+yields[i] = (27, 4.92)
+ele = "Ni"
+val = 6.25
+ele = "Ni"
+yields[i] = (28, 6.25)
+ele = "Cu"
+val = 4.21
+ele = "Cu"
+yields[i] = (29, 4.21)
+ele = "Zn"
+val = 4.6
+ele = "Zn"
+yields[i] = (30, 4.6)
+ele = "Ga"
+val = 2.88
+ele = "Ga"
+yields[i] = (31, 2.88)
+ele = "Ge"
+val = 3.58
+ele = "Ge"
+yields[i] = (32, 3.58)
+ele = "As"
+val = 2.29
+ele = "As"
+yields[i] = (33, 2.29)
+ele = "Se"
+val = 3.33
+ele = "Se"
+yields[i] = (34, 3.33)
+ele = "Br"
+val = 2.56
+ele = "Br"
+yields[i] = (35, 2.56)
+ele = "Kr"
+val = 3.25
+ele = "Kr"
+yields[i] = (36, 3.25)
+ele = "Rb"
+val = 2.6
+ele = "Rb"
+yields[i] = (37, 2.6)
+ele = "Sr"
+val = 2.92
+ele = "Sr"
+yields[i] = (38, 2.92)
+ele = "Y"
+val = 2.21
+ele = "Y"
+yields[i] = (39, 2.21)
+ele = "Zr"
+val = 2.58
+ele = "Zr"
+yields[i] = (40, 2.58)
+ele = "Nb"
+val = 1.42
+ele = "Nb"
+yields[i] = (41, 1.42)
+ele = "Mo"
+val = 1.92
+ele = "Mo"
+yields[i] = (42, 1.92)
+ele = "Ru"
+val = 1.84
+ele = "Ru"
+yields[i] = (44, 1.84)
+ele = "Rh"
+val = 1.12
+ele = "Rh"
+yields[i] = (45, 1.12)
+ele = "Pd"
+val = 1.66
+ele = "Pd"
+yields[i] = (46, 1.66)
+ele = "Ag"
+val = 0.94
+ele = "Ag"
+yields[i] = (47, 0.94)
+ele = "Cd"
+val = 1.77
+ele = "Cd"
+yields[i] = (48, 1.77)
+ele = "In"
+val = 1.6
+ele = "In"
+yields[i] = (49, 1.6)
+ele = "Sn"
+val = 2.0
+ele = "Sn"
+yields[i] = (50, 2.0)
+ele = "Sb"
+val = 1.0
+ele = "Sb"
+yields[i] = (51, 1.0)
+ele = "Te"
+val = 2.19
+ele = "Te"
+yields[i] = (52, 2.19)
+ele = "I"
+val = 1.51
+ele = "I"
+yields[i] = (53, 1.51)
+ele = "Xe"
+val = 2.24
+ele = "Xe"
+yields[i] = (54, 2.24)
+ele = "Cs"
+val = 1.07
+ele = "Cs"
+yields[i] = (55, 1.07)
+ele = "Ba"
+val = 2.17
+ele = "Ba"
+yields[i] = (56, 2.17)
+ele = "La"
+val = 1.13
+ele = "La"
+yields[i] = (57, 1.13)
+ele = "Ce"
+val = 1.7
+ele = "Ce"
+yields[i] = (58, 1.7)
+ele = "Pr"
+val = 0.58
+ele = "Pr"
+yields[i] = (59, 0.58)
+ele = "Nd"
+val = 1.45
+ele = "Nd"
+yields[i] = (60, 1.45)
+ele = "Sm"
+val = 1.0
+ele = "Sm"
+yields[i] = (62, 1.0)
+ele = "Eu"
+val = 0.52
+ele = "Eu"
+yields[i] = (63, 0.52)
+ele = "Gd"
+val = 1.11
+ele = "Gd"
+yields[i] = (64, 1.11)
+ele = "Tb"
+val = 0.28
+ele = "Tb"
+yields[i] = (65, 0.28)
+ele = "Dy"
+val = 1.14
+ele = "Dy"
+yields[i] = (66, 1.14)
+ele = "Ho"
+val = 0.51
+ele = "Ho"
+yields[i] = (67, 0.51)
+ele = "Er"
+val = 0.93
+ele = "Er"
+yields[i] = (68, 0.93)
+ele = "Tm"
+val = 0.0
+ele = "Tm"
+yields[i] = (69, 0.0)
+ele = "Yb"
+val = 1.08
+ele = "Yb"
+yields[i] = (70, 1.08)
+ele = "Lu"
+val = 0.06
+ele = "Lu"
+yields[i] = (71, 0.06)
+ele = "Hf"
+val = 0.88
+ele = "Hf"
+yields[i] = (72, 0.88)
+ele = "Ta"
+val = -0.17
+ele = "Ta"
+yields[i] = (73, -0.17)
+ele = "W"
+val = 1.11
+ele = "W"
+yields[i] = (74, 1.11)
+ele = "Re"
+val = 0.23
+ele = "Re"
+yields[i] = (75, 0.23)
+ele = "Os"
+val = 1.25
+ele = "Os"
+yields[i] = (76, 1.25)
+ele = "Ir"
+val = 1.38
+ele = "Ir"
+yields[i] = (77, 1.38)
+ele = "Pt"
+val = 1.64
+ele = "Pt"
+yields[i] = (78, 1.64)
+ele = "Au"
+val = 1.01
+ele = "Au"
+yields[i] = (79, 1.01)
+ele = "Hg"
+val = 1.13
+ele = "Hg"
+yields[i] = (80, 1.13)
+ele = "Tl"
+val = 0.9
+ele = "Tl"
+yields[i] = (81, 0.9)
+ele = "Pb"
+val = 2.0
+ele = "Pb"
+yields[i] = (82, 2.0)
+ele = "Bi"
+val = 0.65
+ele = "Bi"
+yields[i] = (83, 0.65)
+ele = "Th"
+val = 0.06
+ele = "Th"
+yields[i] = (90, 0.06)
+ele = "U"
+val = -0.52
+ele = "U"
+yields[i] = (92, -0.52)
