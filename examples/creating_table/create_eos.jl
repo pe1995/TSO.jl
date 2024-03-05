@@ -38,7 +38,7 @@ md"## The Grid"
 lnT = range(log(1.1e3), log(5.5e5); length=250)
 
 # ╔═╡ af66c1ea-fee0-4172-9100-88ad54993ebd
-lnρ = range(log(1e-30), log(1e-3); length=250)
+lnρ = range(log(1e-15), log(1e-2); length=250)
 
 # ╔═╡ 5a695141-8e7c-4b85-a886-9c42e0fdad55
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])

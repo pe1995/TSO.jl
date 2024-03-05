@@ -173,7 +173,7 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=true, downD=0.4, downE=0.1, upD=0.01, upE=0.01)
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01)
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
     aos = @axed eos

@@ -88,13 +88,13 @@ function get_opacity(run)
 	chi[chi .> 1e30] .=  NaN
 	
 	E[E .< 1e-30] .= NaN
-	#E[E .> 1e30] .= NaN
+	E[E .> 1e30] .= NaN
 
 	pg[pg .< 1e-30] .= NaN
-	#pg[pg .> 1e30] .= NaN
+	pg[pg .> 1e30] .= NaN
 
 	ne[ne .< 1e-30] .= NaN
-	#ne[ne .> 1e30] .= NaN
+	ne[ne .> 1e30] .= NaN
 	
 	l, log.(rho), log.(temp), log.(E), log.(pg), log.(ne), permutedims(chi, (2, 3, 1))
 end

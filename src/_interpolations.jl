@@ -372,7 +372,7 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
     @inbounds for i in 1:nEBin
         # This is a column of the table, interpolate it and evaluate at the right position
         mask .= sortperm(view(r_old, i, :))
-        x    .= @view r_old[i, mask]
+        x    .= Interpolations.deduplicate_knots!(r_old[i, mask])
         y    .= @view oldlnV[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[i, :] .= ip.(lnRho)
@@ -739,7 +739,7 @@ end
 
 #=================================================================== NaN handling ===#
 
-@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(x, move_knots=true), y, extrapolation_bc=bc).(x0)
+@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(deepcopy(x), move_knots=true), y, extrapolation_bc=bc).(x0)
 
 nan_or_inf(a) = isnan(a) | !isfinite(a)
 

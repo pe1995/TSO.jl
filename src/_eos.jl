@@ -4,6 +4,8 @@
 Switch between different grids of the EoS table.
 """
 function transform(t::EoSTable, from_to::Pair{Symbol, Symbol})
+    @warn "This method is no longer in use and should not be called."
+
     return if (first(from_to) == :lnT) & (last(from_to) == :lnEi)
         lnT_to_lnEi(t)
     else
@@ -41,6 +43,8 @@ temperature is outside the range in the ln rho-lnT table for a
 given rho(i).
 """
 function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
+    @warn "This method is no longer in use and should not be called."
+
     T = eltype(t.lnEi)
     # new axis range
     lnEi2min = minimum(view(t.lnEi, :, :, 1))
@@ -225,6 +229,8 @@ nanmax(x) = isnan(x) ? -Inf : x
 A simple method to interpolate the EoS to new Energy grid.
 """
 function energy_grid(t::RegularEoSTable)
+    @warn "This method is no longer in use and should not be called."
+
     T = eltype(t.lnEi)
 
     # new axis range
@@ -296,6 +302,8 @@ lnT_to_lnEi(t) = error("No transformation from T to Ei implemented for this tabl
 Interpolate the function and first derivative of a cubic spline. (Taken from Tabgen)
     """
 function interpolate_f_df!(ff, dd, xx, x, f, d)
+    @warn "This method is no longer in use and should not be called."
+
     @inbounds for i in eachindex(ff)
         n = length(x)
         k = 0
@@ -333,6 +341,8 @@ end
 Add linear extrapolation outside of the given index.
 """
 function add_outside!(f::AbstractArray{K, 1}, esi, eei) where {K}
+    @warn "This method is no longer in use and should not be called."
+
     nF = length(f)
     for k=1:esi-1
         f[esi-k] = 2.0*f[esi] - f[esi+k]
@@ -348,6 +358,8 @@ Compute the derivatives of all quantities w.r.t the axis variables.
 First: value, Second: df/dρ, third: df/dE (or dT)
 """
 function derivative(t::RegularEoSTable)
+    @warn "This method is no longer in use and should not be called."
+
     e_axis = ndims(t.lnT) == 1 ? false : true
     T = eltype(t.lnT)
 
@@ -443,7 +455,7 @@ function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoS
 
         # It is listed as a function of temperature -> get the new T axis for the new E axis
         mask .= sortperm(eos.lnEi[:, i])
-        x    .= eos.lnEi[mask, i]
+        x    .= Interpolations.deduplicate_knots!(eos.lnEi[mask, i], move_knots=true)
         y    .= eos.lnT[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnTg2[:, i] .= ip.(lnEi_new)
@@ -1087,7 +1099,7 @@ end
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
 function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
-    lnRoss = similar(eos.lnRoss)
+    lnRoss = similar(eos.eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
 end
@@ -1110,9 +1122,14 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
     end
 
     #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
-
-    _rosseland_opacity!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
     #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
+
+    #if Threads.nthreads() == 1
+        _rosseland_opacity!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
+    #else
+    #    @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
+    #    _rosseland_opacityX!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
+    #end
 end
 
 _rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
@@ -1126,6 +1143,41 @@ _rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
                 lnRoss[i, j] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
                 B += weights[k] * δBν(l[k], T[i, j])
             end
+            lnRoss[i, j] /= B
+            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
+                NaN
+            else
+                log(1.0 / lnRoss[i, j])
+            end
+        end
+    end
+    lnRoss
+end
+
+_rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
+    B::Float32 = 0.0
+    lnRoss .= 0.0
+
+    # make backup chunk arras for intermediate sum storage
+    chunks = Iterators.partition(eachindex(l), length(l) ÷ Threads.nthreads()) |> collect
+    BChunk = zeros(Float32, length(chunks))
+    RossChunk = zeros(Float32, length(chunks))
+    
+    @inbounds for j in eachindex(lnRho)
+        @inbounds for i in eachindex(axis_val)
+            RossChunk .= 0.0
+            BChunk .= 0.0
+            Threads.@threads for i in 1:length(chunks)
+                chunk = chunks[i]
+                @inbounds for k in chunk
+                    RossChunk[i] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
+                    BChunk[i] += weights[k] * δBν(l[k], T[i, j])
+                end
+            end
+
+            lnRoss[i, j] = sum(RossChunk)
+            B = sum(BChunk)
+                
             lnRoss[i, j] /= B
             lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
                 NaN
@@ -1198,11 +1250,31 @@ _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     τ
 end
 
+_optical_depthX!(τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
+    # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
+    @inbounds Threads.@threads for i in 1:length(λ)
+        # Look up the opacity in the table
+        ρκ = lookup(eos, opacities, :κ, lnρ, lnE, i)
+        ρκ = binned ? ρκ : exp.(lnρ) .* ρκ
+
+        # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
+        @inbounds for j in eachindex(z)
+            if j==1 
+                τ[1, i] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
+            else
+                τ[j, i] = τ[j-1, i] + (z[j] - z[j-1]) * 0.5 * (ρκ[j] + ρκ[j-1])
+            end
+        end
+    end
+
+    τ
+end
+
 """
     optical_depth(eos, opacities, model; binned=false)
 
 Compute monochromatic and rosseland optical depth scales of the model 
-based on the opacity table
+based on the opacity table.
 """
 function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
@@ -1210,17 +1282,28 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
 
     T = eltype(opacities.κ)
 
-    τ_λ    = zeros(T, length(lnρ), length(opacities.λ)) 
+    τ_λ = zeros(T, length(lnρ), length(opacities.λ)) 
     τ_ross = zeros(T, length(lnρ)) 
-    ρκ     = zeros(T, length(lnρ))
-    κ      = zeros(T, length(lnρ))
 
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
-    _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    #if Threads.nthreads() <= 1
+        ρκ = zeros(T, length(lnρ))
+        _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    #else
+    #    @info "Computing table optical depth with $(Threads.nthreads()) threads."
+    #    _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    #end
 
     # Rosseland optical depth
     τ_ross .= rosseland_optical_depth(eos, opacities, model, binned=binned)
 
+    # impose limits
+    τ_λ[τ_λ .> 1e30] .= 1e30
+    τ_λ[τ_λ .< 1e-30] .= 1e-30
+
+    τ_ross[τ_ross .> 1e30] .= 1e30
+    τ_ross[τ_ross .< 1e-30] .= 1e-30
+    
     return τ_ross, τ_λ
 end
 
@@ -1335,6 +1418,8 @@ rosseland_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_dep
 
 
 """
+    formation_height(model, eos, opacities, τ_ross, τ_λ)
+
 Compute the formation height + opacity, i.e. the rosseland optical depth
 where the monochromatic optical depth is 1.
 """
@@ -1353,14 +1438,14 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     lRoss = log10.(τ_ross)
     lλ    = log10.(τ_λ)
 
-    t_mono = zeros(T, size(τ_λ, 1))
-    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Line())
-    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Line())
+    #t_mono = zeros(T, size(τ_λ, 1))
+    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Flat())
+    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Flat())
 
     @inbounds for i in axes(τ_λ, 2)
-        t_mono .= lλ[:, i]
+        #t_mono .= lλ[:, i]
         rosseland_depth[i] = linear_interpolation(
-            Interpolations.deduplicate_knots!(t_mono, move_knots=true), 
+            Interpolations.deduplicate_knots!(lλ[:, i], move_knots=true), 
             lRoss, 
             extrapolation_bc=Line()
         )(0.0)

@@ -12,6 +12,7 @@ using HDF5
 using Statistics
 using Mmap
 using Clustering
+using ThreadsX
 import Clustering.assignments
 
 import Base.size
