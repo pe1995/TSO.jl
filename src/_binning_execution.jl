@@ -200,6 +200,10 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
 
     save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
     save(eosE, joinpath(folder_new, "eos.hdf5"))
+
+    # also save the T-grid EoS to make comparison easier later
+    save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
+    save(eos, joinpath(folder_new, "eos_T.hdf5"))
 end
 
 function create_E_from_T(table_folder, name=""; 

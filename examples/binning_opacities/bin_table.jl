@@ -19,12 +19,12 @@ md"# Binning of Opacities"
 
 # ╔═╡ 25f6b474-02e0-430e-98ea-dbf658b2199d
 begin
-	eos_folder = "../../../opacity_tables/TSO_M3D_magg_m0_a0_v1.5"
+	eos_folder = "../../../opacity_tables/TSO_M3D_magg_m0_a0_v1.4"
 	model = joinpath(
 		"../../../MUST.jl/examples/initial_models/DIS_MARCS_E_t5777g44m00_v0.5", "inim.dat"
 	)
 	name = "t5777g44m00"
-	version = "v1.1"
+	version = "v1.4"
     extension = "magg_m0_a0"
 	eos_old_name = "combined_eos_$(extension).hdf5"
 	opa_old_name = "combined_opacities_$(extension).hdf5"
