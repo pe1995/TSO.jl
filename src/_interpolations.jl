@@ -739,7 +739,7 @@ end
 
 #=================================================================== NaN handling ===#
 
-@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(deepcopy(x), move_knots=true), y, extrapolation_bc=bc).(x0)
+@inline interpolate_at(x, y, x0; bc=Flat()) = linear_interpolation(Interpolations.deduplicate_knots!(deepcopy(x), move_knots=true), y, extrapolation_bc=bc).(x0)
 
 nan_or_inf(a) = isnan(a) | !isfinite(a)
 
@@ -970,6 +970,8 @@ smoothAccumulate!(aos; spline=true) = begin
 
     aos
 end
+smoothAccumulate!(eos::EoSTable, args...; kwargs...) = smoothAccumulate!(@axed(eos), args...; kwargs...)
+
 
 check(v, small) = !isnan(v) & (v >= small)
 check_small = check

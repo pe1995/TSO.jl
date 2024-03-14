@@ -1167,11 +1167,11 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
         @inbounds for i in eachindex(axis_val)
             RossChunk .= 0.0
             BChunk .= 0.0
-            Threads.@threads for i in 1:length(chunks)
-                chunk = chunks[i]
+            Threads.@threads for chunki in 1:length(chunks)
+                chunk = chunks[chunki]
                 @inbounds for k in chunk
-                    RossChunk[i] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
-                    BChunk[i] += weights[k] * δBν(l[k], T[i, j])
+                    RossChunk[chunki] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
+                    BChunk[chunki] += weights[k] * δBν(l[k], T[i, j])
                 end
             end
 

@@ -1334,8 +1334,7 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                 SBox[ i, j, b]  += weights[k] * bnu[] 
                 B[ i, j, b]     += weights[k] * bnu[]  
                 δB[i, j, b]     += weights[k] * dbnu[]
-                κBox[ i, j, b]  += weights[k] * #weights[k] * 
-                                            (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
+                κBox[ i, j, b]  += weights[k] * (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
             end
         end
     end
