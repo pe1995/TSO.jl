@@ -1098,38 +1098,10 @@ end
 
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
-function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
+rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS} = begin
     lnRoss = similar(eos.eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
-end
-
-"""
-    new_rosseland_opacity(eos, opacities)
-
-Integrate the rosseland opacity from the given monochromatic opacity table.
-"""
-function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
-    eos      = aos.eos 
-    axis_val = aos.energy_axes.values
-    eaxis    = is_internal_energy(aos)
-    
-    T = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
-    if ndims(eos.lnT) == 2
-        T .= exp.(eos.lnT)
-    else
-        puff_up!(T, exp.(eos.lnT))
-    end
-
-    #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
-    #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
-
-    #if Threads.nthreads() == 1
-        _rosseland_opacity!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
-    #else
-    #    @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
-    #    _rosseland_opacityX!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T)
-    #end
 end
 
 _rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
@@ -1154,40 +1126,53 @@ _rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
     lnRoss
 end
 
+
+
 _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
-    B::Float32 = 0.0
     lnRoss .= 0.0
+    B = similar(lnRoss)
 
     # make backup chunk arras for intermediate sum storage
     chunks = Iterators.partition(eachindex(l), length(l) ÷ Threads.nthreads()) |> collect
-    BChunk = zeros(Float32, length(chunks))
-    RossChunk = zeros(Float32, length(chunks))
-    
-    @inbounds for j in eachindex(lnRho)
-        @inbounds for i in eachindex(axis_val)
-            RossChunk .= 0.0
-            BChunk .= 0.0
-            Threads.@threads for chunki in 1:length(chunks)
-                chunk = chunks[chunki]
-                @inbounds for k in chunk
-                    RossChunk[chunki] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
-                    BChunk[chunki] += weights[k] * δBν(l[k], T[i, j])
-                end
-            end
+    tasks = map(chunks) do chunk
+        Threads.@spawn _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity)
+    end
 
-            lnRoss[i, j] = sum(RossChunk)
-            B = sum(BChunk)
+    results = fetch.(tasks)
+    BChunk = getindex.(results, 1)
+    RossChunk = getindex.(results, 2)
+
+    lnRoss .= sum(RossChunk)
+    B = sum(BChunk)
                 
-            lnRoss[i, j] /= B
-            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
-                NaN
-            else
-                log(1.0 / lnRoss[i, j])
+    lnRoss ./= B
+
+    zero_mask = lnRoss.==0.0
+    lnRoss[zero_mask] .= NaN
+    lnRoss[.!zero_mask] .= log.(1.0 ./ lnRoss[.!zero_mask])
+
+    lnRoss
+end
+
+_rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
+    BChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    RossChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    dbnuChunk = Ref(eltype(opacity)(0.0))
+
+    for k in chunk
+        for j in eachindex(lnRho)
+            for i in eachindex(axis_val)
+                δBν!(dbnuChunk, l[k], T[i, j])
+                RossChunk[i, j] += weights[k] * 1 / opacity[i, j, k] * dbnuChunk[]
+                BChunk[i, j] += weights[k] * dbnuChunk[]
             end
         end
     end
-    lnRoss
+
+    return [BChunk, RossChunk]
 end
+
+
 
 _rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin
     B::Float32 = Float32(0.0)
@@ -1211,6 +1196,41 @@ end
 
 rosseland_opacity!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity!(lnRoss, AxedEoS(eos), args...; kwargs...) 
 rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(AxedEoS(eos), args...; kwargs...)
+
+
+"""
+    rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities))    
+
+Integrate the rosseland opacity from the given monochromatic opacity table.
+"""
+function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
+    eos      = aos.eos 
+    axis_val = aos.energy_axes.values
+    eaxis    = is_internal_energy(aos)
+    
+    T = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
+    if ndims(eos.lnT) == 2
+        T .= exp.(eos.lnT)
+    else
+        puff_up!(T, exp.(eos.lnT))
+    end
+
+    #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
+    #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
+    if Threads.nthreads() > 1
+        @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
+    end
+
+    @optionalTiming rosseland_time _rosseland_opacityX!(
+        lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T
+    )    
+    
+end
+
+
+
+
+
 
 """
     transfer_rosseland(from, to)
@@ -1583,3 +1603,6 @@ end
 
 include("_interpolations.jl")
 
+
+#= Timer setup =#
+const rosseland_time = Ref(false)

@@ -1223,68 +1223,34 @@ Multithreaded version of do_binning. Uses partial chunk sums to avoid race condi
 function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                         ρ, λ, binning, Temp, weights, κ, κ_scat)
     rhoBins = size(χBox, 2)
-    AxBins = size(χBox, 2)
-
-    bnu  ::Float32 = Float32(0.0)
-    dbnu ::Float32 = Float32(0.0)
-    b ::Int = 0
-
-    B  .= 0.0
-    δB .= 0.0
+    AxBins = size(χBox, 1)
+    radBins = size(χBox, 3)
 
     # chucks for threading
     chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
 
-    # backup storage for intermediate partial sums
-    χBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    χRBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    χthinChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    SBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    BChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    δBChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    κBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    
-    @inbounds for j in 1:rhoBins
-        @inbounds for i in 1:AxBins
-            # empty intermmediate storage
-            χBoxChunk .= 0.0
-            χRBoxChunk .= 0.0
-            χthinChunk .= 0.0
-            SBoxChunk .= 0.0
-            BChunk .= 0.0
-            δBChunk .= 0.0
-            κBoxChunk .= 0.0
-
-            # Fill intermediate storage
-            @inbounds Threads.@threads for ichunk in 1:length(chunks)
-                chunk = chunks[ichunk]
-                @inbounds for k in chunk
-                    b = binning[k]
-                    bnu = Bν(λ[k], Temp[i, j]) 
-                    dbnu = δBν(λ[k], Temp[i, j]) 
-
-                    χBoxChunk[b, ichunk] += weights[k] * κ[i, j, k] * bnu
-                    χRBoxChunk[b, ichunk] += weights[k] * 1.0 / κ[i, j, k] * dbnu
-                
-                    χthinChunk[b, ichunk] = χBoxChunk[b, ichunk]
-                    
-                    SBoxChunk[b, ichunk]  += weights[k] * bnu 
-                    BChunk[b, ichunk]     += weights[k] * bnu  
-                    δBChunk[b, ichunk]    += weights[k] * dbnu
-                    κBoxChunk[b, ichunk]  += weights[k] * (κ[i, j, k] - κ_scat[i, j, k]) * bnu
-                end
-            end
-
-            # sum over all chunks to get the total sum
-            χBox[ i, j, :]  .= sum(χBoxChunk; dims=2)
-            χRBox[i, j, :]  .= sum(χRBoxChunk; dims=2)
-            χ_thin[i,j, :]  .= sum(χthinChunk; dims=2) 
-            SBox[ i, j, :]  .= sum(SBoxChunk; dims=2)
-            B[ i, j, :]     .= sum(BChunk; dims=2)
-            δB[i, j, :]     .= sum(δBChunk; dims=2)
-            κBox[ i, j, :]  .= sum(κBoxChunk; dims=2)
+    begin
+        tasks = map(chunks) do chunk
+            Threads.@spawn _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, κ_scat, Temp, λ)
         end
+        results = fetch.(tasks)
+        χBoxChunk = getindex.(results, 1)
+        χRBoxChunk = getindex.(results, 2)
+        χthinChunk = getindex.(results, 3)
+        SBoxChunk = getindex.(results, 4)
+        BChunk = getindex.(results, 5)
+        δBChunk = getindex.(results, 6)
+        κBoxChunk = getindex.(results, 7)
     end
+
+    # sum over all chunks to get the total sum
+    χBox .= sum(χBoxChunk)
+    χRBox .= sum(χRBoxChunk)
+    χ_thin .= sum(χthinChunk) 
+    SBox .= sum(SBoxChunk)
+    B .= sum(BChunk)
+    δB .= sum(δBChunk)
+    κBox .= sum(κBoxChunk)
 
     χBox   ./= B
     κBox   ./= B
@@ -1307,10 +1273,51 @@ function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .>= 1e30]  .= 1e30
 end
 
+@inline _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, κ_scat, Temp, λ) = begin
+    bC = Ref{Int}(0)
+    dbnC = Ref(eltype(κ)(0.0)) 
+    bnC = Ref(eltype(κ)(0.0))
+    χBoxChunk = zeros(eltype(κ), AxBins, rhoBins, radBins)
+    χRBoxChunk = deepcopy(χBoxChunk)
+    χthinChunk = deepcopy(χBoxChunk)
+    SBoxChunk = deepcopy(χBoxChunk)
+    BChunk = deepcopy(χBoxChunk)
+    δBChunk = deepcopy(χBoxChunk)
+    κBoxChunk = deepcopy(χBoxChunk)
+
+    @inbounds for k in chunk
+        bC[] = binning[k] 
+        @inbounds for j in 1:rhoBins
+            @inbounds for i in 1:AxBins
+                Bν!(bnC, λ[k], Temp[i, j]) 
+                δBν!(dbnC, λ[k], Temp[i, j]) 
+
+                χBoxChunk[i, j, bC[]] += weights[k] * κ[i, j, k] * bnC[]
+                χRBoxChunk[i, j, bC[]] += weights[k] * 1.0 / κ[i, j, k] * dbnC[]
+                χthinChunk[i, j, bC[]] = χBoxChunk[i, j, bC[]]
+                SBoxChunk[i, j, bC[]]  += weights[k] * bnC[] 
+                BChunk[i, j, bC[]] += weights[k] * bnC[]
+                δBChunk[i, j, bC[]] += weights[k] * dbnC[]
+                κBoxChunk[i, j, bC[]] += weights[k] * (κ[i, j, k] - κ_scat[i, j, k]) * bnC[]
+            end
+        end
+    end
+
+    return [
+        χBoxChunk,
+        χRBoxChunk,
+        χthinChunk,
+        SBoxChunk,
+        BChunk,
+        δBChunk,
+        κBoxChunk
+    ]
+end
+
 function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                         ρ, λ, binning, Temp, weights, κ, κ_scat)
     rhoBins = size(χBox, 2)
-    AxBins = size(χBox, 2)
+    AxBins = size(χBox, 1)
 
     bnu  = Ref(Float32(0.0))
     dbnu = Ref(Float32(0.0))
@@ -1319,22 +1326,24 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     B  .= 0.0
     δB .= 0.0
     
-    @inbounds for k in eachindex(λ)
-        b = binning[k]
-        @inbounds for j in 1:rhoBins
-            @inbounds for i in 1:AxBins
-                Bν!(bnu,   λ[k], Temp[i, j]) 
-                δBν!(dbnu, λ[k], Temp[i, j]) 
+    begin
+        @inbounds for k in eachindex(λ)
+            b = binning[k]
+            @inbounds for j in 1:rhoBins
+                @inbounds for i in 1:AxBins
+                    Bν!(bnu,   λ[k], Temp[i, j]) 
+                    δBν!(dbnu, λ[k], Temp[i, j]) 
 
-                χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
-                χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
-                
-                χ_thin[i,j, b] = χRBox[i, j, b]
-                
-                SBox[ i, j, b]  += weights[k] * bnu[] 
-                B[ i, j, b]     += weights[k] * bnu[]  
-                δB[i, j, b]     += weights[k] * dbnu[]
-                κBox[ i, j, b]  += weights[k] * (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
+                    χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
+                    χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
+                    
+                    χ_thin[i,j, b] = χRBox[i, j, b]
+                    
+                    SBox[ i, j, b]  += weights[k] * bnu[] 
+                    B[ i, j, b]     += weights[k] * bnu[]  
+                    δB[i, j, b]     += weights[k] * dbnu[]
+                    κBox[ i, j, b]  += weights[k] * (κ[i, j, k] - κ_scat[i, j, k]) * bnu[]
+                end
             end
         end
     end
@@ -1359,6 +1368,8 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .<= 1e-30] .= 1e-30
     SBox[SBox   .>= 1e30]  .= 1e30
 end
+
+
 
 """
     do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
@@ -1369,68 +1380,34 @@ Multithreaded version of do_binning. Uses partial chunk sums to avoid race condi
 function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                         ρ, λ, binning, Temp, weights, κ)
     rhoBins = size(χBox, 2)
-    AxBins = size(χBox, 2)
-
-    bnu  ::Float32 = Float32(0.0)
-    dbnu ::Float32 = Float32(0.0)
-    b ::Int = 0
-
-    B  .= 0.0
-    δB .= 0.0
+    AxBins = size(χBox, 1)
+    radBins = size(χBox, 3)
 
     # chucks for threading
     chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
 
-    # backup storage for intermediate partial sums
-    χBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    χRBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    χthinChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    SBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    BChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    δBChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    κBoxChunk = zeros(eltype(χBox), size(χBox, 3), length(chunks))
-    
-    @inbounds for j in 1:rhoBins
-        @inbounds for i in 1:AxBins
-            # empty intermmediate storage
-            χBoxChunk .= 0.0
-            χRBoxChunk .= 0.0
-            χthinChunk .= 0.0
-            SBoxChunk .= 0.0
-            BChunk .= 0.0
-            δBChunk .= 0.0
-            κBoxChunk .= 0.0
-
-            # Fill intermediate storage
-            @inbounds Threads.@threads for ichunk in 1:length(chunks)
-                chunk = chunks[ichunk]
-                @inbounds for k in chunk
-                    b = binning[k]
-                    bnu = Bν(λ[k], Temp[i, j]) 
-                    dbnu = δBν(λ[k], Temp[i, j]) 
-
-                    χBoxChunk[b, ichunk] += weights[k] * κ[i, j, k] * bnu
-                    χRBoxChunk[b, ichunk] += weights[k] * 1.0 / κ[i, j, k] * dbnu
-                
-                    χthinChunk[b, ichunk] = χBoxChunk[b, ichunk]
-                    
-                    SBoxChunk[b, ichunk]  += weights[k] * bnu 
-                    BChunk[b, ichunk]     += weights[k] * bnu  
-                    δBChunk[b, ichunk]    += weights[k] * dbnu
-                    κBoxChunk[b, ichunk]  += weights[k] * κ[i, j, k] * bnu
-                end
-            end
-
-            # sum over all chunks to get the total sum
-            χBox[ i, j, :]  .= sum(χBoxChunk; dims=2)
-            χRBox[i, j, :]  .= sum(χRBoxChunk; dims=2)
-            χ_thin[i,j, :]  .= sum(χthinChunk; dims=2) 
-            SBox[ i, j, :]  .= sum(SBoxChunk; dims=2)
-            B[ i, j, :]     .= sum(BChunk; dims=2)
-            δB[i, j, :]     .= sum(δBChunk; dims=2)
-            κBox[ i, j, :]  .= sum(κBoxChunk; dims=2)
+    begin
+        tasks = map(chunks) do chunk
+            Threads.@spawn _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, Temp, λ)
         end
+        results = fetch.(tasks)
+        χBoxChunk = getindex.(results, 1)
+        χRBoxChunk = getindex.(results, 2)
+        χthinChunk = getindex.(results, 3)
+        SBoxChunk = getindex.(results, 4)
+        BChunk = getindex.(results, 5)
+        δBChunk = getindex.(results, 6)
+        κBoxChunk = getindex.(results, 7)
     end
+
+    # sum over all chunks to get the total sum
+    χBox .= sum(χBoxChunk)
+    χRBox .= sum(χRBoxChunk)
+    χ_thin .= sum(χthinChunk) 
+    SBox .= sum(SBoxChunk)
+    B .= sum(BChunk)
+    δB .= sum(δBChunk)
+    κBox .= sum(κBoxChunk)
 
     χBox   ./= B
     κBox   ./= B
@@ -1453,11 +1430,52 @@ function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .>= 1e30]  .= 1e30
 end
 
+@inline _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, Temp, λ) = begin
+    bC = Ref{Int}(0)
+    dbnC = Ref(eltype(κ)(0.0)) 
+    bnC = Ref(eltype(κ)(0.0))
+    χBoxChunk = zeros(eltype(κ), AxBins, rhoBins, radBins)
+    χRBoxChunk = deepcopy(χBoxChunk)
+    χthinChunk = deepcopy(χBoxChunk)
+    SBoxChunk = deepcopy(χBoxChunk)
+    BChunk = deepcopy(χBoxChunk)
+    δBChunk = deepcopy(χBoxChunk)
+    κBoxChunk = deepcopy(χBoxChunk)
+
+    @inbounds for k in chunk
+        bC[] = binning[k] 
+        @inbounds for j in 1:rhoBins
+            @inbounds for i in 1:AxBins
+                Bν!(bnC, λ[k], Temp[i, j]) 
+                δBν!(dbnC, λ[k], Temp[i, j]) 
+
+                χBoxChunk[i, j, bC[]] += weights[k] * κ[i, j, k] * bnC[]
+                χRBoxChunk[i, j, bC[]] += weights[k] * 1.0 / κ[i, j, k] * dbnC[]
+                χthinChunk[i, j, bC[]] = χBoxChunk[i, j, bC[]]
+                SBoxChunk[i, j, bC[]]  += weights[k] * bnC[] 
+                BChunk[i, j, bC[]] += weights[k] * bnC[]
+                δBChunk[i, j, bC[]] += weights[k] * dbnC[]
+                κBoxChunk[i, j, bC[]] += weights[k] * κ[i, j, k] * bnC[]
+            end
+        end
+    end
+
+    return [
+        χBoxChunk,
+        χRBoxChunk,
+        χthinChunk,
+        SBoxChunk,
+        BChunk,
+        δBChunk,
+        κBoxChunk
+    ]
+end
+
 function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
                         ρ, λ, binning, Temp, weights, κ)
 
     rhoBins = size(χBox, 2)
-    AxBins = size(χBox, 2)
+    AxBins = size(χBox, 1)
 
     bnu  = Ref(Float32(0.0))
     dbnu = Ref(Float32(0.0))
@@ -1466,26 +1484,28 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     B  .= 0.0
     δB .= 0.0
     
-    @inbounds for k in eachindex(λ)
-        b = binning[k]
-        @inbounds for j in 1:rhoBins
-            @inbounds for i in 1:AxBins
-                Bν!(bnu,   λ[k], Temp[i, j]) 
-                δBν!(dbnu, λ[k], Temp[i, j]) 
+    begin
+        @inbounds for k in eachindex(λ)
+            b = binning[k]
+            @inbounds for j in 1:rhoBins
+                @inbounds for i in 1:AxBins
+                    Bν!(bnu,   λ[k], Temp[i, j]) 
+                    δBν!(dbnu, λ[k], Temp[i, j]) 
 
-                χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
-                χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
-                
-                χ_thin[i,j, b] = χRBox[i, j, b]
-                
-                SBox[ i, j, b]  += weights[k] * bnu[] 
-                B[ i, j, b]     += weights[k] * bnu[]  
-                δB[i, j, b]     += weights[k] * dbnu[]
-                κBox[ i, j, b]  += weights[k] * κ[i, j, k] * bnu[]
+                    χBox[ i, j, b] += weights[k] * κ[i, j, k] * bnu[]  
+                    χRBox[i, j, b] += weights[k] * 1.0 / κ[i, j, k] * dbnu[]
+                    
+                    χ_thin[i,j, b] = χRBox[i, j, b]
+                    
+                    SBox[ i, j, b]  += weights[k] * bnu[] 
+                    B[ i, j, b]     += weights[k] * bnu[]  
+                    δB[i, j, b]     += weights[k] * dbnu[]
+                    κBox[ i, j, b]  += weights[k] * κ[i, j, k] * bnu[]
+                end
             end
         end
     end
-
+    
     χBox   ./= B
     κBox   ./= B
     χRBox  ./= δB
@@ -1507,6 +1527,8 @@ function do_binning!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .>= 1e30]  .= 1e30
 end
 
+
+
 function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothing; 
     transition_model=nothing) where {E<:AxedEoS}
     eos = aos.eos
@@ -1514,6 +1536,10 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     iscat = isnothing(scattering)
     remove_from_thin = !iscat
+
+    if !remove_from_thin
+        @warn "No scattering opacity provided!"
+    end
 
     radBins = length(unique(binning))
     rhoBins = length(eos.lnRho)
@@ -1545,37 +1571,41 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
     # None of the bins are allowed to be empty as this stage
     @assert all(binning .!= 0)
 
+    if Threads.nthreads() > 1
+        @info "Binning opacities with $(Threads.nthreads()) threads."
+    end
+
     # Do stuff
-    if (!iscat) 
-        #if Threads.nthreads() <= 1
+    if remove_from_thin
+        #=if Threads.nthreads() <= 1
             do_binning!(
                 B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
                 opacities.λ, binning, Temp, weights, 
                 opacities.κ, scattering.κ
             )
-        #=else
-            @info "Binning opacities with $(Threads.nthreads()) threads."
+        else
+            @info "Binning opacities with $(Threads.nthreads()) threads."=#
             do_binningX!(
                 B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
                 opacities.λ, binning, Temp, weights, 
                 opacities.κ, scattering.κ
             )
-        end=#
+        #end
     else
-        #if Threads.nthreads() <= 1
+        #=if Threads.nthreads() <= 1
             do_binning!(
                 B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
                 opacities.λ, binning, Temp, weights, 
                 opacities.κ
             )
-        #=else
-            @info "Binning opacities with $(Threads.nthreads()) threads."
+        else
+            @info "Binning opacities with $(Threads.nthreads()) threads."=#
             do_binningX!(
                 B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
                 opacities.λ, binning, Temp, weights, 
                 opacities.κ
             )
-        end=#
+        #end
     end
 
     κ_ross = T(1.0) ./χRBox
@@ -1690,7 +1720,7 @@ Tabulate opacity and source function for the given binning. Calls the currently
 recommended version of box_integrated, which is box_integrated_v3, which is 
 the fastest implementation, however without scattering at the moment to save memory.
 """
-tabulate(args...; kwargs...) = box_integrated_v4(args...; kwargs...)
+tabulate(args...; kwargs...) = @optionalTiming binning_time box_integrated_v4(args...; kwargs...)
 
 
 
@@ -1772,5 +1802,7 @@ mean_intensity(aos::AxedEoS, opacity, model) = mean_intensity(aos, @binned(opaci
 const test_bin = 4
 const test_t   = 4843.07
 const test_r   = 2.38802e-8
+
+const binning_time = Ref(false)
 
 #=======================================================================================#

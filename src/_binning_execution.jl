@@ -74,6 +74,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
                                         line_bins=3, 
                                         scattering_path=nothing,
                                         name_extension="DIS_MARCS",
+                                        formation_opacities="combined_formation_opacities_$(name).hdf5",
                                         version="v0.1",
                                         kwargs...)
     eos = reload(
@@ -94,7 +95,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
     )
 	
     formOpacities = reload(SqOpacity, 
-		joinpath(table_folder, "combined_formation_opacities_$(name).hdf5"), 
+		joinpath(table_folder, formation_opacities), 
 		mmap=true
     )
 
