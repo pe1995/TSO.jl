@@ -102,6 +102,6 @@ include("_extend.jl")
 
 
 #= Deprecations =#
-@deprecate replaceEoS complement do_binning! box_integrated_v3 box_integrated_v2 box_integrated
+#@deprecate replaceEoS complement do_binning! box_integrated_v3 box_integrated_v2 box_integrated
 
 end
