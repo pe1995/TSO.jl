@@ -1271,11 +1271,28 @@ _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
 end
 
 _optical_depthX!(τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
+    chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
+
+    tasks = map(chunks) do chunk
+        Threads.@spawn _optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned)
+    end
+    results = fetch.(tasks)
+
+    for (i, chunk) in enumerate(chunks)
+        τ[:, chunk] .= results[i]
+    end
+end
+
+_optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned) = begin
+    τ = zeros(eltype(opacities.κ), length(z), length(chunk))
+    ρκ = zeros(eltype(opacities.κ), length(z))
+    ρ = exp.(lnρ)
+
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
-    @inbounds Threads.@threads for i in 1:length(λ)
+    @inbounds for (i, k) in enumerate(chunk)
         # Look up the opacity in the table
-        ρκ = lookup(eos, opacities, :κ, lnρ, lnE, i)
-        ρκ = binned ? ρκ : exp.(lnρ) .* ρκ
+        ρκ .= lookup(eos, opacities, :κ, lnρ, lnE, k)
+        ρκ .= binned ? ρκ : ρ .* ρκ
 
         # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
         @inbounds for j in eachindex(z)
@@ -1297,6 +1314,9 @@ Compute monochromatic and rosseland optical depth scales of the model
 based on the opacity table.
 """
 function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
+    # make sure model is in right direction
+    model = TSO.flip(model, depth=true)
+
     # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
@@ -1306,13 +1326,13 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
     τ_ross = zeros(T, length(lnρ)) 
 
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
-    #if Threads.nthreads() <= 1
+    @optionalTiming optical_depth_time if Threads.nthreads() <= 1
         ρκ = zeros(T, length(lnρ))
         _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
-    #else
-    #    @info "Computing table optical depth with $(Threads.nthreads()) threads."
-    #    _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
-    #end
+    else
+        @info "Computing table optical depth with $(Threads.nthreads()) threads."
+        _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    end
 
     # Rosseland optical depth
     τ_ross .= rosseland_optical_depth(eos, opacities, model, binned=binned)
@@ -1326,6 +1346,10 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
     
     return τ_ross, τ_λ
 end
+
+
+
+
 
 function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
@@ -1377,6 +1401,9 @@ end
 
 rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
 rosseland_optical_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), model; kwargs...)
+
+
+
 
 
 
@@ -1458,26 +1485,60 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     lRoss = log10.(τ_ross)
     lλ    = log10.(τ_λ)
 
+    λ = opacities.λ
+
     #t_mono = zeros(T, size(τ_λ, 1))
     r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Flat())
     T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Flat())
 
-    @inbounds for i in axes(τ_λ, 2)
-        #t_mono .= lλ[:, i]
-        rosseland_depth[i] = linear_interpolation(
-            Interpolations.deduplicate_knots!(lλ[:, i], move_knots=true), 
-            lRoss, 
-            extrapolation_bc=Line()
-        )(0.0)
-        
-        opacity_depth[i] = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), i)
+    if Threads.nthreads() > 1
+        @info "Computing formation height with $(Threads.nthreads()) threads."
+    end
+
+    @optionalTiming formation_height_time begin
+        chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
+
+        tasks = map(chunks) do chunk
+            Threads.@spawn _formation_height_chunk(chunk, τ_λ, lλ, lRoss, r_ross, T_ross, eos, opacities)
+        end
+        results = fetch.(tasks)
+        rossChunk = getindex.(results, 1)
+        opaChunk = getindex.(results, 2)
+
+        for (i, chunk) in enumerate(chunks)
+            rosseland_depth[chunk] .= rossChunk[i]
+            opacity_depth[chunk] .= opaChunk[i]
+        end
     end
 
     exp10.(rosseland_depth), opacity_depth
 end
 
+_formation_height_chunk(chunk, τ_λ, lλ, lRoss, r_ross, T_ross, eos, opacities) = begin
+    T = eltype(opacities.κ)
+    rosseland_depth = zeros(T, length(chunk))
+    opacity_depth = zeros(T, length(chunk))
+    t_mono = zeros(T, size(τ_λ, 1))
+
+    @inbounds for (i, k) in enumerate(chunk) 
+        t_mono .= @view(lλ[:, k])
+        rosseland_depth[i] = linear_interpolation(
+            Interpolations.deduplicate_knots!(t_mono, move_knots=true), 
+            lRoss, 
+            extrapolation_bc=Line()
+        )(0.0)
+        
+        opacity_depth[i] = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), k)
+    end
+
+    return [rosseland_depth, opacity_depth]
+end
+
 optical_depth(eos::RegularEoSTable,    args...; kwargs...) = optical_depth(AxedEoS(eos),    args...; kwargs...)
 formation_height(model, eos::RegularEoSTable, args...; kwargs...) = formation_height(model, AxedEoS(eos), args...; kwargs...)
+
+
+
 
 """
 Convert a monochromatic EoS into a binned EoS format
@@ -1606,3 +1667,5 @@ include("_interpolations.jl")
 
 #= Timer setup =#
 const rosseland_time = Ref(false)
+const optical_depth_time = Ref(false)
+const formation_height_time = Ref(false)

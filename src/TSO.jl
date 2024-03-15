@@ -100,6 +100,13 @@ include("_binning_execution.jl")
 include("_extend.jl")
 
 
+#= List of timers =#
+const timers = [
+    rosseland_time, 
+    optical_depth_time, 
+    formation_height_time,
+    binning_time
+]
 
 #= Deprecations =#
 #@deprecate replaceEoS complement do_binning! box_integrated_v3 box_integrated_v2 box_integrated
