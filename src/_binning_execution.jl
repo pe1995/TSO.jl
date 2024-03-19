@@ -74,6 +74,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
                                         line_bins=3, 
                                         scattering_path=nothing,
                                         name_extension="DIS_MARCS",
+                                        formation_opacities="combined_formation_opacities_$(name).hdf5",
                                         version="v0.1",
                                         kwargs...)
     eos = reload(
@@ -94,7 +95,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
     )
 	
     formOpacities = reload(SqOpacity, 
-		joinpath(table_folder, "combined_formation_opacities_$(name).hdf5"), 
+		joinpath(table_folder, formation_opacities), 
 		mmap=true
     )
 
@@ -173,15 +174,22 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000)
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01)
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
     aos = @axed eos
 
     # Before switching energy sources, make sure that everything is monotonic
     TSO.smoothAccumulate!(aos, spline=true)
+    eos_new, opa_new = if extend
+        @info "Extrapolating EoS at $(table_folder) beyond limits."
+        TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
+    else
+        aos.eos, opa
+    end
+    TSO.smoothAccumulate!(@axed(eos_new), spline=true)
 
-    eosE, opaE = switch_energy(aos, opa, upsample=upsample, conservative=false);
+    eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false);
     aosE = @axed eosE
 
     TSO.fill_nan!(aosE, opaE)
@@ -193,6 +201,10 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000)
 
     save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
     save(eosE, joinpath(folder_new, "eos.hdf5"))
+
+    # also save the T-grid EoS to make comparison easier later
+    save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
+    save(eos, joinpath(folder_new, "eos_T.hdf5"))
 end
 
 function create_E_from_T(table_folder, name=""; 

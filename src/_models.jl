@@ -169,7 +169,7 @@ optical_surface!(model::OpticalModel1D) = model.z .= model.z .- optical_surface(
 #================================================================ Utilities ==#
 
 upsample(model::AbstractModel, N=500) = begin
-	oldz = model.z
+	oldz = deepcopy(model.z)
 	z = Base.convert.(eltype(oldz), 
 		range(minimum(oldz), maximum(oldz), length=N)) |> collect
 
@@ -181,7 +181,7 @@ upsample(model::AbstractModel, N=500) = begin
 	
 	for (i, f) in enumerate(fields)
 		v = getfield(model, f)
-		results[f] .= TSO.linear_interpolation(oldz, v).(z)
+		results[f] .= TSO.linear_interpolation(Interpolations.deduplicate_knots!(oldz, move_knots=true), v).(z)
 	end
 
 	args = [!is_field(model, f) ? getfield(model, f) : results[f] 
@@ -216,6 +216,7 @@ function interpolate_to(m::AbstractModel; in_log=false, kwargs...)
     
     para, new_scale = first(keys(kwargs)), first(values(kwargs))
     old_scale = in_log ? log10.(getfield(m, para)) : getfield(m, para)
+    old_scale = deepcopy(old_scale)
     mask = sortperm(old_scale)
 
     d = []

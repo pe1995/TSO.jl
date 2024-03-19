@@ -84,6 +84,67 @@ zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
 
 
+# stuff for timing
+
+"""
+    activate_timing!(t)
+
+Activate timing of the given timer. See `timers` for a list of available timers.
+"""
+activate_timing!(t) = begin
+    reset_timer!(generalTimer)
+    t[] = true
+end
+
+"""
+    deactivate_timing!(t)
+
+Deactivate timing of the given timer. See `timers` for a list of available timers.
+"""
+deactivate_timing!(t) = begin
+    reset_timer!(generalTimer)
+    t[] = false
+end
+
+"""
+    start_timing!(t=generalTimer)
+
+Reset the timer.
+"""
+start_timing!(t=generalTimer) = reset_timer!(t) 
+
+"""
+    end_timing!(t=generalTimer)
+
+Reset the timer.
+"""
+end_timing!(t=generalTimer) = begin
+    println("")
+    show(t)
+    println("")
+    reset_timer!(t) 
+end
+
+macro optionalTiming(name, exp)
+    name_e = esc(name)
+    ex = esc(exp)
+    name_string = "$(name)"
+    quote
+        if $(name_e)[]
+            @timeit generalTimer $(name_string) begin
+                $(ex)
+            end
+        else
+            $(ex)
+        end
+    end
+end
+
+
+
+
+
+
 ## Importing of python modules
 
 function _get_help_py(mod ,dir=dirname(@__FILE__))

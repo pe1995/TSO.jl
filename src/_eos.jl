@@ -4,6 +4,8 @@
 Switch between different grids of the EoS table.
 """
 function transform(t::EoSTable, from_to::Pair{Symbol, Symbol})
+    @warn "This method is no longer in use and should not be called."
+
     return if (first(from_to) == :lnT) & (last(from_to) == :lnEi)
         lnT_to_lnEi(t)
     else
@@ -41,6 +43,8 @@ temperature is outside the range in the ln rho-lnT table for a
 given rho(i).
 """
 function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
+    @warn "This method is no longer in use and should not be called."
+
     T = eltype(t.lnEi)
     # new axis range
     lnEi2min = minimum(view(t.lnEi, :, :, 1))
@@ -225,6 +229,8 @@ nanmax(x) = isnan(x) ? -Inf : x
 A simple method to interpolate the EoS to new Energy grid.
 """
 function energy_grid(t::RegularEoSTable)
+    @warn "This method is no longer in use and should not be called."
+
     T = eltype(t.lnEi)
 
     # new axis range
@@ -296,6 +302,8 @@ lnT_to_lnEi(t) = error("No transformation from T to Ei implemented for this tabl
 Interpolate the function and first derivative of a cubic spline. (Taken from Tabgen)
     """
 function interpolate_f_df!(ff, dd, xx, x, f, d)
+    @warn "This method is no longer in use and should not be called."
+
     @inbounds for i in eachindex(ff)
         n = length(x)
         k = 0
@@ -333,6 +341,8 @@ end
 Add linear extrapolation outside of the given index.
 """
 function add_outside!(f::AbstractArray{K, 1}, esi, eei) where {K}
+    @warn "This method is no longer in use and should not be called."
+
     nF = length(f)
     for k=1:esi-1
         f[esi-k] = 2.0*f[esi] - f[esi+k]
@@ -348,6 +358,8 @@ Compute the derivatives of all quantities w.r.t the axis variables.
 First: value, Second: df/dρ, third: df/dE (or dT)
 """
 function derivative(t::RegularEoSTable)
+    @warn "This method is no longer in use and should not be called."
+
     e_axis = ndims(t.lnT) == 1 ? false : true
     T = eltype(t.lnT)
 
@@ -443,7 +455,7 @@ function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoS
 
         # It is listed as a function of temperature -> get the new T axis for the new E axis
         mask .= sortperm(eos.lnEi[:, i])
-        x    .= eos.lnEi[mask, i]
+        x    .= Interpolations.deduplicate_knots!(eos.lnEi[mask, i], move_knots=true)
         y    .= eos.lnT[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnTg2[:, i] .= ip.(lnEi_new)
@@ -979,7 +991,7 @@ function Bλ(λ::AbstractFloat, T::AbstractArray)
 end
 
 Bλ(λ::AbstractVector, T::AbstractVector) = begin
-    B = zeros(length(T), length(λ))
+    B = zeros(eltype(T), length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= Bν(λ[i], T)
     end
@@ -988,7 +1000,7 @@ Bλ(λ::AbstractVector, T::AbstractVector) = begin
 end
 
 Bλ(λ::AbstractVector, T::AbstractMatrix) = begin
-    B = zeros(size(T)..., length(λ))
+    B = zeros(eltype(T), size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= Bν(λ[i], T)
     end
@@ -1005,7 +1017,7 @@ function δBλ(λ::AbstractFloat, T::AbstractArray)
 end
 
 δBλ(λ::AbstractVector, T::AbstractVector) = begin
-    B = zeros(length(T), length(λ))
+    B = zeros(eltype(T), length(T), length(λ))
     for i in axes(B, 2)
         B[:, i] .= δBν(λ[i], T)
     end
@@ -1014,7 +1026,7 @@ end
 end
 
 δBλ(λ::AbstractVector, T::AbstractMatrix) = begin
-    B = zeros(size(T)..., length(λ))
+    B = zeros(eltype(T), size(T)..., length(λ))
     for i in axes(B, 3)
         B[:, :, i] .= δBν(λ[i], T)
     end
@@ -1078,6 +1090,7 @@ end
 
 
 
+
 #=========================== Rosseland opacity ===============================#
 
 """
@@ -1085,14 +1098,108 @@ end
 
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
-function rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
-    lnRoss = similar(eos.lnRoss)
+rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS} = begin
+    lnRoss = similar(eos.eos.lnRoss)
     rosseland_opacity!(lnRoss, eos, opacities, weights=weights)
     lnRoss
 end
 
+_rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
+    B::Float32 = 0.0
+    lnRoss .= 0.0
+    
+    @inbounds for j in eachindex(lnRho)
+        @inbounds for i in eachindex(axis_val)
+            B  = Float32(0.0)
+            @inbounds for k in eachindex(l)
+                lnRoss[i, j] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
+                B += weights[k] * δBν(l[k], T[i, j])
+            end
+            lnRoss[i, j] /= B
+            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
+                NaN
+            else
+                log(1.0 / lnRoss[i, j])
+            end
+        end
+    end
+    lnRoss
+end
+
+
+
+_rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
+    lnRoss .= 0.0
+    B = similar(lnRoss)
+
+    # make backup chunk arras for intermediate sum storage
+    chunks = Iterators.partition(eachindex(l), length(l) ÷ Threads.nthreads()) |> collect
+    tasks = map(chunks) do chunk
+        Threads.@spawn _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity)
+    end
+
+    results = fetch.(tasks)
+    BChunk = getindex.(results, 1)
+    RossChunk = getindex.(results, 2)
+
+    lnRoss .= sum(RossChunk)
+    B = sum(BChunk)
+                
+    lnRoss ./= B
+
+    zero_mask = lnRoss.==0.0
+    lnRoss[zero_mask] .= NaN
+    lnRoss[.!zero_mask] .= log.(1.0 ./ lnRoss[.!zero_mask])
+
+    lnRoss
+end
+
+_rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
+    BChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    RossChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    dbnuChunk = Ref(eltype(opacity)(0.0))
+
+    for k in chunk
+        for j in eachindex(lnRho)
+            for i in eachindex(axis_val)
+                δBν!(dbnuChunk, l[k], T[i, j])
+                RossChunk[i, j] += weights[k] * 1 / opacity[i, j, k] * dbnuChunk[]
+                BChunk[i, j] += weights[k] * dbnuChunk[]
+            end
+        end
+    end
+
+    return [BChunk, RossChunk]
+end
+
+
+
+_rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin
+    B::Float32 = Float32(0.0)
+
+    @inbounds for j in eachindex(lnRho)
+        @inbounds for i in eachindex(axis_val)
+            B = Float32(0.0)
+
+            lnRoss[i, j] = sum(weights .* 1 ./ view(opacity, :, i, j) .* view(db, :, i, j))
+            B = sum(weights .* view(db, :, i, j))
+            
+            lnRoss[i, j] /= B
+            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
+                NaN
+            else
+                log(1.0 / lnRoss[i, j])
+            end
+        end
+    end
+end
+
+rosseland_opacity!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity!(lnRoss, AxedEoS(eos), args...; kwargs...) 
+rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(AxedEoS(eos), args...; kwargs...)
+
+
 """
-    new_rosseland_opacity(eos, opacities)
+    rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities))    
 
 Integrate the rosseland opacity from the given monochromatic opacity table.
 """
@@ -1101,39 +1208,29 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
     axis_val = aos.energy_axes.values
     eaxis    = is_internal_energy(aos)
     
-    lnRoss .= 0.0
-    T       = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
+    T = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
     if ndims(eos.lnT) == 2
         T .= exp.(eos.lnT)
     else
         puff_up!(T, exp.(eos.lnT))
     end
 
-    B::Float32 = 0.0
-
-    @inbounds for j in eachindex(eos.lnRho)
-        @inbounds for i in eachindex(axis_val)
-            B  = Float32(0.0)
-            @inbounds for k in eachindex(opacities.λ)
-                lnRoss[i, j] += weights[k] * 1 / opacities.κ[i, j, k] * δBν(opacities.λ[k], T[i, j])
-                B += weights[k] * δBν(opacities.λ[k], T[i, j])
-            end
-            lnRoss[i, j] /= B
-            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
-                log(1e-30)
-            else
-                log(1.0 / lnRoss[i, j])
-            end
-
-            #if isnan(lnRoss[i, j])
-            #    @warn "NaN in Ross - i:$(i), j:$(j), B:$(B), k:$(opacities.κ[i, j, 1])"
-            #end
-        end
+    #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
+    #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
+    if Threads.nthreads() > 1
+        @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
     end
+
+    @optionalTiming rosseland_time _rosseland_opacityX!(
+        lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T
+    )    
+    
 end
 
-rosseland_opacity!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity!(lnRoss, AxedEoS(eos), args...; kwargs...) 
-rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(AxedEoS(eos), args...; kwargs...)
+
+
+
+
 
 """
     transfer_rosseland(from, to)
@@ -1144,6 +1241,7 @@ transfer_rosseland!(eos::E, opa::OpacityTable) where {E<:EoSTable} = opa.κ_ross
 transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:EoSTable} = eos.lnRoss .= log.(opa.κ_ross);
 transfer_rosseland!(eos::E, opa::OpacityTable) where {E<:AxedEoS}  = opa.κ_ross .= exp.(eos.eos.lnRoss);
 transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnRoss .= log.(opa.κ_ross);
+
 
 
 
@@ -1172,29 +1270,86 @@ _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     τ
 end
 
+_optical_depthX!(τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
+    chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
+
+    tasks = map(chunks) do chunk
+        Threads.@spawn _optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned)
+    end
+    results = fetch.(tasks)
+
+    for (i, chunk) in enumerate(chunks)
+        τ[:, chunk] .= results[i]
+    end
+end
+
+_optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned) = begin
+    τ = zeros(eltype(opacities.κ), length(z), length(chunk))
+    ρκ = zeros(eltype(opacities.κ), length(z))
+    ρ = exp.(lnρ)
+
+    # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
+    @inbounds for (i, k) in enumerate(chunk)
+        # Look up the opacity in the table
+        ρκ .= lookup(eos, opacities, :κ, lnρ, lnE, k)
+        ρκ .= binned ? ρκ : ρ .* ρκ
+
+        # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
+        @inbounds for j in eachindex(z)
+            if j==1 
+                τ[1, i] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
+            else
+                τ[j, i] = τ[j-1, i] + (z[j] - z[j-1]) * 0.5 * (ρκ[j] + ρκ[j-1])
+            end
+        end
+    end
+
+    τ
+end
+
 """
+    optical_depth(eos, opacities, model; binned=false)
+
 Compute monochromatic and rosseland optical depth scales of the model 
-based on the opacity table
+based on the opacity table.
 """
 function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
+    # make sure model is in right direction
+    model = TSO.flip(model, depth=true)
+
     # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(opacities.κ)
 
-    τ_λ    = zeros(T, length(lnρ), length(opacities.λ)) 
+    τ_λ = zeros(T, length(lnρ), length(opacities.λ)) 
     τ_ross = zeros(T, length(lnρ)) 
-    ρκ     = zeros(T, length(lnρ))
-    κ      = zeros(T, length(lnρ))
 
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
-    _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    @optionalTiming optical_depth_time if Threads.nthreads() <= 1
+        ρκ = zeros(T, length(lnρ))
+        _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    else
+        @info "Computing table optical depth with $(Threads.nthreads()) threads."
+        _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
+    end
 
     # Rosseland optical depth
     τ_ross .= rosseland_optical_depth(eos, opacities, model, binned=binned)
 
+    # impose limits
+    τ_λ[τ_λ .> 1e30] .= 1e30
+    τ_λ[τ_λ .< 1e-30] .= 1e-30
+
+    τ_ross[τ_ross .> 1e30] .= 1e30
+    τ_ross[τ_ross .< 1e-30] .= 1e-30
+    
     return τ_ross, τ_λ
 end
+
+
+
+
 
 function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
@@ -1246,6 +1401,9 @@ end
 
 rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
 rosseland_optical_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), model; kwargs...)
+
+
+
 
 
 
@@ -1307,6 +1465,8 @@ rosseland_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_dep
 
 
 """
+    formation_height(model, eos, opacities, τ_ross, τ_λ)
+
 Compute the formation height + opacity, i.e. the rosseland optical depth
 where the monochromatic optical depth is 1.
 """
@@ -1325,26 +1485,60 @@ function formation_height(model::AbstractModel, eos::E, opacities::OpacityTable,
     lRoss = log10.(τ_ross)
     lλ    = log10.(τ_λ)
 
-    t_mono = zeros(T, size(τ_λ, 1))
-    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Line())
-    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Line())
+    λ = opacities.λ
 
-    @inbounds for i in axes(τ_λ, 2)
-        t_mono .= lλ[:, i]
+    #t_mono = zeros(T, size(τ_λ, 1))
+    r_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnρ, extrapolation_bc=Flat())
+    T_ross = linear_interpolation(Interpolations.deduplicate_knots!(lRoss, move_knots=true), lnE, extrapolation_bc=Flat())
+
+    if Threads.nthreads() > 1
+        @info "Computing formation height with $(Threads.nthreads()) threads."
+    end
+
+    @optionalTiming formation_height_time begin
+        chunks = Iterators.partition(eachindex(λ), length(λ) ÷ Threads.nthreads()) |> collect
+
+        tasks = map(chunks) do chunk
+            Threads.@spawn _formation_height_chunk(chunk, τ_λ, lλ, lRoss, r_ross, T_ross, eos, opacities)
+        end
+        results = fetch.(tasks)
+        rossChunk = getindex.(results, 1)
+        opaChunk = getindex.(results, 2)
+
+        for (i, chunk) in enumerate(chunks)
+            rosseland_depth[chunk] .= rossChunk[i]
+            opacity_depth[chunk] .= opaChunk[i]
+        end
+    end
+
+    exp10.(rosseland_depth), opacity_depth
+end
+
+_formation_height_chunk(chunk, τ_λ, lλ, lRoss, r_ross, T_ross, eos, opacities) = begin
+    T = eltype(opacities.κ)
+    rosseland_depth = zeros(T, length(chunk))
+    opacity_depth = zeros(T, length(chunk))
+    t_mono = zeros(T, size(τ_λ, 1))
+
+    @inbounds for (i, k) in enumerate(chunk) 
+        t_mono .= @view(lλ[:, k])
         rosseland_depth[i] = linear_interpolation(
             Interpolations.deduplicate_knots!(t_mono, move_knots=true), 
             lRoss, 
             extrapolation_bc=Line()
         )(0.0)
         
-        opacity_depth[i] = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), i)
+        opacity_depth[i] = lookup(eos, opacities, :κ, r_ross(rosseland_depth[i]), T_ross(rosseland_depth[i]), k)
     end
 
-    exp10.(rosseland_depth), opacity_depth
+    return [rosseland_depth, opacity_depth]
 end
 
 optical_depth(eos::RegularEoSTable,    args...; kwargs...) = optical_depth(AxedEoS(eos),    args...; kwargs...)
 formation_height(model, eos::RegularEoSTable, args...; kwargs...) = formation_height(model, AxedEoS(eos), args...; kwargs...)
+
+
+
 
 """
 Convert a monochromatic EoS into a binned EoS format
@@ -1470,3 +1664,8 @@ end
 
 include("_interpolations.jl")
 
+
+#= Timer setup =#
+const rosseland_time = Ref(false)
+const optical_depth_time = Ref(false)
+const formation_height_time = Ref(false)

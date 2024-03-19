@@ -1,22 +1,21 @@
 #= Running M3D =#
 
-function opacityTableInput(modelatmosfolder; 
-                            lnT = range(log(1.1e3), log(5.5e5); length=59) |> collect, 
-                            lnρ = range(log(1e-15), log(1e-3); length=59) |> collect)
-	!isdir(modelatmosfolder) && mkdir(modelatmosfolder)
-
-	z = range(-1, 1, length=length(lnT)) |> collect
-	v = similar(lnT)
-
-	paths = String[]
-	for i in eachindex(lnρ)
-		path_new = joinpath(modelatmosfolder, "TSO-M3D-$i")
-		saveAsText(path_new, T=exp.(lnT), ρ=fill!(v, exp.(lnρ[i])), z=z)
-
-		append!(paths, ["TSO-M3D-$i"])
+function eosTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3)
+	if isdir(path)
+		# clear the folder
+		rm(path, recursive=true)
 	end
+	mkdir(path)
 
-	paths
+	z = [-1.0, 0.0, 1.0]
+	saveAsText(
+		joinpath(path, "TSO-M3D"), 
+		z=z, 
+		T=[minT, (maxT-minT)/2, maxT], 
+		ρ=[minρ, (maxρ-minρ)/2, maxρ]
+	)
+
+	"TSO-M3D"
 end
 
 function saveAsText(path_new; z, T, ρ, vmic=1.0)
@@ -62,111 +61,125 @@ end
 
 Extract EoS + Opacities from given run. Return arrays
 """
-function get_opacity(run)
-	c = run.run.read_patch_save("chi", concat=false)
-	s = run.run.read_patch_save("src", concat=false)
-	e = run.run.read_patch_save("E", concat=false)
-	p = run.run.read_patch_save("Pg", concat=false)
-	n = run.run.read_patch_save("Ne", concat=false)
-	
-	ck = pyconvert(Array, c.keys())
-	sk = pyconvert(Array, s.keys())
-	ek = pyconvert(Array, e.keys())
-	pk = pyconvert(Array, p.keys())
-	nk = pyconvert(Array, n.keys())
-	
-	chi = pyconvert(Array, c[ck[1]])[:, :, :, :, 1]
-	src = pyconvert(Array, s[sk[1]])[:, :, :, :, 1]
-	E = pyconvert(Array, e[ek[1]])[:, :, :, 1, 1]
-	P = pyconvert(Array, p[pk[1]])[:, :, :, 1, 1]
-	N = pyconvert(Array, n[nk[1]])[:, :, :, 1, 1]
+function get_opacity(run, from="opa")
+	chi = pyconvert(
+		Array, 
+		run.run.read_patch_save(from, concat=true, fdim=0, lazy=false)[0]
+	)
 
-	r = run.rho
-	T = run.temp
-	l = run.lam
+	chi  = chi[:, :, :] 
+	l = Base.convert.(eltype(chi), run.lam)
 
 	chi[chi .< 1e-30] .= NaN
 	chi[chi .> 1e30] .=  NaN
-	src[src .< 1e-30] .= NaN
-	src[src .> 1e30] .= NaN
+
+	l, permutedims(chi, (2, 3, 1))
+end
+
+"""
+    get_opacity(run)
+
+Extract EoS + Opacities from given run. Return arrays
+"""
+function get_eos(run)
+	eos = pyconvert(
+		Array, 
+		run.run.read_patch_save("eos", concat=false)[1,1]
+	)
+
+    temp = eos[1, :, 1]
+    rho  = eos[2, 1, :]
+    ne   = eos[3, :, :]
+    pg   = eos[4, :, :]
+    E    = eos[5, :, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
 	
 	E[E .< 1e-30] .= NaN
 	E[E .> 1e30] .= NaN
 
-	P[P .< 1e-30] .= NaN
-	P[P .> 1e30] .= NaN
+	pg[pg .< 1e-30] .= NaN
+	pg[pg .> 1e30] .= NaN
 
-	N[N .< 1e-30] .= NaN
-	N[N .> 1e30] .= NaN
+	ne[ne .< 1e-30] .= NaN
+	ne[ne .> 1e30] .= NaN
 	
-	l, r, T, E, P, N, chi, src
+	log.(rho), log.(temp), log.(E), log.(pg), log.(ne)
 end
 
-"""
-    collect_opacity(runs)
+function add_opacities!(opa1, opa...)
+	for i in eachindex(opa)
+		opa1.κ .+= opa[i].κ
+	end
+end
 
-Extract EoS + Opacities from given runs. Collect them together in a table.
-"""
-function collect_opacity(runs)
-	l, r, T, E, P, N, chi, src = [], [], [], [], [], [], [], []
-	for i in eachindex(runs)
-		li, ri, Ti, Ei, Pi, Ni, chii, srci = get_opacity(runs[i])
 
-		append!(l, [li])
-		append!(r, [ri])
-		append!(T, [Ti])
-		append!(E, [Ei])
-		append!(P, [Pi])
-		append!(N, [Ni])
-		append!(chi, [chii])
-		append!(src, [srci])
+
+
+"""
+    collect_opacity(run)
+
+Extract EoS + Opacities from given run. Collect them together in a table.
+"""
+function collect_opacity(run; compute_ross=false)
+	rho, temp, E, pg, ne = get_eos(run)
+	l, chi = get_opacity(run, "opa")
+	_, scat = try
+		get_opacity(run, "scat")
+	catch
+		@warn "No scattering opacity found."
+		nothing, nothing
 	end
 
-	# We sort everything into arrays (TxRho)
-	Rho = Iterators.flatten(r) |> collect |> unique |> sort
-	Temp = Iterators.flatten(T) |> collect |> unique |> sort
-	lam = first(l)
-
-	@assert length(Rho)==length(runs)
-	@assert length(Temp)==length(first(T))
-	@assert Temp == first(T)
-
-	te = eltype(first(E))
-	to = eltype(first(chi))
-
-	lam = to[lam...]
-	
-	lnEi = zeros(te, length(Temp), length(Rho))
-	lnPg = zeros(te, length(Temp), length(Rho))
-	lnNe = zeros(te, length(Temp), length(Rho))
-	lnChi = zeros(te, length(Temp), length(Rho), length(lam))
-	lnSrc = zeros(te, length(Temp), length(Rho), length(lam))
-
-	for i in eachindex(r)
-		ri = first(r[i])
-		ir = findfirst(x->x≈ri, Rho)
-		
-		lnEi[:, ir] .= log.(E[i][1, 1, :])
-		lnPg[:, ir] .= log.(P[i][1, 1, :])
-		lnNe[:, ir] .= log.(N[i][1, 1, :])
-		
-		lnChi[:, ir, :] .= log.(chi[i][1, 1, :, :])
-		#lnSrc[:, ir, :] .= log.(src[i][1, 1, :, :])
-		lnSrc[:, ir, :] .= log.(Base.convert.(to, Bλ(lam, Temp)))
-	end
+	ross = fill!(similar(pg), 1.0)
+	S = fill!(similar(chi), 1.0)
 
 	eos = TSO.SqEoS(
-		log.(Rho), log.(Temp), lnEi, lnPg, zeros(to, length(Temp), length(Rho)), lnNe
+		rho, temp, E, pg, log.(ross), ne
 	)
-
-	opa = TSO.SqOpacity(
-		exp.(lnChi), ones(to, length(Temp), length(Rho)), exp.(lnSrc), lam, false
-	)
-
     aos = @axed eos
 
-    fill_nan!(aos, opa)
-    set_limits!(aos, opa)
 
-	eos, opa
+	chi = TSO.SqOpacity(
+		chi, ross, S, l, false
+	)
+	scat = if !isnothing(scat)
+		TSO.SqOpacity(
+			scat, ross, S, l, false
+		)
+	else
+		nothing
+	end
+
+	# add scattering opacity to normal opacity
+	if !isnothing(scat)
+		@info "Adding scattering opacity to absorption."
+		add_opacities!(chi, scat)
+	end
+
+	# compute rosseland opacity
+	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
+	fill_nan!(aos, chi, scat)
+	set_limits!(aos, chi, small=1e-30, large=1e30)
+	set_limits!(aos, scat, small=1e-30, large=1e30)
+
+	eos, chi, scat
+end
+
+
+function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)
+	S = similar(opa.κ)
+	T = exp.(eos.lnT)
+	for j in eachindex(eos.lnRho)
+		S[:, j, :] .= TSO.Bλ(opa.λ, T)
+	end
+
+	if compute_ross
+		@info "Computing table Rosseland opacity. This may take a while..."
+		rosseland_opacity!(eos.lnRoss, @axed(eos), opa)
+		transfer_rosseland!(@axed(eos), opa)
+		if !isnothing(scat)
+			transfer_rosseland!(@axed(eos), scat)
+		end
+	end
+
+	eos, opa, scat
 end

@@ -1,2 +1,16 @@
 [deps]
+ipython = ""
+matplotlib = ""
+imageio = ""
+f90nml = ""
+seaborn = ""
+cmake = ""
+pandas = ""
+dask = ""
+numba = ""
+astropy = ""
+numpy = ""
 scipy = ""
+
+[pip.deps]
+idlsave = ""

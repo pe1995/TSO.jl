@@ -372,7 +372,7 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
     @inbounds for i in 1:nEBin
         # This is a column of the table, interpolate it and evaluate at the right position
         mask .= sortperm(view(r_old, i, :))
-        x    .= @view r_old[i, mask]
+        x    .= Interpolations.deduplicate_knots!(r_old[i, mask])
         y    .= @view oldlnV[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[i, :] .= ip.(lnRho)
@@ -492,23 +492,10 @@ function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
             kLF = [lookup_function(aos, opacities[m], :κ, k)   for m in eachindex(opacities)]
             sLF = [lookup_function(aos, opacities[m], :src, k) for m in eachindex(opacities)]
 
-            #if k == length(ref_o.λ)
-            #    @show typeof(lookup(sLF[1], rr, oldAxisNewGrid)) any(isnothing.(lookup(sLF[1], rr, oldAxisNewGrid)))
-            #end
-
             for m in eachindex(opacities)
                 κ_all[:, :, k, m] .= lookup(kLF[m], rr, oldAxisNewGrid)
                 s_all[:, :, k, m] .= lookup(sLF[m], rr, oldAxisNewGrid)
             end
-
-            #@inbounds for j in eachindex(newRho)
-            #    @inbounds for i in eachindex(newAxis)
-            #        for m in eachindex(opacities)
-            #            κ_all[i, j, k, m] = lookup(kLF[m], newRho[j], oldAxisNewGrid[i, j])
-            #            s_all[i, j, k, m] = lookup(sLF[m], newRho[j], oldAxisNewGrid[i, j])
-            #        end
-            #    end
-            #end
         end
 
         κ_all, s_all, κ_rall 
@@ -660,7 +647,7 @@ conservative_axis(mat::Matrix) = begin
         macol[j] = maximum(view(mat, :, j))
     end
 
-    max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))
+    sort([max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))])
 end
 
 default_axis(mat) = minimum(mat), maximum(mat)
@@ -688,7 +675,7 @@ pick_axis(eos; conservative=false, upsample=-1, switch=true) = begin
         deepcopy(DensityAxis(eos).values)
     end
 
-    collect(newAxis), collect(newRho)
+    sort(collect(newAxis)), sort(collect(newRho))
 end
 
 
@@ -752,7 +739,7 @@ end
 
 #=================================================================== NaN handling ===#
 
-@inline interpolate_at(x, y, x0; bc=Line()) = linear_interpolation(Interpolations.deduplicate_knots!(x, move_knots=true), y, extrapolation_bc=bc).(x0)
+@inline interpolate_at(x, y, x0; bc=Flat()) = linear_interpolation(Interpolations.deduplicate_knots!(deepcopy(x), move_knots=true), y, extrapolation_bc=bc).(x0)
 
 nan_or_inf(a) = isnan(a) | !isfinite(a)
 
@@ -769,63 +756,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
     lm2    = length(mask2)
 
     var = getfield(aos.eos, dependent_energy_variable(aos))
-
-    for i in eachindex(xc2)
-        mask  .= nan_or_inf.(view(var, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            var[i, mask] .= interpolate_at(view(xc, nmask), view(var, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnPg, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnPg[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnPg, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnNe, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnNe[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnNe, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnRoss, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnRoss[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnRoss, i, nmask), view(xc, mask))
-        end
-
-        for m in eachindex(opacities)
-            opa = opacities[m]
-
-            mask  .= nan_or_inf.(log.(view(opa.κ_ross, i, :)))
-            nmask .= .!mask
-            cm = count(mask)
-            if (cm<=lm-2) & (cm>0)
-                opa.κ_ross[i, mask] .= interpolate_at(view(xc, nmask), log.(view(opa.κ_ross, i, nmask)), view(xc, mask)) .|> exp
-            end
-            
-            for k in eachindex(opa.λ)
-                mask  .= nan_or_inf.(log.(view(opa.κ, i, :, k)))
-                nmask .= .!mask
-                cm = count(mask)
-                if (cm<=lm-2) & (cm>0)
-                    opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
-                end
-
-                mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
-                nmask .= .!mask
-                cm = count(mask)
-                if (cm<=lm-2) & (cm>0)
-                    opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
-                end
-            end
-        end
-    end
 
     ## the other direction
     for j in eachindex(xc)
@@ -898,7 +828,64 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
                 end
             end
         end
-    end;
+    end
+
+    for i in eachindex(xc2)
+        mask  .= nan_or_inf.(view(var, i, :))
+        nmask .= .!mask
+        cm = count(mask)
+        if (cm<=lm-2) & (cm>0)
+            var[i, mask] .= interpolate_at(view(xc, nmask), view(var, i, nmask), view(xc, mask))
+        end
+
+        mask  .= nan_or_inf.(view(eos.lnPg, i, :))
+        nmask .= .!mask
+        cm = count(mask)
+        if (cm<=lm-2) & (cm>0)
+            eos.lnPg[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnPg, i, nmask), view(xc, mask))
+        end
+
+        mask  .= nan_or_inf.(view(eos.lnNe, i, :))
+        nmask .= .!mask
+        cm = count(mask)
+        if (cm<=lm-2) & (cm>0)
+            eos.lnNe[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnNe, i, nmask), view(xc, mask))
+        end
+
+        mask  .= nan_or_inf.(view(eos.lnRoss, i, :))
+        nmask .= .!mask
+        cm = count(mask)
+        if (cm<=lm-2) & (cm>0)
+            eos.lnRoss[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnRoss, i, nmask), view(xc, mask))
+        end
+
+        for m in eachindex(opacities)
+            opa = opacities[m]
+
+            mask  .= nan_or_inf.(log.(view(opa.κ_ross, i, :)))
+            nmask .= .!mask
+            cm = count(mask)
+            if (cm<=lm-2) & (cm>0)
+                opa.κ_ross[i, mask] .= interpolate_at(view(xc, nmask), log.(view(opa.κ_ross, i, nmask)), view(xc, mask)) .|> exp
+            end
+            
+            for k in eachindex(opa.λ)
+                mask  .= nan_or_inf.(log.(view(opa.κ, i, :, k)))
+                nmask .= .!mask
+                cm = count(mask)
+                if (cm<=lm-2) & (cm>0)
+                    opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
+                end
+
+                mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
+                nmask .= .!mask
+                cm = count(mask)
+                if (cm<=lm-2) & (cm>0)
+                    opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
+                end
+            end
+        end
+    end
 end
 
 function set_small!(aos, opa, small=1e-30)
@@ -983,6 +970,8 @@ smoothAccumulate!(aos; spline=true) = begin
 
     aos
 end
+smoothAccumulate!(eos::EoSTable, args...; kwargs...) = smoothAccumulate!(@axed(eos), args...; kwargs...)
+
 
 check(v, small) = !isnan(v) & (v >= small)
 check_small = check

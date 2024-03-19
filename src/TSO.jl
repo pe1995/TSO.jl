@@ -10,7 +10,10 @@ using PythonCall
 using Glob
 using HDF5
 using Statistics
+using Mmap
 using Clustering
+using ThreadsX
+using TimerOutputs
 import Clustering.assignments
 
 import Base.size
@@ -75,8 +78,8 @@ export Solver, Jν, Qr
 
 #= Python libs =#
 const scipy_interpolate = PythonCall.pynew()
-const scipy_loaded      = Ref(false)
-
+const scipy_loaded = Ref(false)
+const generalTimer = TimerOutput()
 
 #= Source files =#
 include("_aux.jl")
@@ -94,50 +97,18 @@ include("_marcs.jl")
 include("_adiabat.jl")
 include("_from_m3d.jl")
 include("_binning_execution.jl")
+include("_extend.jl")
 
 
+#= List of timers =#
+const timers = [
+    rosseland_time, 
+    optical_depth_time, 
+    formation_height_time,
+    binning_time
+]
 
 #= Deprecations =#
-@deprecate replaceEoS complement
-#@deprecate regrid replace_axis
-
-
-
-#= TODO =#
-#=
-    MOST IMPORTANT PROBLEMS:
-    ------------------------
-(A) The resolution when switching from T
-    to E grids needs to be increased by a lot
-    because otherwise horizontal parts in the T-E
-    plane are very poorly interpolated!
-
-    -> A possible solution is to keep the tables 
-    that are on the T grid on there as long as possible!
-    When they are binned the tables are tiny anyways, 
-    so then a interpolation to a very dense E grid is possible.
-
-    -> For this one has to make sure that every function in here is
-    capable of working with a temperature grid, i.e. does not
-    require internal energy as before! Use the AxedEoS everywhere
-    to check if the grid is T or E.
-
-(B) All functions work only if the input tables have some sort
-    of symmetry, i.e. are gridded in at least one dimension.
-    It would be much nicer if the lookup infrastructure would
-    be able to interpolate on any grid (also scattered),
-    so that every table however it looks like can be interpolated
-    to any grid by one sinple function. The EoS just needs to be 
-    Axed, then the lookup knows how to interpolate, so that you can
-    just loop though whatever new grid and lookup all the quantites for it.
-    There should be function that accepts any new axes and a function that
-    just makes it regular in the alredy existing axes.
-
-    UPDATE 1: Scattered Interpolation is taken over from scipy for now
-              -> there is no extrapolation yet, howver can be added to
-              the square function (tbd, not there yet) by extrapolating 
-              constant rows
-=#
-
+#@deprecate replaceEoS complement do_binning! box_integrated_v3 box_integrated_v2 box_integrated
 
 end

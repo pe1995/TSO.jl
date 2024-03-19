@@ -23,8 +23,8 @@ md"For the setup we use the Turspectrum Wrapper, although for the actual executi
 
 # ╔═╡ 60c90eec-8f36-47bd-9320-e198dab6fd70
 begin
-	TSO.load_TS()         # Set the TS path
-	TSO.load_wrapper()    # Set the Wrapper path
+	TSO.load_TS("../../../../TS_opacity_tables/Turbospectrum_NLTE/")         # Set the TS path
+	TSO.load_wrapper("../../../../TS_opacity_tables/TurboSpectrum-Wrapper/")    # Set the Wrapper path
 	TSO.import_wrapper()  # import the python modules of the wrapper
 end
 
@@ -35,10 +35,10 @@ end
 md"## The Grid"
 
 # ╔═╡ a128a520-895b-4f40-9fbb-6586ac25da10
-lnT = range(log(1.1e3), log(5.5e5); length=200)
+lnT = range(log(1.1e3), log(5.5e5); length=250)
 
 # ╔═╡ af66c1ea-fee0-4172-9100-88ad54993ebd
-lnρ = range(log(1e-22), log(1e-3); length=200)
+lnρ = range(log(1e-15), log(1e-2); length=250)
 
 # ╔═╡ 5a695141-8e7c-4b85-a886-9c42e0fdad55
 TSO.write_as_stagger(Float64[lnT...], Float64[lnρ...])
@@ -109,7 +109,7 @@ begin
 	setup.jobID = "TSO"
 	FeH = 0.0
 	α = 0.0
-	wvl_set = "magg22_m0_a0_v5.1"
+	wvl_set = "magg22_m0_a0_v5.2"
 end
 
 # ╔═╡ 04c77365-c905-4635-b9a2-dc5e44628a23

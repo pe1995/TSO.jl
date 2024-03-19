@@ -220,6 +220,10 @@ is_uniform(values::A) where {N, T, A<:AbstractArray{T, N}} = begin
         return false
     end
 
+    if all(diff(values) .≈ first(diff(values)))
+        return true
+    end
+
     d::T  = T(values[2] .- values[1])
     d2::T = T(0.0)
 
@@ -243,7 +247,6 @@ is_uniform(values::A) where {N, T, A<:AbstractArray{T, N}} = begin
             break
         end
     end
-
 
     uni
 end
@@ -344,10 +347,10 @@ lookup_function(eos::EA, what::Symbol, args...) where {EA<:AxedEoS} = begin
 
         ScatteredLookup(ip)
     else
-        second_axis = ea.values
-        rho_axis    = da.values
+        second_axis = Interpolations.deduplicate_knots!(copy(ea.values), move_knots=true)
+        rho_axis = Interpolations.deduplicate_knots!(copy(da.values), move_knots=true)
+        @warn "The EoS seems to be non-uniform! Gridded lookup function will be used."
         GriddedLookup(extrapolate(interpolate((second_axis, rho_axis), view(getfield(eos.eos, what), :, :, args...), Gridded(Linear())), Line()))
-    
     end
 end
 lookup_function(eos::EA, opacities::O, what::Symbol, args...) where {EA<:AxedEoS, O<:OpacityTable} = begin
@@ -380,8 +383,8 @@ lookup_function(eos::EA, opacities::O, what::Symbol, args...) where {EA<:AxedEoS
         )
 
     else
-        second_axis = EnergyAxis(eos).values
-        rho_axis    = DensityAxis(eos).values
+        second_axis = Interpolations.deduplicate_knots!(copy(EnergyAxis(eos).values), move_knots=true)
+        rho_axis    = Interpolations.deduplicate_knots!(copy(DensityAxis(eos).values), move_knots=true)
         extrapolate(interpolate((second_axis, rho_axis), log.(view(getfield(opacities, what), :, :, args...)), Gridded(Linear())), Line())
     end
 

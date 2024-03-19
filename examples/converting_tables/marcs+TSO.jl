@@ -28,7 +28,7 @@ Pick the EoS that shall provide the internal energy to the opacity table.
 	SqEoS, 
 	abspath("/mnt/beegfs/gemini/groups/bergemann/users/eitner/storage/opacity_tables/TSO_sun_Magg_v10.2/eos.hdf5")
 )=#
-aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg_v5.0.hdf5"))
+aos = @axed reload(SqEoS, abspath("../creating_table/eos_magg22_m0_a0_v5.1.hdf5"))
 
 # ╔═╡ c7f9ebfc-4010-47e5-afe0-183efec4273f
 md"Folder of the Opacity tables"
@@ -36,7 +36,8 @@ md"Folder of the Opacity tables"
 # ╔═╡ d5be07a6-c7bc-48ea-8337-73f445dfea1a
 #paths = glob("OS_table*", "opacity_tables/MARCS/asplund/Z-1.0a0.4/")
 #paths = glob("OS_table*", "/mnt/beegfs/gemini/groups/bergemann/users/eitner/TS_opacity_tables/create_tables/MARCS/OPAC-for-3D/Z0.0a0.0/")
-paths = glob("OS_table*", "../../../opacity_tables/magg/M0.0a0.0/")
+#paths = glob("OS_table*", "../../../opacity_tables/magg/M0.0a0.0/")
+paths = glob("OS_table*", "opacity_tables/MARCS/M0.0a0.0/")
 
 # ╔═╡ 626c6ea3-ee30-4dbe-9e32-4b211fa559e0
 md"Read the raw opacity tables"
@@ -80,7 +81,7 @@ We can now first interpolate the unstructured data to a square T-rho table, whic
 is required for the conversion to dispatch later, and also to fit into the rest of the API."
 
 # ╔═╡ 18876950-d744-40c7-9b8c-1ec8044708f9
-m_int = uniform(mos..., new_T_size=159, new_ρ_size=159)
+m_int = uniform(mos..., new_T_size=200, new_ρ_size=200)
 
 # ╔═╡ 772769bf-d366-4265-aa72-91ba2ee5d803
 begin
@@ -127,7 +128,7 @@ Save everything in the usual TSO.jl format
 # ╔═╡ fd21fd34-a8a1-4f14-8e54-a3cbe76a17cb
 begin
 	ext = "magg_m0_a0"
-	dname = "TSO_MARCS_$(ext)_v1.7"
+	dname = "opacity_tables/TSO_MARCS_$(ext)_v1.9"
 
 	if !isdir(dname)
 		mkdir(dname)
