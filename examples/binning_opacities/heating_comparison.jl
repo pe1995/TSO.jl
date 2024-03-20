@@ -462,10 +462,53 @@ let
 	ax.set_ylim(-3.5, 3.5)
 
 	ax.legend(
-		labelspacing=0.05, handlelength=3, loc="lower center", ncols=2,
+		labelspacing=0.05, handlelength=2, loc="lower center", ncols=2,
 		bbox_to_anchor=(0.5, 0.99)
 	)
 	
+	gcf()
+end
+
+# ╔═╡ 5b5243b0-189f-48ca-a8c2-5aa63f7c74c1
+
+
+# ╔═╡ 87a57724-8403-44ed-85ef-6d101409b299
+md"# Assignment"
+
+# ╔═╡ 61b38b1c-e9be-43f6-a642-be6b72a27d5c
+bin_assignment(path) = begin
+    fid = TSO.HDF5.h5open(path, "r")
+    bins = TSO.HDF5.read(fid["bins"])
+    λ = TSO.HDF5.read(fid["lambda"])
+    close(fid)
+
+    bins, λ
+end
+
+# ╔═╡ 50e0e483-82f9-4b58-baac-ea0df32b8cfa
+a, lam = bin_assignment(joinpath(eosBinnedPaperPath, "bin_assignment.hdf5"))
+
+# ╔═╡ 5f9d2291-2d6b-4a0a-a19d-c3a9ac28707e
+fopa = reload(
+	SqOpacity, 
+	joinpath(eosUnbinnedPath, "combined_formation_opacities_t5777g44m00.hdf5"), 
+	mmap=true
+)
+
+# ╔═╡ de186f85-91b3-4dd8-9f66-aca0ade1cb03
+let
+	plt.close()
+
+	f, ax = plt.subplots(1, 1, figsize=(5, 6))
+
+	im = ax.scatter(
+		log10.(fopa.λ), -log10.(fopa.κ_ross),
+		s=1, c=a, cmap="rainbow"
+	)
+	f.colorbar(im, ax=ax)
+
+	ax.set_ylabel(L"\rm -\log \tau_{ross}\left(\ \tau_{\lambda}=1\ \right)")
+
 	gcf()
 end
 
@@ -550,3 +593,9 @@ end
 # ╟─60138269-4108-44a4-9b4d-dcf397931be0
 # ╟─56acf259-9998-4d39-a99b-2bf4cfaf37a6
 # ╟─f461a848-0d30-4fb6-81ca-27905544d4e0
+# ╟─5b5243b0-189f-48ca-a8c2-5aa63f7c74c1
+# ╟─87a57724-8403-44ed-85ef-6d101409b299
+# ╟─61b38b1c-e9be-43f6-a642-be6b72a27d5c
+# ╠═50e0e483-82f9-4b58-baac-ea0df32b8cfa
+# ╟─5f9d2291-2d6b-4a0a-a19d-c3a9ac28707e
+# ╟─de186f85-91b3-4dd8-9f66-aca0ade1cb03

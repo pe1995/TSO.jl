@@ -214,13 +214,3 @@ function create_E_from_T(table_folder, name="";
     new_table_name = TSO.join_full(name_extension, name, version, add_start=false)
     convert_fromT_toE(table_folder, new_table_name, upsample=upsample)
 end
-
-
-
-
-
-
-bin_assignment(path) = begin
-	o = TSO.HDF5.h5open(path)
-	TSO.HDF5.read(o["bins"])
-end

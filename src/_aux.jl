@@ -251,6 +251,22 @@ get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid[
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
 
+"""
+    bin_assignment(path)
+
+Load bin assignment used for opacity binning.
+"""
+bin_assignment(path) = begin
+    fid = HDF5.h5open(path, "r")
+    bins = HDF5.read(fid["bins"])
+    λ = HDF5.read(fid["lambda"])
+    close(fid)
+
+    bins, λ
+end
+
+
+
 ## Saving for Multi3D computation of heating
 
 """
