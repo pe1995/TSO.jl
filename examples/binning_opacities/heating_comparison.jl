@@ -385,19 +385,19 @@ let
 	ax.plot(diag, diag, color="k", ls=":")
 	ax.plot(
 		TSO.heating(QUnbinned)[mask]./norm, TSO.heating(QBinnedPaper5)[mask]./norm, 
-		color="cyan", label="5 bins", lw=2, ls="", marker="s"
+		color="cyan", label="5 bins", lw=1, ls="-", marker="s", markersize=9
 	)
 	ax.plot(
 		TSO.heating(QUnbinned)[mask]./norm, TSO.heating(QBinnedPaper)[mask]./norm, 
-		color="k", label="7 bins", lw=3, marker="s", ls=""
+		color="k", label="7 bins", lw=1, marker="v", ls="-", markersize=9
 	)
 	ax.plot(
 		TSO.heating(QUnbinned)[mask]./norm, TSO.heating(QBinnedPaper8)[mask]./norm, 
-		color="magenta", label="8 bins", lw=3, marker="s", ls=""
+		color="magenta", label="8 bins", lw=1, marker=".", ls="-", markersize=9
 	)
 	ax.plot(
 		TSO.heating(QUnbinned)[mask]./norm, TSO.heating(QBinnedPaper12)[mask]./norm, 
-		color="lime", label="12 bins", lw=3, marker="s", ls=""
+		color="lime", label="12 bins", lw=1, marker="x", ls="-", markersize=9
 	)
 
 	ax.set_xlabel(L"\rm q_{rad}^{\lambda}\ /\  \left|q_{rad}^{\lambda, max}\right|")
@@ -495,8 +495,8 @@ end
 # ╟─2211cd3c-1a8b-49b7-ad39-1c7849a5875e
 # ╟─eb4669a5-aecb-4320-8477-9ef581a6db2f
 # ╠═1f568201-92d4-493e-a9d0-7d8ca42caeb9
-# ╠═8ce20d39-2a0c-490c-97f9-2e21559a6bdf
-# ╠═3dd054b6-65a8-48c5-a91c-14010aa06725
+# ╟─8ce20d39-2a0c-490c-97f9-2e21559a6bdf
+# ╟─3dd054b6-65a8-48c5-a91c-14010aa06725
 # ╟─ff459b9c-41c4-4ef4-802c-fd486b5e1504
 # ╠═24dc0315-e841-4eb6-8d3b-b8c6ba5c91f8
 # ╟─76dcf498-0fe5-467c-bbb7-ed66d34e7f46
@@ -517,7 +517,7 @@ end
 # ╟─0c64314d-3c2b-43df-85e1-121e3ad2c2ba
 # ╟─a6d9cb7c-28f1-48ad-8ff3-aaa872ef5da8
 # ╟─611fbf7c-51de-457f-a35f-230db8992979
-# ╠═d1848d82-a027-4e1d-bdff-9a60a8a1986b
+# ╟─d1848d82-a027-4e1d-bdff-9a60a8a1986b
 # ╟─9f9ab022-e122-4880-b2a5-419def02de86
 # ╟─7dc65fe5-575f-458f-a562-26f0adc380c0
 # ╟─aed8567f-b982-4da6-a913-69091fe49962
@@ -529,7 +529,7 @@ end
 # ╟─43a0bf36-ed3d-49af-9be2-a26295a977f6
 # ╟─6e9f815b-fd56-4bd3-a2d0-ccc89ee81c64
 # ╟─d9b1484a-c91c-4def-956c-3fb05469c6ce
-# ╠═d524e5fb-0622-4503-8951-dbfc2be84088
+# ╟─d524e5fb-0622-4503-8951-dbfc2be84088
 # ╟─8ba7a253-482e-44f8-b7e3-5a3485bf343e
 # ╟─f2497cb5-efd6-4045-80d2-63691055a70b
 # ╟─e6d8b403-f8d0-444e-a994-e927d54b7d80
@@ -539,7 +539,7 @@ end
 # ╟─54bbc506-0c18-4ab3-a3c7-1d811c54f73e
 # ╟─5a600020-6012-4ba4-8ed2-cd08ec7bc4d5
 # ╟─13f694d0-9ea8-413c-943a-b196baad5d89
-# ╠═39b151a7-7d0b-4474-9c94-289136fe4c50
+# ╟─39b151a7-7d0b-4474-9c94-289136fe4c50
 # ╟─07644fb0-3db1-4e46-adf6-5bac7cdb3bf3
 # ╟─d7951d3a-2d7b-4303-aa3d-0b326ea51e53
 # ╟─38fe75d7-ee09-4dbc-aedd-fbf8ef304bb9
