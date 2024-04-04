@@ -205,6 +205,11 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
     # also save the T-grid EoS to make comparison easier later
     save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
     save(eos, joinpath(folder_new, "eos_T.hdf5"))
+
+    # also copy over bin assignment, if present
+    if isfile(joinpath(table_folder, "bin_assignment.hdf5"))
+        cp(joinpath(table_folder, "bin_assignment.hdf5"), joinpath(folder_new, "bin_assignment.hdf5"), force=true)
+    end
 end
 
 function create_E_from_T(table_folder, name=""; 
