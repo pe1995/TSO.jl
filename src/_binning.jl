@@ -1273,7 +1273,7 @@ function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .>= 1e30]  .= 1e30
 end
 
-@inline _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, κ_scat, Temp, λ) = begin
+_do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, κ_scat, Temp, λ) = begin
     bC = Ref{Int}(0)
     dbnC = Ref(eltype(κ)(0.0)) 
     bnC = Ref(eltype(κ)(0.0))
@@ -1430,7 +1430,7 @@ function do_binningX!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     SBox[SBox   .>= 1e30]  .= 1e30
 end
 
-@inline _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, Temp, λ) = begin
+_do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, Temp, λ) = begin
     bC = Ref{Int}(0)
     dbnC = Ref(eltype(κ)(0.0)) 
     bnC = Ref(eltype(κ)(0.0))
