@@ -1287,6 +1287,7 @@ _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, κ_sca
 
     @inbounds for k in chunk
         bC[] = binning[k] 
+        #(bC[] == 0) && continue
         @inbounds for j in 1:rhoBins
             @inbounds for i in 1:AxBins
                 Bν!(bnC, λ[k], Temp[i, j]) 
@@ -1444,6 +1445,7 @@ _do_binning_chunks(chunk, rhoBins, AxBins, radBins, binning, weights, κ, Temp, 
 
     @inbounds for k in chunk
         bC[] = binning[k] 
+        #(bC[] == 0) && continue
         @inbounds for j in 1:rhoBins
             @inbounds for i in 1:AxBins
                 Bν!(bnC, λ[k], Temp[i, j]) 
@@ -1568,8 +1570,11 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     ρ = exp.(eos.lnRho)
 
-    # None of the bins are allowed to be empty as this stage
-    @assert all(binning .!= 0)
+    # None of the bins are allowed to be empty as this 
+    if !all(binning .!= 0)
+        @warn "N0 = $(count(binning .== 0)), $(count(binning .== 0)/length(binning)*100.0)"
+        @assert all(binning .!= 0)
+    end
 
     if Threads.nthreads() > 1
         @info "Binning opacities with $(Threads.nthreads()) threads."
