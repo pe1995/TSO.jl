@@ -177,6 +177,14 @@ md"# Model Atmosphere"
 model = TSO.@optical(
 	TSO.Average3D(eosUnbinned, "sun_stagger.dat"), eosUnbinned, opaUnbinned
 )
+#=model = TSO.@optical(
+	TSO.Average3D(
+		eosUnbinned, 
+		"../../../MUST.jl/examples/initial_models/av_models/t65g45m00_00069_av"
+	), 
+	eosUnbinned, 
+	opaUnbinned
+)=#
 
 # ╔═╡ 83619cb0-6edb-46ff-8367-0378b2b2783e
 
@@ -420,6 +428,7 @@ let
 	stat_label(yi) = "$(round(maximum(abs.(y))/norm, sigdigits=3)) %"
 
 	
+	
 	y = (TSO.heating(QBinnedPaper5) .- TSO.heating(QUnbinned))
 	ax.plot(
 		log10.(τ), y./norm, 
@@ -448,12 +457,19 @@ let
 		lw=2, ls="-."
 	)
 
-	#=y = (TSO.heating(QBinned) .- TSO.heating(QUnbinned))
+	y = (TSO.heating(QBinned) .- TSO.heating(QUnbinned))
 	ax.plot(
 		log10.(τ), y./norm, 
 		color="cyan", label="8 bins (new method), "*L"\rm max(\delta q) = "*stat_label(y),
 		lw=3, ls="-"
-	)=#
+	)
+
+	y = (TSO.heating(QBinnedMuram) .- TSO.heating(QUnbinned))
+	ax.plot(
+		log10.(τ), y./norm, 
+		color="lime", label="MURaM bins, "*L"\rm max(\delta q) = "*stat_label(y), 
+		lw=2, ls="-"
+	)
 
 	
 	ax.set_ylabel(L"\rm \left(q_{rad}^{bin} - q_{rad}^{\lambda} \right)\ /\ \left|q_{rad}^{\lambda, max}\right|\ [\%]")	
@@ -486,7 +502,7 @@ bin_assignment(path) = begin
 end
 
 # ╔═╡ 50e0e483-82f9-4b58-baac-ea0df32b8cfa
-a, lam = bin_assignment(joinpath(eosBinnedPaperPath, "bin_assignment.hdf5"))
+a, lam = bin_assignment(joinpath(eosBinnedPath, "bin_assignment.hdf5"))
 
 # ╔═╡ 5f9d2291-2d6b-4a0a-a19d-c3a9ac28707e
 fopa = reload(
