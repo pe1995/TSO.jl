@@ -593,7 +593,7 @@ function tabparam(folder::String, EOSTableFile, RhoEiRadTableFile, nEiBin, nRhoB
             @sprintf("EiMin =  %.7E\n", EiMin)*
             @sprintf("EiMax =  %.7E\n", EiMax)*
             "nRadBins = $(nRadBins)\n"*
-            "/"
+            "/\n"
 
     open(joinpath(folder, "tabparam.in"), "w") do f
         write(f, content)
