@@ -7,12 +7,12 @@ function eosTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3)
 	end
 	mkdir(path)
 
-	z = [-1.0, 0.0, 1.0]
+	z = [-1.0, 1.0]
 	saveAsText(
 		joinpath(path, "TSO-M3D"), 
 		z=z, 
-		T=[minT, (maxT-minT)/2, maxT], 
-		ρ=[minρ, (maxρ-minρ)/2, maxρ]
+		T=[minT, maxT], 
+		ρ=[minρ, maxρ]
 	)
 
 	"TSO-M3D"

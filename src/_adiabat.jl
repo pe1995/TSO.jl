@@ -301,7 +301,7 @@ function adiabatic_extrapolation(model, eos, dz=nothing; kwargs...)
         a = adiabatDown(i_top, eos; kwargs...)
         @optical a eos
     else
-        z_end = first(model_flip) - dz
+        z_end = first(model_flip.z) - dz
         a = adiabatDown(i_top, eos, z_end=z_end; kwargs...)
         @optical a eos
     end
