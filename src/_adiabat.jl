@@ -149,7 +149,7 @@ adiabatDown(t0, ρ0, z0, logg, eos_in::SqEoS; kwargs...) = is_internal_energy(@a
     adiabatDown_t(t0, ρ0, z0, logg, eos_in; kwargs...)
 
 function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS; 
-                    nz=2000, n_iter=30, dlnd=0.05, ee_min=nothing, z_end=-Inf)
+                    nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
     eos = @axed eos_in
 
     # Find the initial energy from the EoS. Assert that the EoS is in the 
@@ -220,7 +220,7 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
 end
 
 function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS; 
-                    nz=2000, n_iter=30, dlnd=0.05, ee_min=nothing, z_end=-Inf)
+                    nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
     eos = @axed eos_in
 
     # Find the initial energy from the EoS. Assert that the EoS is in the 
