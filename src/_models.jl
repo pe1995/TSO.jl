@@ -153,7 +153,8 @@ function optical_surface(model::OpticalModel1D)
     mask = sortperm(log10.(model.τ))
     linear_interpolation(
         Interpolations.deduplicate_knots!(log10.(model.τ[mask]), move_knots=true), 
-        model.z[mask]
+        model.z[mask],
+        extrapolation_bc=Line()
     )(0.0)
 end
 

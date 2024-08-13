@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.41
 
 using Markdown
 using InteractiveUtils
@@ -8,27 +8,28 @@ using InteractiveUtils
 # ╠═╡ show_logs = false
 begin
 	using Pkg; Pkg.activate(".")
-	using PyPlot 
+	using PythonPlot 
 	using TSO
 	using LaTeXStrings
+	plt=matplotlib.pyplot
 end
 
 # ╔═╡ 1f1efb64-f9e9-41ba-9796-2901ceda199d
-table = abspath("tables/TSO_MARCS_v1.6")
+table = abspath("../../../opacity_tables/TSO_M3D_magg_m0_a0_vmic1_v5.0")
 
 # ╔═╡ fa9f67c9-7984-4593-8575-25cf9d370e53
-table_old = abspath("tables/TSO_MARCS_v1.4")
+#table_old = abspath("tables/TSO_MARCS_v1.4")
 
 # ╔═╡ a65d723f-1623-44cf-a8ec-90f53f32722c
 fopa = reload(
-	SqOpacity, joinpath(table, "combined_formation_opacities.hdf5"), mmap=true
+	SqOpacity, joinpath(table, "combined_formation_opacities_t5777g44m00.hdf5"), mmap=true
 )
 
 # ╔═╡ a23d901d-e903-46d0-8106-c7a897839cab
 begin
 	ff, axf = plt.subplots(figsize=(5,6))
 
-	axf.scatter(log10.(fopa.λ), -log10.(fopa.κ_ross), color="k", s=0.1)	
+	axf.scatter(log10.(fopa.λ), -log10.(fopa.κ_ross), color="k", s=0.5)	
 
 	axf.set_ylabel(L"\rm \log\ \tau_{ross} (\tau_{\lambda}=1)", fontsize="large")
 	axf.set_xlabel(L"\rm \lambda\ [\AA]", fontsize="large")
