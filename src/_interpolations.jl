@@ -650,7 +650,7 @@ conservative_axis(mat::Matrix) = begin
     sort([max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))])
 end
 
-default_axis(mat) = minimum(mat), maximum(mat)
+default_axis(mat) = (minimum(mat), maximum(mat))
 
 pick_axis(eos; conservative=false, upsample=-1, switch=true) = begin
     switch_values = if switch

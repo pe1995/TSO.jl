@@ -174,10 +174,13 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01)
-    eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
-    opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01, lnEimin=nothing, lnEimax=nothing)
+    eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
+    opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"))
     aos = @axed eos
+
+    # make sure new dir exists
+    !isdir(folder_new) && mkdir(folder_new) 
 
     # Before switching energy sources, make sure that everything is monotonic
     TSO.smoothAccumulate!(aos, spline=true)
@@ -189,22 +192,38 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
     end
     TSO.smoothAccumulate!(@axed(eos_new), spline=true)
 
+    # save the T-grid EoS to make comparison easier later
+    save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
+    save(eos, joinpath(folder_new, "eos_T.hdf5"))
+
+    # Limit the internal energy range to what is occupied by the initial model to make sure
+    # the model atmosphere will be well sampled
+    if !isnothing(lnEimax)
+        lnEimax_orig = maximum(eos_new.lnEi)
+        mask = eos_new.lnEi.>=lnEimax
+        eos_new.lnEi[mask] .= lnEimax
+
+        if !isnothing(lnEimin)
+            @info "Limiting the internal energy (log) between $(lnEimin) - $(lnEimax) on the energy grid." 
+            @info "The original limits were $(minimum(eos_new.lnEi)) - $(lnEimax_orig)." 
+            eos_new.lnEi[eos_new.lnEi.<=lnEimin] .= lnEimin
+        else
+            @info "Limiting the internal energy (log) to $(lnEimax) on the energy grid." 
+            @info "The original limits was $(lnEimax_orig)." 
+        end
+        @info "The upper limit will have an effect on $(count(mask)/length(mask))% of points in the rho-T table."
+    end
+
     eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false);
     aosE = @axed eosE
 
     TSO.fill_nan!(aosE, opaE)
     TSO.set_limits!(aosE, opaE)
 
-    !isdir(folder_new) && mkdir(folder_new) 
-
     for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new)
 
     save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
     save(eosE, joinpath(folder_new, "eos.hdf5"))
-
-    # also save the T-grid EoS to make comparison easier later
-    save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
-    save(eos, joinpath(folder_new, "eos_T.hdf5"))
 
     # also copy over bin assignment, if present
     if isfile(joinpath(table_folder, "bin_assignment.hdf5"))
@@ -212,10 +231,28 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
     end
 end
 
-function create_E_from_T(table_folder, name=""; 
+convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...) = begin
+    eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
+    opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
+    model = @optical flip(Average3D(eos, av_path), depth=true) eos opa
+
+    lnEimin = minimum(model.lnEi)
+    lnEimax = maximum(model.lnEi)
+
+    lnEilimit = lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch
+
+    convert_fromT_toE(table_folder, folder_new; lnEimax=lnEilimit, kwargs...)
+end
+
+function create_E_from_T(table_folder, name="", av_path=nothing; 
                                 upsample=2048,
                                 name_extension="DIS_MARCS_E",
-                                version="v0.1")
+                                version="v0.1", lnEi_stretch=1.0)
     new_table_name = TSO.join_full(name_extension, name, version, add_start=false)
-    convert_fromT_toE(table_folder, new_table_name, upsample=upsample)
+
+    if !isnothing(av_path)
+        convert_fromT_toE(table_folder, new_table_name, av_path, upsample=upsample)
+    else
+        convert_fromT_toE(table_folder, new_table_name, upsample=upsample)
+    end
 end
