@@ -81,7 +81,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
         SqEoS, 
 		joinpath(table_folder, eos_path)
     ) 
-	
+
     opacities = reload(
         SqOpacity, 
 		joinpath(table_folder, opa_path), 
@@ -94,50 +94,55 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
 		mmap=true
     )
 	
-    formOpacities = reload(SqOpacity, 
-		joinpath(table_folder, formation_opacities), 
-		mmap=true
-    )
-
     weights = ω_midpoint(opacities)
     model = @optical flip(Average3D(eos, av_path, logg=logg), depth=true) eos opacities
+    
+    bin = if Nbins > 1
+        formOpacities = reload(SqOpacity, 
+            joinpath(table_folder, formation_opacities), 
+            mmap=true
+        )
 
-    TSO.Clustering.Random.seed!(42)
+        TSO.Clustering.Random.seed!(42)
 
-    ks = if use_contribution
-        T = TSO.linear_interpolation(log10.(model.τ), model.lnT, extrapolation_bc=TSO.Line()).(log10.(formOpacities.κ_ross))
-        S = TSO.Bλ.(opacities.λ, Base.convert.(Float32, exp.(T)))
-        -log10.(formOpacities.κ_ross .* S)
+        ks = if use_contribution
+            T = TSO.linear_interpolation(log10.(model.τ), model.lnT, extrapolation_bc=TSO.Line()).(log10.(formOpacities.κ_ross))
+            S = TSO.Bλ.(opacities.λ, Base.convert.(Float32, exp.(T)))
+            -log10.(formOpacities.κ_ross .* S)
+        else
+            -log10.(formOpacities.κ_ross)
+        end
+
+        bins = if method == :tabgen
+            TabgenBinning(TSO.UniformTabgenBins; 
+                        opacities=opacities, 
+                        formation_opacity=ks, 
+                        Nbins=Nbins, line_bins=line_bins, kwargs...)
+
+        elseif method == :equal
+            TabgenBinning(TSO.EqualTabgenBins;
+                        opacities=opacities, 
+                        formation_opacity=ks, 
+                        Nbins=Nbins, kwargs...)
+        elseif method == :stagger
+            StaggerBinning(TSO.StaggerBins;
+                        opacities=opacities, 
+                        formation_opacity=ks, 
+                        Nbins=Nbins, kwargs...)
+        elseif method == :kmeans
+            ClusterBinning(TSO.KmeansBins;
+                                opacities=opacities, 
+                                formation_opacity=ks, 
+                                Nbins=Nbins, kwargs...)
+        else
+            error("Chosen method not implemented.")
+        end
+
+        bin = binning(bins, opacities, ks) 
     else
-        -log10.(formOpacities.κ_ross)
+        # in the monochromatic case we dont need formation opacities and dont need binning
+        ones(length(opacities.λ))
     end
-
-    bins = if method == :tabgen
-        TabgenBinning(TSO.UniformTabgenBins; 
-                    opacities=opacities, 
-                    formation_opacity=ks, 
-                    Nbins=Nbins, line_bins=line_bins, kwargs...)
-
-    elseif method == :equal
-        TabgenBinning(TSO.EqualTabgenBins;
-                    opacities=opacities, 
-                    formation_opacity=ks, 
-                    Nbins=Nbins, kwargs...)
-    elseif method == :stagger
-        StaggerBinning(TSO.StaggerBins;
-                    opacities=opacities, 
-                    formation_opacity=ks, 
-                    Nbins=Nbins, kwargs...)
-    elseif method == :kmeans
-        ClusterBinning(TSO.KmeansBins;
-                            opacities=opacities, 
-                            formation_opacity=ks, 
-                            Nbins=Nbins, kwargs...)
-    else
-        error("Chosen method not implemented.")
-    end
-
-    bin = binning(bins, opacities, ks) 
 
     # saving the table
     save_table(binned_opacities) = begin
@@ -162,6 +167,18 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
         tabulate(bin, weights, eos, opacities, transition_model=model)
     else
         tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
+    end
+
+    binned_opacities = if Nbins == 1
+        @info "Replacing binned opacity with Rosseland opacity."
+
+        # Replace binned opacity with rosseland opacity
+        binned_opacities.opacities.κ[:, :, 1] .= binned_opacities.opacities.κ_ross[:, :]
+
+        # multiply with density from EoS
+        TSO.@binned binned_opacities.opacities eos 
+    else
+        binned_opacities
     end
     
     save_table(binned_opacities)
