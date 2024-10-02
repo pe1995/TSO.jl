@@ -248,6 +248,12 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
     end
 end
 
+"""
+    convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...)
+
+Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. If needed, 
+the internal energy is cut where the models internal energy ends (+lnEi_stretch*absolute difference top-bottom).
+"""
 convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...) = begin
     eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));

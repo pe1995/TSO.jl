@@ -139,7 +139,6 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
     density_gridded = is_gridded(DensityAxis(aos_old))
     energy_gridded  = is_gridded(EnergyAxis(aos_old))
 
-
     ## we only need to make sure that if the new axis is internal energy we dont have any offsets
     aos_old_mod = if is_internal_energy(aos_new)
         ee, rr      = meshgrid(EnergyAxis(aos_old).values, DensityAxis(aos_old).values)
@@ -172,12 +171,10 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
         aos_old
     end
 
-
     e = aos_new.eos
 
     density_gridded = is_gridded(DensityAxis(aos_old_mod))
     energy_gridded  = is_gridded(EnergyAxis(aos_old_mod))
-
 
     # Interpolate the old tables to the grid
     efinal, ofinal... = interpolate_2D(aos_old_mod, opacities...; lnRho=deepcopy(e.lnRho), (ename_new=>evals_new,)...)
@@ -186,32 +183,6 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
     else
         ofinal
     end
-
-    #=return if energy_gridded
-        aos_puff = if density_gridded          
-            puff_up(aos_old, :density)
-        else
-            aos_old
-        end
-        aos, opacities... = interpolate_at_energy(aos_puff, opacities...; lnRho=deepcopy(e.lnRho))
-        aos_puff          = puff_up(AxedEoS(aos), :energy)
-
-        interpolate_at_density(aos_puff, opacities...; (ename_new=>newE,)...)
-
-    elseif density_gridded
-        aos_puff = if energy_gridded           
-            puff_up(aos_old, :energy)
-        else
-            aos_old
-        end
-        aos, opacities... = interpolate_at_density(aos_puff, opacities...; (ename_new=>newE,)...)
-        aos_puff          = puff_up(AxedEoS(aos), :density)
-
-        interpolate_at_energy(aos_puff, opacities...; lnRho=deepcopy(e.lnRho))
-
-    else
-        interpolate_2D(aos_old, opacities...; lnRho=deepcopy(e.lnRho), (ename_new=>newE,)...)
-    end=#
 end
 
 """
@@ -700,7 +671,7 @@ end
 
 Puff up the temperature axis to a 2D array.
 """
-function puff_up!(Tnew::Matrix, Told::Vector, dim=1)
+function puff_up!(Tnew::AbstractArray{T,2}, Told::Vector, dim=1) where {T}
     @inbounds for j in axes(Tnew, 2)
         @inbounds for i in axes(Tnew, 1)
             Tnew[i, j] = dim==1 ? Told[i] : Told[j]
