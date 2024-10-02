@@ -58,15 +58,27 @@ begin
 	ρ = Base.convert.(Tp, data["tab_rho"][:])
 	κ = Base.convert.(Tp, permutedims(data["kap_mean"], (2, 3, 1)))
 	S = Base.convert.(Tp, similar(κ))
-	λ = Base.convert.(Tp, range(1., size(S, 3), step=1.) |> collect)
-	κ_ross = Base.convert.(Tp,ones(length(T), length(ρ)))
+	λ = Base.convert.(Tp, range(1., size(S, 3)-1, step=1.) |> collect)
+	κ_ross = Base.convert.(Tp, ones(length(T), length(ρ)))
 	for b in axes(S, 3)
 		TSO.puff_up!(view(S, :, :, b), data["b_band"][b, :])
 	end
 end
 
+# ╔═╡ 76fec8a9-d993-4786-899b-56281994d766
+κ500_bin = size(κ, 3)
+
 # ╔═╡ c4d133d7-5a9e-44b9-abcb-c544e0979135
-opa = SqOpacity(κ, κ_ross, S, λ, false) 
+opa = SqOpacity(κ[:,:,1:κ500_bin-1], κ_ross, S[:,:,1:κ500_bin-1], λ, false) 
+
+# ╔═╡ 6e2b8498-c1fd-4618-8e2b-28b4ea601c09
+opa500 = SqOpacity(
+	κ[:,:,κ500_bin:κ500_bin],
+	κ_ross, 
+	S,  
+	Base.convert.(Tp,[1.0]), 
+	false
+) 
 
 # ╔═╡ f54bbdb9-d9e2-47b0-aafe-5302b8510290
 
@@ -109,12 +121,20 @@ eos_new = reload(SqEoS, eos_new_path)
 
 
 # ╔═╡ 27ce24a3-dca7-429e-849c-9f8accda58e4
-opa_interpolated = complement(
-	fake_eos, eos_new, opa_binned.opacities
+opa_interpolated  = complement(
+	fake_eos, eos_new, opa_binned.opacities, 
+)
+
+# ╔═╡ d22bfe30-1462-43cc-9975-d8cfe6f4444e
+opa500_interpolated  = complement(
+	fake_eos, eos_new, opa500, 
 )
 
 # ╔═╡ 1ad3c07e-729c-480b-89b4-54e1f0f38f55
 TSO.transfer_rosseland!(eos_new, opa_interpolated);
+
+# ╔═╡ b15bc213-584d-4b91-a99f-d56a0e46f23d
+opa500_interpolated.κ_ross .= opa500_interpolated.κ[:,:,1]
 
 # ╔═╡ 42052bfb-8321-45c4-af8e-3d053e2ba623
 
@@ -169,6 +189,9 @@ TSO.save(eos_new, joinpath(eos_dir_new, "eos.hdf5"))
 # ╔═╡ 3b817455-d43d-4f61-ac3d-bdb80e992e34
 TSO.save(opa_interpolated, joinpath(eos_dir_new, "binned_opacities.hdf5"))
 
+# ╔═╡ 0f74cbc2-a131-435b-bfe2-d65c8f56749a
+TSO.save(opa_interpolated, joinpath(eos_dir_new, "opacities_500.hdf5"))
+
 # ╔═╡ d6ba4c07-6c86-48de-979e-e212f22da557
 
 
@@ -216,6 +239,34 @@ let
 
 end
 
+# ╔═╡ ea7424fb-ae1a-4029-8a8f-ea55c5250d09
+
+
+# ╔═╡ e2456ba4-2bc6-4661-ba31-2601e5f1fa47
+md"Extra: How do $\rm \tau_{500}$ and  $\rm \tau_{ross}$ compare?"
+
+# ╔═╡ 9b452f2d-2cbc-4d95-9da1-bc53d5ae2721
+model_ross = @optical Average3D(eos_new, av_path) eos_new opa_interpolated
+
+# ╔═╡ 8ae8d7d2-d92e-48be-ad9f-64fe8a9f5067
+model_500 = @optical Average3D(eos_new, av_path) eos_new opa500_interpolated
+
+# ╔═╡ 5e3a7e44-9845-461a-9d3e-330fd80c8a79
+let
+	f, ax = plt.subplots(1, 1)
+
+	ax.plot(log10.(model_ross.τ), log10.(model_500.τ), color="red")
+	ax.plot(log10.(model_ross.τ), log10.(model_ross.τ), ls=":", color="k")
+
+	ax.set_xlim(-7, 7)
+	ax.set_ylim(-7, 7)
+
+	ax.set_xlabel("τ ross")
+	ax.set_ylabel("τ 500")
+	
+	f
+end
+
 # ╔═╡ Cell order:
 # ╟─cd40eac0-d41d-4c45-b7ca-d7f3cc168829
 # ╠═c65e0994-8085-11ef-3cbc-fb515d8af323
@@ -228,7 +279,9 @@ end
 # ╟─9ae7c1f5-a2bd-4518-b686-d53b81ad9fcb
 # ╟─d45f9356-94f7-4320-ab75-24ef0b18fc80
 # ╠═7469fefc-b084-4dc1-9c1a-78f747bd6eb0
+# ╠═76fec8a9-d993-4786-899b-56281994d766
 # ╠═c4d133d7-5a9e-44b9-abcb-c544e0979135
+# ╠═6e2b8498-c1fd-4618-8e2b-28b4ea601c09
 # ╟─f54bbdb9-d9e2-47b0-aafe-5302b8510290
 # ╟─1ca76166-5719-470c-8cd4-c44438310c86
 # ╠═37e70e5a-eadd-4e3f-b6dd-e3ac05595f7e
@@ -241,7 +294,9 @@ end
 # ╠═ff6559ef-9b86-40df-9ad6-4b921d934a6f
 # ╟─4012a87c-03d6-45fe-b08e-41e0c3fb28a0
 # ╠═27ce24a3-dca7-429e-849c-9f8accda58e4
+# ╠═d22bfe30-1462-43cc-9975-d8cfe6f4444e
 # ╠═1ad3c07e-729c-480b-89b4-54e1f0f38f55
+# ╠═b15bc213-584d-4b91-a99f-d56a0e46f23d
 # ╟─42052bfb-8321-45c4-af8e-3d053e2ba623
 # ╟─8d07f251-9362-495d-b502-c7b98a318140
 # ╟─883fcfc6-bc40-4011-ada5-031259f42320
@@ -249,6 +304,7 @@ end
 # ╠═d2da6ed8-d19c-4b12-ab33-384d0b524cb3
 # ╠═fb0dbfdf-d2ce-4b20-bdeb-fa7cb6599378
 # ╠═3b817455-d43d-4f61-ac3d-bdb80e992e34
+# ╠═0f74cbc2-a131-435b-bfe2-d65c8f56749a
 # ╟─d6ba4c07-6c86-48de-979e-e212f22da557
 # ╟─445da383-5dfe-427e-89f9-28ab480ffa47
 # ╠═e566b981-c20d-4405-bbd3-7f59ecdcc915
@@ -258,3 +314,8 @@ end
 # ╠═5eff0a2d-2e20-4699-a29f-d1be0cc4c428
 # ╠═5846c57c-171b-4ef5-abcf-666596605e6d
 # ╟─2d48d193-b822-46e2-a605-397b27634b3e
+# ╟─ea7424fb-ae1a-4029-8a8f-ea55c5250d09
+# ╟─e2456ba4-2bc6-4661-ba31-2601e5f1fa47
+# ╠═9b452f2d-2cbc-4d95-9da1-bc53d5ae2721
+# ╠═8ae8d7d2-d92e-48be-ad9f-64fe8a9f5067
+# ╟─5e3a7e44-9845-461a-9d3e-330fd80c8a79
