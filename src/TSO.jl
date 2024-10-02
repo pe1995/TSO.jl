@@ -14,6 +14,7 @@ using Mmap
 using Clustering
 using ThreadsX
 using TimerOutputs
+using ImageFiltering
 import Clustering.assignments
 
 import Base.size

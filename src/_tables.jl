@@ -576,6 +576,84 @@ bisect(aos::E, lnRho::F, between=limits(aos.eos, 1); kwargs...) where {E<:AxedEo
 
 
 
+#= Image Filtering for smoothing the EoS =#
+
+"""
+    smooth(eos::AxedEoS, radius=30)
+
+Apply a gaussian 1D filter to the energy dimension of the given EoS table.
+"""
+function smooth(aos::AxedEoS, radius=30)
+	kernel = ImageFiltering.Kernel.gaussian((radius,))
+
+    eos = aos.eos
+    V = getfield(aos.eos, dependent_energy_variable(aos))
+
+    E_conv = similar(V)
+	P_conv = similar(V)
+	N_conv = similar(V)
+	R_conv = similar(V)
+	
+	for i in axes(E_conv, 2)
+		x=V[:, i]
+		E_conv[:, i] .= ImageFiltering.imfilter(x, kernel)
+
+		x=eos.lnPg[:, i]
+		P_conv[:, i] .= ImageFiltering.imfilter(x, kernel)
+
+		x=eos.lnNe[:, i]
+		N_conv[:, i] .= ImageFiltering.imfilter(x, kernel)
+
+		x=eos.lnRoss[:, i]
+		R_conv[:, i] .= ImageFiltering.imfilter(x, kernel)
+	end
+
+    if is_internal_energy(aos)
+	    SqEoS(eos.lnRho, E_conv, eos.lnEi, P_conv, R_conv, N_conv)
+    else
+        SqEoS(eos.lnRho, eos.lnT, E_conv, P_conv, R_conv, N_conv)
+    end
+end
+
+"""
+    smooth(opa::SqOpacity, radius=30)
+
+Apply a gaussian 1D filter to the energy dimension of the given opacity table.
+"""
+function smooth(opa::SqOpacity, radius=30)
+	kernel = ImageFiltering.Kernel.gaussian((radius,))
+
+    k_conv = similar(opa.κ)
+	kr_conv = similar(opa.κ_ross)
+	src_conv = similar(opa.κ)
+	
+	for l in axes(k_conv, 3)
+		for i in axes(k_conv, 2)
+			x=log.(opa.κ[:, i, l])
+			k_conv[:, i, l] .= ImageFiltering.imfilter(x, kernel)
+			
+			x=log.(opa.src[:, i, l])
+			src_conv[:, i, l] .= ImageFiltering.imfilter(x, kernel)
+		end
+	end
+	for i in axes(k_conv, 2)
+		x=log.(opa.κ_ross[:, i])
+		kr_conv[:, i] .= ImageFiltering.imfilter(x, kernel)
+	end
+	
+	SqOpacity(exp.(k_conv), exp.(kr_conv), exp.(src_conv), opa.λ, opa.optical_depth)
+end
+
+"""
+    smooth(eos::SqEoS, opa::SqOpacity; eos_radius=30, opa_radius=30)
+
+Apply a gaussian 1D filter to the energy dimension of the given EoS and opacity table.
+"""
+smooth(eos::SqEoS, opa::SqOpacity; eos_radius=30, opa_radius=30) = smooth(@axed(eos), eos_radius), smooth(opa, opa_radius)
+smooth(eos::AxedEoS, opa::SqOpacity; eos_radius=30, opa_radius=30) = smooth(eos, eos_radius), smooth(opa, opa_radius)
+
+
+
 
 
 

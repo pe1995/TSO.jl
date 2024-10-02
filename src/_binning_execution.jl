@@ -191,7 +191,7 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01, lnEimin=nothing, lnEimax=nothing)
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01, lnEimin=nothing, lnEimax=nothing, eos_radius=-1, opa_radius=-1)
     eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"))
     aos = @axed eos
@@ -201,12 +201,24 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
 
     # Before switching energy sources, make sure that everything is monotonic
     TSO.smoothAccumulate!(aos, spline=true)
+
+    eos, opa = if (eos_radius>0) & (opa_radius>0)
+        @info "Smoothing EoS + opacities with Gaussian kernel radii $(eos_radius) (EoS) and $(opa_radius) (opacities)"
+        TSO.smooth(eos, opa, eos_radius=eos_radius, opa_radius=opa_radius)
+    else
+        eos, opa
+    end
+
+
+    # possibly extrapolate EoS
     eos_new, opa_new = if extend
         @info "Extrapolating EoS at $(table_folder) beyond limits."
         TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
     else
         aos.eos, opa
     end
+
+    # Again making it monotonic
     TSO.smoothAccumulate!(@axed(eos_new), spline=true)
 
     # save the T-grid EoS to make comparison easier later
