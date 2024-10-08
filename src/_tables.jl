@@ -659,7 +659,7 @@ smooth(eos::AxedEoS, opa::SqOpacity; eos_radius=30, opa_radius=30) = smooth(eos,
 
 #= Writing in Dispatch format =#
 
-function tabparam(folder::String, EOSTableFile, RhoEiRadTableFile, nEiBin, nRhoBin, nRadBins, EiMin, EiMax, RhoMin, RhoMax)
+function tabparam(folder::String, EOSTableFile, RhoEiRadTableFile, tabparam_file, nEiBin, nRhoBin, nRadBins, EiMin, EiMax, RhoMin, RhoMax)
     content="&TABPAR\n"*
             "EOSTableFile = '$(EOSTableFile)'\n"*
             "RhoEiRadTableFile = '$(RhoEiRadTableFile)'\n"*
@@ -673,20 +673,22 @@ function tabparam(folder::String, EOSTableFile, RhoEiRadTableFile, nEiBin, nRhoB
             "nRadBins = $(nRadBins)\n"*
             "/\n"
 
-    open(joinpath(folder, "tabparam.in"), "w") do f
+    open(joinpath(folder, tabparam_file), "w") do f
         write(f, content)
     end
 
     nothing
 end
 
-tabparam(eos::EoSTable, nradbins, folder::String; eos_file="eostable.dat", opacity_file="rhoei_radtab.dat") = tabparam(folder, eos_file, opacity_file, size(eos.lnPg)..., nradbins, exp.(limits(eos))...)
+tabparam(eos::EoSTable, nradbins, folder::String; eos_file="eostable.dat", opacity_file="rhoei_radtab.dat", tabparam_file="tabparam.in") = tabparam(folder, eos_file, opacity_file, tabparam_file, size(eos.lnPg)..., nradbins, exp.(limits(eos))...)
 
 """
 Write the EoS + binned opacities in the same format as in Tabgen, so that it can be read by dispatch.
 """
-function for_dispatch(eos::EoSTable, χ, S, ϵ, folder::String)
-    f = FortranFile(joinpath(folder, "rhoei_radtab.dat"), "w", access="direct", recl=prod(size(S))*4)
+function for_dispatch(eos::EoSTable, χ, S, ϵ, folder::String; name="")
+    !isdir(folder) && mkdir(folder) 
+
+    f = FortranFile(joinpath(folder, "rhoei_radtab$(name).dat"), "w", access="direct", recl=prod(size(S))*4)
     FortranFiles.write(f, rec=1, log.(ϵ))
     FortranFiles.write(f, rec=2, log.(S))
     FortranFiles.write(f, rec=3, log.(χ))
@@ -698,32 +700,20 @@ function for_dispatch(eos::EoSTable, χ, S, ϵ, folder::String)
     eos_table[:, :, 3] = eos.lnNe
     eos_table[:, :, 4] = eos.lnRoss
 
-    f = FortranFile(joinpath(folder, "eostable.dat"), "w", access="direct", recl=prod(size(eos.lnT))*4*4)
+    f = FortranFile(joinpath(folder, "eostable$(name).dat"), "w", access="direct", recl=prod(size(eos.lnT))*4*4)
     FortranFiles.write(f, rec=1, eos_table)
     close(f)
 
-    tabparam(eos, size(χ, 3), folder)
+    tabparam(eos, size(χ, 3), folder, eos_file="eostable$(name).dat", opacity_file="rhoei_radtab$(name).dat", tabparam_file="tabparam$(name).in")
 end
 
-#for_dispatch(eos::EoSTable, opacities::OpacityTable, folder::String) = for_dispatch(eos, opacities.κ, opacities.src, opacities.κ_ross, folder)
-for_dispatch(eos::EoSTable, opacities::OpacityTable, folder::String) = begin
-    # Move files to the final folder for dispatch
+for_dispatch(eos::EoSTable, opacities::OpacityTable, folder::String; name="") = begin
     eos_table_name = folder
-    !isdir(eos_table_name) && mkdir(eos_table_name) 
-
 
     for_dispatch(eos, opacities.κ, opacities.src, opacities.κ_ross, folder)
-
     
-    save(opacities, joinpath(eos_table_name, "binned_opacities.hdf5"))
-    save(eos, joinpath(eos_table_name, "eos.hdf5"))
-
-
-    #mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
-    #mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
-    #mv("rhoei_radtab.dat",      joinpath(eos_table_name, "rhoei_radtab.dat"),      force=true)
-    #mv("binned_opacities.hdf5", joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
-    #mv("binned_eos.hdf5",       joinpath(eos_table_name, "eos.hdf5"),              force=true);
+    save(opacities, joinpath(eos_table_name, "binned_opacities$(name).hdf5"))
+    save(eos, joinpath(eos_table_name, "eos$(name).hdf5"))
 end
 
 for_dispatch(aos::AxedEoS, args...; kwargs...) = begin

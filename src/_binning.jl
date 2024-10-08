@@ -1582,35 +1582,17 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     # Do stuff
     if remove_from_thin
-        #=if Threads.nthreads() <= 1
-            do_binning!(
-                B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-                opacities.λ, binning, Temp, weights, 
-                opacities.κ, scattering.κ
-            )
-        else
-            @info "Binning opacities with $(Threads.nthreads()) threads."=#
-            do_binningX!(
-                B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-                opacities.λ, binning, Temp, weights, 
-                opacities.κ, scattering.κ
-            )
-        #end
+        do_binningX!(
+            B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+            opacities.λ, binning, Temp, weights, 
+            opacities.κ, scattering.κ
+        )
     else
-        #=if Threads.nthreads() <= 1
-            do_binning!(
-                B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-                opacities.λ, binning, Temp, weights, 
-                opacities.κ
-            )
-        else
-            @info "Binning opacities with $(Threads.nthreads()) threads."=#
-            do_binningX!(
-                B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-                opacities.λ, binning, Temp, weights, 
-                opacities.κ
-            )
-        #end
+        do_binningX!(
+            B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
+            opacities.λ, binning, Temp, weights, 
+            opacities.κ
+        )
     end
 
     κ_ross = T(1.0) ./χRBox
@@ -1629,16 +1611,19 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
     end
 
     ## Opacity
-    opacity_table = remove_from_thin ? 
-        wthin .* κBox .+ wthick .* κ_ross : 
-        wthin .* χBox .+ wthick .* κ_ross
+    #opacity_table = remove_from_thin ? 
+    #    wthin .* κBox .+ wthick .* κ_ross : 
+    #    wthin .* χBox .+ wthick .* κ_ross
+    #
+    # if remove_from_thin => k = chi_tot - chi_scat, else k = chi_tot
+    opacity_table = wthin .* κBox .+ wthick .* κ_ross 
 
     ## ϵ table
     ϵ_table = κBox ./ χBox
 
     ## Source function table --> S                = x/x+s * B + s/x+s * J 
     ##                       --> thermal emission = x/x+s * B
-    S_table = SBox
+    S_table =  opacity_table ./ (wthin .* χBox .+ wthick .* κ_ross) .* SBox
 
     BinnedOpacities(
         SqOpacity(
@@ -1733,10 +1718,10 @@ tabulate(args...; kwargs...) = @optionalTiming binning_time box_integrated_v4(ar
 
 #=============== Wrapper for normal functionality of binned tables =====================#
 
-for_dispatch(eos::EoSTable, opacities::BinnedOpacities) = for_dispatch(eos, 
+for_dispatch(eos::EoSTable, opacities::BinnedOpacities, args...) = for_dispatch(eos, 
                                                                         opacities.opacities.κ, 
                                                                         opacities.opacities.src, 
-                                                                        opacities.ϵ)
+                                                                        opacities.ϵ, args...)
 
 switch_energy(aos::A, opacities::BinnedOpacities, args...; kwargs...) where {A<:AxedEoS} = begin
     eos_e, opa_e = switch_energy(aos, opacities.opacities, args...; kwargs...)

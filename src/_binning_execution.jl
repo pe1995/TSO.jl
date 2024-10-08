@@ -191,7 +191,7 @@ end
 
 Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. Upsample the resulting table.
 """
-function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01, lnEimin=nothing, lnEimax=nothing, eos_radius=-1, opa_radius=-1)
+function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false, downD=0.4, downE=0.1, upD=0.01, upE=0.01, lnEimin=nothing, lnEimax_V=nothing, lnEimin_V=nothing, lnEimax=nothing, eos_radius=-1, opa_radius=-1)
     eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"))
     aos = @axed eos
@@ -209,10 +209,50 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
         eos, opa
     end
 
+     # save the T-grid EoS to make comparison easier later
+     save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
+     save(eos, joinpath(folder_new, "eos_T.hdf5"))
+
+     # also copy over bin assignment, if present
+     if isfile(joinpath(table_folder, "bin_assignment.hdf5"))
+        cp(joinpath(table_folder, "bin_assignment.hdf5"), joinpath(folder_new, "bin_assignment.hdf5"), force=true)
+    end
+
+    # also save per unit volume
+    eos_ev = deepcopy(eos)
+	for j in axes(eos_ev.lnEi, 2)
+		eos_ev.lnEi[:, j] .+= eos_ev.lnRho[j]
+	end
+    aos_ev = @axed(eos_ev)
+
+    # regular table
+    _convert_fromT_toE(
+        aos, opa, folder_new, 
+        upsample, extend, 
+        downD, downE, upD, upE, 
+        lnEimin, lnEimax, eos_radius, 
+        opa_radius; name=""
+    )
+
+    # ev table
+    _convert_fromT_toE(
+        aos_ev, opa, folder_new, 
+        upsample, extend, 
+        downD, downE, upD, upE, 
+        lnEimin_V, lnEimax_V, eos_radius, 
+        opa_radius; name="_V"
+    )
+end
+
+_convert_fromT_toE(aos, opa, folder_new,
+    upsample=1000, extend=false, 
+    downD=0.4, downE=0.1, upD=0.01, upE=0.01, 
+    lnEimin=nothing, lnEimax=nothing, 
+    eos_radius=-1, opa_radius=-1; name="") = begin
 
     # possibly extrapolate EoS
     eos_new, opa_new = if extend
-        @info "Extrapolating EoS at $(table_folder) beyond limits."
+        @info "Extrapolating EoS beyond limits."
         TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
     else
         aos.eos, opa
@@ -220,10 +260,6 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
 
     # Again making it monotonic
     TSO.smoothAccumulate!(@axed(eos_new), spline=true)
-
-    # save the T-grid EoS to make comparison easier later
-    save(opa, joinpath(folder_new, "binned_opacities_T.hdf5"))
-    save(eos, joinpath(folder_new, "eos_T.hdf5"))
 
     # Limit the internal energy range to what is occupied by the initial model to make sure
     # the model atmosphere will be well sampled
@@ -249,15 +285,10 @@ function convert_fromT_toE(table_folder, folder_new; upsample=1000, extend=false
     TSO.fill_nan!(aosE, opaE)
     TSO.set_limits!(aosE, opaE)
 
-    for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new)
+    for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new, name=name)
 
-    save(opaE, joinpath(folder_new, "binned_opacities.hdf5"))
-    save(eosE, joinpath(folder_new, "eos.hdf5"))
-
-    # also copy over bin assignment, if present
-    if isfile(joinpath(table_folder, "bin_assignment.hdf5"))
-        cp(joinpath(table_folder, "bin_assignment.hdf5"), joinpath(folder_new, "bin_assignment.hdf5"), force=true)
-    end
+    save(opaE, joinpath(folder_new, "binned_opacities$(name).hdf5"))
+    save(eosE, joinpath(folder_new, "eos$(name).hdf5"))
 end
 
 """
@@ -267,17 +298,29 @@ Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. If needed,
 the internal energy is cut where the models internal energy ends (+lnEi_stretch*absolute difference top-bottom).
 """
 convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...) = begin
-    eos = reload(SqEoS,     joinpath(table_folder, "eos.hdf5"))
+    eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
+    lnEilimit = _get_e_limit(eos, opa, av_path, lnEi_stretch)
+
+    # also save per unit volume
+    eos_ev = deepcopy(eos)
+	for j in axes(eos_ev.lnEi, 2)
+		eos_ev.lnEi[:, j] .+= eos_ev.lnRho[j]
+	end
+    lnEilimit_V = _get_e_limit(eos_ev, opa, av_path, lnEi_stretch)
+
+    convert_fromT_toE(table_folder, folder_new; lnEimax=lnEilimit, lnEimax_V=lnEilimit_V, kwargs...)
+end
+
+_get_e_limit(eos, opa, av_path, lnEi_stretch) = begin
     model = @optical flip(Average3D(eos, av_path), depth=true) eos opa
 
     lnEimin = minimum(model.lnEi)
     lnEimax = maximum(model.lnEi)
 
     lnEilimit = lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch
-
-    convert_fromT_toE(table_folder, folder_new; lnEimax=lnEilimit, kwargs...)
 end
+
 
 function create_E_from_T(table_folder, name="", av_path=nothing; 
                                 upsample=2048,

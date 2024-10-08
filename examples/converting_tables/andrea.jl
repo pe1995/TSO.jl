@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.41
+# v0.19.46
 
 using Markdown
 using InteractiveUtils
@@ -251,7 +251,7 @@ av_path = "/mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/MUST.jl/initial
 eos_dir_new_E = "MANCHA_M3D_S_E_magg_m0_a0_vmic1_v5.1/"
 
 # ╔═╡ 46f48e0e-e324-439c-9b71-762989b2b778
-TSO.convert_fromT_toE(eos_dir_new, eos_dir_new_E, av_path; lnEi_stretch=1.0)
+TSO.convert_fromT_toE(eos_dir_new, eos_dir_new_E, av_path; lnEi_stretch=0.5, upsample=4096)
 
 # ╔═╡ 87913ced-c8d0-42c1-916a-9250cdde8f73
 
