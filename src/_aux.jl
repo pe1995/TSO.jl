@@ -691,7 +691,7 @@ const asplund2007_abund = Dict(
 
 ## Alpha elements
 
-α_elements = ["C", "O", "Ne", "Mg", "Si", "S", "Ar", "Ca"]
+α_elements = ["O", "Ne", "Mg", "Si", "S", "Ar", "Ca"]
 primordial_elements = ["H", "He", "Li"]
 
 
