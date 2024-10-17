@@ -1623,7 +1623,7 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     ## Source function table --> S                = x/x+s * B + s/x+s * J 
     ##                       --> thermal emission = x/x+s * B
-    S_table =  opacity_table ./ (wthin .* χBox .+ wthick .* κ_ross) .* SBox
+    S_table =  SBox #opacity_table ./ (wthin .* χBox .+ wthick .* κ_ross) .* SBox
 
     BinnedOpacities(
         SqOpacity(
