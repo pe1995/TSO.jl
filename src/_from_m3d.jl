@@ -82,7 +82,13 @@ end
 Extract EoS + Opacities from given run. Return arrays
 """
 function get_eos(run)
-	eos = pyconvert(
+    temp = pyconvert(Array, run.run.temp)[:, 1]
+    rho  = pyconvert(Array, run.run.rho)[1, :]
+    ne   = pyconvert(Array, run.run.ne)[:, :]
+    pg   = pyconvert(Array, run.run.pg)[:, :]
+    E    = pyconvert(Array, run.run.E)[:, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
+	
+	#=eos = pyconvert(
 		Array, 
 		run.run.read_patch_save("eos", concat=false)[1,1]
 	)
@@ -91,7 +97,7 @@ function get_eos(run)
     rho  = eos[2, 1, :]
     ne   = eos[3, :, :]
     pg   = eos[4, :, :]
-    E    = eos[5, :, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
+    E    = eos[5, :, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)=#
 	
 	E[E .< 1e-30] .= NaN
 	E[E .> 1e30] .= NaN
