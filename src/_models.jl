@@ -85,7 +85,7 @@ Construct 1D model from keyword arrays. If `τ` given OpticalModel1D is construc
 # Examples
 
 ```julia
-julia> Model1D(τ=τ, z=z, lnρ=lnρ, lnT=lnT)
+julia> Model1D(τ=nothing, z=nothing, lnρ=nothing, lnT=nothing, lnEi=nothing, logg=log10(2.75e4))
 TSO.OpticalModel1D{Float64}(...)
 ```
 """
