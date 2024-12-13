@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.20.0
 
 using Markdown
 using InteractiveUtils
@@ -112,7 +112,7 @@ opa_binned = TSO.@binned opa fake_eos
 md"The opacity table above needs to be interpolated to a different EoS in case there is non provided."
 
 # ╔═╡ 8a2f3599-c7be-4159-b56d-315b8f9b1996
-eos_new_path = "/mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/opacity_tables/TSO_M3D_magg_m0_a0_vmic1_v5.1/combined_eos_magg_m0_a0_vmic1.hdf5"
+eos_new_path = "/mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/opacity_tables/magg_m0_a0_vmic1_noH_v1.0/combined_eos_magg_m0_a0_vmic1_noH.hdf5"
 
 # ╔═╡ ff6559ef-9b86-40df-9ad6-4b921d934a6f
 eos_new = reload(SqEoS, eos_new_path)
@@ -224,7 +224,7 @@ end
 md"Saving the converted tables on the temperature grid."
 
 # ╔═╡ 37630f68-acd6-4517-a8c8-58f825b00c93
-eos_dir_new = "MANCHA_M3D_S_magg_m0_a0_vmic1_v5.1/"
+eos_dir_new = "MANCHA_M3D_S1_magg_m0_a0_vmic1_v5.1/"
 
 # ╔═╡ d2da6ed8-d19c-4b12-ab33-384d0b524cb3
 !isdir(eos_dir_new) && mkdir(eos_dir_new)
@@ -248,7 +248,7 @@ md"These tables can now be used in the usual routines, as if they were from M3D 
 av_path = "/mnt/beegfs/gemini/groups/bergemann/users/eitner/StAt/MUST.jl/initial_grids/Stagger/av_models/t5777g44m0005_00070_av.dat" 
 
 # ╔═╡ b3551f27-a745-4816-a173-6fcc54a2f001
-eos_dir_new_E = "MANCHA_M3D_S_E_magg_m0_a0_vmic1_v5.1/"
+eos_dir_new_E = "MANCHA_M3D_S1_E_magg_m0_a0_vmic1_v5.1/"
 
 # ╔═╡ 46f48e0e-e324-439c-9b71-762989b2b778
 TSO.convert_fromT_toE(eos_dir_new, eos_dir_new_E, av_path; lnEi_stretch=0.5, upsample=4096)
