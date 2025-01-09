@@ -172,10 +172,9 @@ end
 
 
 function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)
-	S = similar(opa.κ)
 	T = exp.(eos.lnT)
 	for j in eachindex(eos.lnRho)
-		S[:, j, :] .= TSO.Bλ(opa.λ, T)
+		opa.src[:, j, :] .= TSO.Bλ(opa.λ, T)
 	end
 
 	if compute_ross
