@@ -1132,7 +1132,7 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
     lnRoss .= 0.0
     B = similar(lnRoss)
 
-    # make backup chunk arras for intermediate sum storage
+    # make backup chunk arrays for intermediate sum storage
     chunks = Iterators.partition(eachindex(l), length(l) ÷ Threads.nthreads()) |> collect
     tasks = map(chunks) do chunk
         Threads.@spawn _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity)
@@ -1159,9 +1159,9 @@ _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
     RossChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
     dbnuChunk = Ref(eltype(opacity)(0.0))
 
-    for k in chunk
-        for j in eachindex(lnRho)
-            for i in eachindex(axis_val)
+    @inbounds for k in chunk
+        @inbounds for j in eachindex(lnRho)
+            @inbounds for i in eachindex(axis_val)
                 δBν!(dbnuChunk, l[k], T[i, j])
                 RossChunk[i, j] += weights[k] * 1 / opacity[i, j, k] * dbnuChunk[]
                 BChunk[i, j] += weights[k] * dbnuChunk[]
