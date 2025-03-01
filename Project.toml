@@ -21,9 +21,9 @@ ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-julia = "1"
 CondaPkg = "< 0.2.25"
-PythonCall = "< 0.9.24"
+PythonCall = "< 0.9.24, 0.9"
+julia = "1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
