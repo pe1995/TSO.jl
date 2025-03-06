@@ -340,3 +340,22 @@ Base.size(m::AbstractModel) = size(m.z)
 
 
 #=============================================================================#
+
+"""
+    save_text_m3d(model::AbstractModel, f_new; header=nothing, vmic=0.0)
+
+Save the model in a format readable by M3D.
+"""
+function save_text_m3d(model_in::AbstractModel, f_new; header=nothing, vmic=0.0)
+    model = flip(model_in, depth=true)
+    open(f_new, "w") do f
+        h = isnothing(header) ? "TSO.Model1D_g$(model.logg)" : header
+		write(f, h*"\n")
+		write(f, "$(length(model.z))\n")
+		
+		for i in eachindex(model.z)
+			line = @sprintf "%.6E    %.1f    %.4E    %.4E    %.1f\n" model.z[i] exp(model.lnT[i]) 0.0 exp(model.lnρ[i]) vmic
+			write(f, line)
+		end
+	end
+end
