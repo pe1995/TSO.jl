@@ -7,17 +7,22 @@ Note: `name` will decide the name suffix under which the formation opacities wil
 If under this `extension` at the very end no table with the name `combined_formation_opacities_name_extension.hdf5` is found, it will be created.
 Also a new opacity table with updated rosseland opacities is saved.
 """
-function compute_formation_opacities(name, table_folder, eos_path, opa_path, av_path; logg=log10(2.75e4))
+function compute_formation_opacities(name, table_folder, eos_path, opa_path, av_path; corr_χ=nothing, corr_S=nothing, logg=log10(2.75e4))
     opacities = reload(
         SqOpacity, 
 		joinpath(table_folder, opa_path), 
-        mmap=true
+        mmap=false
     )
     
     eos = reload(
         SqEoS,     
 		joinpath(table_folder, eos_path)
     )
+
+    if !isnothing(corr_χ)
+        @info "Correcting formation opacities."
+        TSO.scale!(opacities; κ=corr_χ, src=corr_S)
+    end
     
     aos = @axed eos
     model = flip(Average3D(av_path, logg=logg), depth=true)
@@ -67,6 +72,7 @@ end
 Bin opacities, based on a specific binning method, using formation opacities computed previously. Save the binned tables.
 """
 function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path; 
+                                        corr_χ=nothing, corr_S=nothing, 
                                         method=:uniform, 
                                         use_contribution=false, 
                                         logg=log10(2.75e4), 
@@ -163,11 +169,7 @@ function bin_opacity_table(name, table_folder, eos_path, opa_path, av_path;
         eos_table_name
     end
 	
-    binned_opacities = if isnothing(sopacities)
-        tabulate(bin, weights, eos, opacities, transition_model=model)
-    else
-        tabulate(bin, weights, eos, opacities, sopacities, transition_model=model)
-    end
+    binned_opacities = tabulate(bin, weights, eos, opacities, sopacities, transition_model=model; corr_χ=corr_χ, corr_S=corr_S)
 
     binned_opacities = if Nbins == 1
         @info "Replacing binned opacity with Rosseland opacity."

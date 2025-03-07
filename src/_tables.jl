@@ -749,3 +749,14 @@ function save_tables(aos, opa, eos_table_name, table_folder=nothing)
         cp(joinpath(table_folder, "combined_eos.hdf5"), joinpath(eos_table_name, "eos.hdf5"), force=true);
     end;
 end
+
+
+
+
+#= Manipulating opacity tables =#
+
+scale!(opa::SqOpacity; fields...) = begin
+    for (fieldname, factor) in fields
+        getfield(opa, fieldname) .*= factor
+    end
+end
