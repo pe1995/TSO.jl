@@ -1,7 +1,7 @@
 name = "TSO"
 uuid = "65303bd6-8358-47a4-91b9-056454446fac"
 authors = ["Philipp Eitner <eitner@mpia.de> and contributors"]
-version = "0.2.5"
+version = "0.3.0"
 
 [deps]
 BSplineKit = "093aae92-e908-43d7-9660-e50ee39d5a0a"
