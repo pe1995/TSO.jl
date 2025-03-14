@@ -83,10 +83,11 @@ Extract EoS + Opacities from given run. Return arrays
 """
 function get_eos(run)
     temp = pyconvert(Array, run.run.temp)[:, 1]
-    rho  = pyconvert(Array, run.run.rho)[1, :]
+    rho  = pyconvert(Array, run.run.rho)[:, :]
     ne   = pyconvert(Array, run.run.ne)[:, :]
     pg   = pyconvert(Array, run.run.pg)[:, :]
     E    = pyconvert(Array, run.run.E)[:, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
+    χ500 = pyconvert(Array, run.run.chi)[:, :]
 	
 	#=eos = pyconvert(
 		Array, 
@@ -107,8 +108,11 @@ function get_eos(run)
 
 	ne[ne .< 1e-30] .= NaN
 	ne[ne .> 1e30] .= NaN
+
+	χ500[χ500 .< 1e-30] .= NaN
+	χ500[χ500 .> 1e30] .= NaN
 	
-	log.(rho), log.(temp), log.(E), log.(pg), log.(ne)
+	log.(rho[1, :]), log.(temp), log.(E), log.(pg), log.(ne), log.(χ500 ./ rho)
 end
 
 function add_opacities!(opa1, opa...)
@@ -126,7 +130,7 @@ end
 Extract EoS + Opacities from given run. Collect them together in a table.
 """
 function collect_opacity(run; compute_ross=false)
-	rho, temp, E, pg, ne = get_eos(run)
+	rho, temp, E, pg, ne, χ500 = get_eos(run)
 	l, chi = get_opacity(run, "opa")
 	_, scat = try
 		get_opacity(run, "scat")
@@ -141,7 +145,11 @@ function collect_opacity(run; compute_ross=false)
 	eos = TSO.SqEoS(
 		rho, temp, E, pg, log.(ross), ne
 	)
+	eos500 = TSO.SqEoS(
+		rho, temp, E, pg, χ500, ne
+	)
     aos = @axed eos
+    aos500 = @axed eos500
 
 
 	chi = TSO.SqOpacity(
@@ -164,10 +172,12 @@ function collect_opacity(run; compute_ross=false)
 	# compute rosseland opacity
 	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
 	fill_nan!(aos, chi, scat)
+	fill_nan!(aos500)
 	set_limits!(aos, chi, small=1e-30, large=1e30)
 	set_limits!(aos, scat, small=1e-30, large=1e30)
+	set_limits!(aos500, small=1e-30, large=1e30)
 
-	eos, chi, scat
+	eos, eos500, chi, scat
 end
 
 
