@@ -164,10 +164,10 @@ function collect_opacity(run; compute_ross=false)
 	end
 
 	# add scattering opacity to normal opacity
-	if !isnothing(scat)
-		@info "Adding scattering opacity to absorption."
-		add_opacities!(chi, scat)
-	end
+	#if !isnothing(scat)
+	#	@info "Adding scattering opacity to absorption."
+	#	add_opacities!(chi, scat)
+	#end
 
 	# compute rosseland opacity
 	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
