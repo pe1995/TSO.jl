@@ -292,20 +292,28 @@ end
 
 
 
+stitch(model, adiabat) = begin
+	z = [adiabat.z..., model.z...]
+	mask = unique(i -> z[i], eachindex(z))
+	Model1D(
+		z=[adiabat.z..., model.z...][mask], 
+		lnρ=[adiabat.lnρ..., model.lnρ...][mask], 
+		lnT=[adiabat.lnT..., model.lnT...][mask], 
+		lnEi=[adiabat.lnEi..., model.lnEi...][mask], 
+		logg=model.logg
+    )
+end
 
-function adiabatic_extrapolation(model, eos, dz=nothing; kwargs...)
+
+
+function adiabatic_extrapolation(model, eos, dz; kwargs...)
     model_flip = flip(model)
     i_top = pick_point(model_flip, 1)
 
-    ad_opt = if isnothing(dz)
-        a = adiabatDown(i_top, eos; kwargs...)
-        @optical a eos
-    else
-        z_end = first(model_flip.z) - dz
-        a = adiabatDown(i_top, eos, z_end=z_end; kwargs...)
-        @optical a eos
-    end
-
+    z_end = first(model_flip.z) - dz
+    a = adiabatDown(i_top, eos, z_end=z_end; kwargs...)
+    ad_opt = @optical a eos
+    
 	flip!(ad_opt, depth=false)
 	model_flip.lnEi .= lookup(eos, :lnEi, model_flip.lnρ, model_flip.lnT)
 	
@@ -325,3 +333,38 @@ function adiabatic_extrapolation(model, eos, dz=nothing; kwargs...)
 		depth=true
 	)
 end
+
+function adiabatic_extrapolation(model, eos; τ_extrapolate=1.0, τ_target=8.0, iter_max=500, kwargs...)
+    model_flip = @optical flip(model) eos
+
+	# crop the model until τ=τ_extrapolate
+	model_opt_cut = flip(
+        cut(
+            flip(model_flip, depth=true), 
+            τ=[minimum(model_flip.τ), exp10(τ_extrapolate)]
+        ), 
+        depth=false
+    )
+	
+	tau_bottom = Ref(-Inf)
+	mloc = deepcopy(model_opt_cut)
+	ic = 0
+	while (tau_bottom[] < τ_target) && (ic < iter_max)
+		ic += 1
+
+		i_top = pick_point(mloc, 1)
+		a = adiabatDown(i_top, eos; nz=10, dlnd=0.01, kwargs...)
+		mloc = stitch(mloc, a)
+
+		τ = rosseland_optical_depth(eos, flip(mloc, depth=true))
+		tau_bottom[] = maximum(log10.(τ)) 
+	end
+	
+	mloc.lnEi .= lookup(eos, :lnEi, mloc.lnρ, mloc.lnT)
+	uniform_z = range(minimum(mloc.z), maximum(mloc.z), length=length(mloc.z)) 
+	@optical flip(
+		interpolate_to(mloc, in_log=false, z=uniform_z |> collect),
+		depth=true
+	) eos
+end
+
