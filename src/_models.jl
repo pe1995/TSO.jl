@@ -72,7 +72,7 @@ macro optical(model, eos)
     m = esc(model)
     e = esc(eos)
     quote
-        OpticalModel1D(Base.convert(typeof(getfield($m, :z)), rosseland_optical_depth($e, $m)), (getfield($m, p) for p in fieldnames(typeof($m)))...)
+        OpticalModel1D(Base.convert(typeof(getfield($m, :z)), rosseland_optical_depth($e, $m)), (getfield($m, p) for p in fieldnames(typeof($m)) if p!=:τ)...)
     end
 end
 
