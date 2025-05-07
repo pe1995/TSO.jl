@@ -339,6 +339,61 @@ Base.length(m::AbstractModel) = length(m.z)
 Base.size(m::AbstractModel) = size(m.z)
 
 
+#======================================== Make models monotonic in T and rho =#
+
+"""
+    monotonic(model; spline=true)
+
+Make model monotonically increasing in rho and T. Sort it to be on a depth scale first, 
+followed by a reverse minima accumulation and spline interpolation (SteffenMonotonicInterpolation), if wanted.
+"""
+monotonic(model; spline=true) = begin
+    model_depth = flip(deepcopy(model), depth=true)
+    x = copy(model_depth.z)
+	y = similar(model_depth.lnρ)
+    y .= reverse(model_depth.lnρ)
+    y .= reverse(accumulate(min, y))
+
+    model_depth.lnρ .= if spline
+        ip = Interpolations.extrapolate(
+            Interpolations.interpolate(
+                Interpolations.deduplicate_knots!(
+                    x, 
+                    move_knots=true
+                ), 
+                y, 
+                Interpolations.SteffenMonotonicInterpolation()
+            ), 
+            Interpolations.Flat()
+        )
+        ip.(x) 
+    else
+        y
+    end
+
+    y .= reverse(model_depth.lnT)
+    y .= reverse(accumulate(min, y))
+    model_depth.lnT .= if spline
+        ip = Interpolations.extrapolate(
+            Interpolations.interpolate(
+                Interpolations.deduplicate_knots!(
+                    x, 
+                    move_knots=true
+                ), 
+                y, 
+                Interpolations.SteffenMonotonicInterpolation()
+            ), 
+            Interpolations.Flat()
+        )
+        ip.(x) 
+    else
+        y
+    end
+
+    model_depth
+end
+
+
 #=============================================================================#
 
 """
