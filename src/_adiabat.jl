@@ -553,6 +553,7 @@ function adiabatic_extrapolation(model, eos; τ_extrapolate=1.0, τ_target=8.0, 
 end
 
 function reverse_adiabatic_extrapolation(model, rho_bottom, T_bottom, eos; τbottom=1.0, iter_max=500, kwargs...)
+    model = deepcopy(model)
     model_flip = flip(model)
 
 	# crop the model until τ=τbottom
