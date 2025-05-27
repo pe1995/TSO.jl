@@ -123,9 +123,9 @@ Model1D(; τ   =nothing,
     end
 
     if isnothing(τ)
-        Model1D(input_arrays[2:end]..., logg)
+        Model1D(input_arrays[2:end]..., Base.convert(t_ref, logg))
     else
-        OpticalModel1D(input_arrays..., logg)
+        OpticalModel1D(input_arrays..., Base.convert(t_ref, logg))
     end
 end
 
