@@ -233,6 +233,12 @@ function interpolate_to(m::AbstractModel; in_log=false, kwargs...)
                     extrapolation_bc=Line()
                 ).(new_scale)
 
+                # the upper layers are almost isothermal
+                if f==:lnT
+                    mint = minimum(v[mask])
+                    r[r.<mint] .= mint
+                end
+
                 append!(d, [r])
             else
                 append!(d, [v])
