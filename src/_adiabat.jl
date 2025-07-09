@@ -518,17 +518,21 @@ function adiabatic_extrapolation(model, eos, dz; kwargs...)
 	)
 end
 
-function adiabatic_extrapolation(model, eos; τ_extrapolate=1.0, τ_target=8.0, iter_max=500, kwargs...)
+function adiabatic_extrapolation(model, eos; τ_extrapolate=nothing, τ_target=8.0, iter_max=500, kwargs...)
     model_flip = @optical flip(model) eos
 
 	# crop the model until τ=τ_extrapolate
-	model_opt_cut = flip(
-        cut(
-            flip(model_flip, depth=true), 
-            τ=[minimum(model_flip.τ), exp10(τ_extrapolate)]
-        ), 
-        depth=false
-    )
+	model_opt_cut = if !isnothing(τ_extrapolate)
+        flip(
+            cut(
+                flip(model_flip, depth=true), 
+                τ=[minimum(model_flip.τ), exp10(τ_extrapolate)]
+            ), 
+            depth=false
+        )
+    else
+        flip(model_flip, depth=false)
+    end
 	
 	tau_bottom = Ref(-Inf)
 	mloc = deepcopy(model_opt_cut)
