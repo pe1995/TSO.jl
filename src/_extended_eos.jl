@@ -36,9 +36,9 @@ end
 
 function ideal_entropy(T, rho, mu)    
     m_particle = mu * m_u
-    R_spec = k_B / m_particle
+    R_spec = KBoltzmann / m_particle
     
-    factor = (2.0 * pi * m_particle * k_B * T) / (h^2)
+    factor = (2.0 * pi * m_particle * KBoltzmann * T) / (HPlanck^2)
     n_quantum = factor^1.5
     n = rho / m_particle
     
@@ -107,8 +107,6 @@ Add gradients and thermodynamic quantities to the EoS and allow for interpolatio
 """
 function add_thermodynamics!(eos_extended::ExtendedEoS)
 	eos = eos_extended.eos
-	k_B = 1.380649e-16
-	m_u = 1.660539e-24
 	χₜ, χᵨ, cᵥ = gradients!(eos_extended)
 
 	# expansion coefficient dlnrho / dlnT |_P = χₜ/χᵨ
@@ -126,7 +124,7 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 			T = exp(eos.lnT[i])
 			cₚ[i, j] = min(1e12, max(1e-12, cᵥ[i, j] + P/(ρ*T) * χₜ[i, j]^2 / χᵨ[i, j]))
 			∇ₐ[i, j] = min(1, max(1e-12, P/(ρ*T) .* Q[i, j] ./ cₚ[i, j]))
-			μ[i, j] = min(1e12, max(1e-12, ρ * k_B * T / (P * m_u)))
+			μ[i, j] = min(1e12, max(1e-12, ρ * KBoltzmann * T / (P * m_u)))
 		end
 	end
 	eos_extended.extensions[:Q] = Q

@@ -311,6 +311,7 @@ const twohc2     = 2.0e0 *HPlanck*CLight^2
 const hc_k       = HPlanck*CLight/KBoltzmann
 const aa_to_cm   = 1.0e-8
 const σ_S        = 5.6704e-5
+const m_u = 1.660539e-24
 const atomic_number = Symbol.(
     strip(i, ' ') for i in [
         "H ","He","Li","Be","B ","C ","N ","O ","F ",         # |  1 -  9
