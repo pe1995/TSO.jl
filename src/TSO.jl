@@ -99,6 +99,7 @@ include("_adiabat.jl")
 include("_from_m3d.jl")
 include("_binning_execution.jl")
 include("_extend.jl")
+include("_extended_eos.jl")
 
 
 #= List of timers =#
