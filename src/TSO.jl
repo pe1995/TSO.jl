@@ -80,6 +80,8 @@ export Solver, Jν, Qr
 #= Python libs =#
 const scipy_interpolate = PythonCall.pynew()
 const scipy_loaded = Ref(false)
+const numpy = PythonCall.pynew()
+const numpy_loaded = Ref(false)
 const generalTimer = TimerOutput()
 
 #= Source files =#

@@ -282,12 +282,20 @@ Lookup "what" in the EoS, return the value spliced as args... indicate.
 """
 lookup(eos::E, what::Symbol, rho, var, args...) where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = lookup(lookup_function(eos, what, args...), rho, var)
 lookup(eos::E, opacities::OpacityTable, what::Symbol, rho, var, args...)  where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}} = begin
-    if (length(args) > 0) | (ndims(getfield(opacities, what))==2)
+    wavelength_window = if (length(args) > 0)
+        args[1]
+    else
+        1:length(opacities.λ)
+    end
+
+    if (length(wavelength_window)==1) | (ndims(getfield(opacities, what))==2)
         lookup(lookup_function(eos, opacities, what, args...), rho, var)
-    else # lookup all of the wavelength points
-        v = zeros(eltype(opacities.κ), size(rho)..., length(opacities.λ))
-        for i in eachindex(opacities.λ)
-            setindex!(v, lookup(lookup_function(eos, opacities, what, i), rho, var), (Base.Colon() for j in 1:ndims(rho))..., i)
+    else # lookup all of the wavelength points in the window
+        v = zeros(eltype(opacities.κ), size(rho)..., length(opacities.λ[wavelength_window]))
+        c = 1
+        for i in eachindex(opacities.λ)[wavelength_window]
+            setindex!(v, lookup(lookup_function(eos, opacities, what, i), rho, var), (Base.Colon() for j in 1:ndims(rho))..., c)
+            c += 1
         end
 
         v

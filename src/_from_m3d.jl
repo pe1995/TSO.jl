@@ -62,13 +62,24 @@ end
 Extract EoS + Opacities from given run. Return arrays
 """
 function get_opacity(run, from="opa")
+	if !numpy_loaded[]
+        load_numpy!()
+    end
+
 	chi = pyconvert(
 		Array, 
 		run.run.read_patch_save(from, concat=true, fdim=0, lazy=false)[0]
 	)
 
 	chi  = chi[:, :, :] 
-	l = Base.convert.(eltype(chi), run.lam)
+	#l = Base.convert.(eltype(chi), run.lam)
+	l = Base.convert.(eltype(chi), reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
+	if !issorted(l)
+		@warn "Wavelength array appears to be not sorted. This may indicate a bug."
+		m = sortperm(l)
+		l .= l[m]
+		chi .= chi[m, :, :]
+	end
 
 	chi[chi .< 1e-30] .= NaN
 	chi[chi .> 1e30] .=  NaN

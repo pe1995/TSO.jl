@@ -633,7 +633,7 @@ pick_axis(eos; conservative=false, upsample=-1, switch=true) = begin
     newAxis = if conservative
         upsample==-1 ? range(conservative_axis(switch_values)..., length=EnergyAxis(eos).length) :
                        range(conservative_axis(switch_values)..., length=upsample)
-    else
+    else    
         upsample==-1 ? range(default_axis(switch_values)..., length=EnergyAxis(eos).length) :
                        range(default_axis(switch_values)..., length=upsample)
     end
@@ -858,6 +858,76 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
         end
     end
 end
+
+function repair_line!(y_view, x_coords; is_log=false, fallback=nothing)
+    work_y = is_log ? log.(y_view) : y_view
+    bad_mask = nan_or_inf.(work_y)    
+    if !any(bad_mask)
+        return
+    end
+
+    good_mask = .!bad_mask
+    n_good    = count(good_mask)
+    if n_good >= 2
+        repaired_vals = interpolate_at(
+            view(x_coords, good_mask), 
+            view(work_y, good_mask), 
+            view(x_coords, bad_mask)
+        )
+        
+        if is_log
+            y_view[bad_mask] .= exp.(repaired_vals)
+        else
+            y_view[bad_mask] .= repaired_vals
+        end
+    elseif fallback !== nothing
+        @warn "Fallback value used."
+        y_view[bad_mask] .= fallback
+    end
+end
+
+#=function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
+    eos = aos.eos
+    
+    x_density = DensityAxis(aos).values
+    x_energy  = EnergyAxis(aos).values
+    main_var = getfield(eos, dependent_energy_variable(aos))
+    fallback_val = 1.0f-30
+
+    for j in eachindex(x_density)
+        repair_line!(view(main_var, :, j),   x_energy, fallback=fallback_val)
+        repair_line!(view(eos.lnPg, :, j),   x_energy, fallback=fallback_val)
+        repair_line!(view(eos.lnNe, :, j),   x_energy, fallback=fallback_val)
+        repair_line!(view(eos.lnRoss, :, j), x_energy, fallback=fallback_val)
+
+        for opa in opacities
+            repair_line!(view(opa.κ_ross, :, j), x_energy, is_log=true, fallback=fallback_val)
+            @inbounds for k in eachindex(opa.λ)
+                repair_line!(view(opa.κ, :, j, k),   x_energy, is_log=true, fallback=fallback_val)
+                repair_line!(view(opa.src, :, j, k), x_energy, is_log=true, fallback=fallback_val)
+            end
+        end
+    end
+
+    #=for i in eachindex(x_energy)
+        repair_line!(view(main_var, i, :),   x_density)
+        repair_line!(view(eos.lnPg, i, :),   x_density)
+        repair_line!(view(eos.lnNe, i, :),   x_density)
+        #repair_line!(view(eos.lnRoss, i, :), x_density)
+
+        for opa in opacities
+            #repair_line!(view(opa.κ_ross, i, :), x_density, is_log=true)
+            @inbounds for k in eachindex(opa.λ)
+                #repair_line!(view(opa.κ, i, :, k),   x_density, is_log=true)
+                repair_line!(view(opa.src, i, :, k), x_density, is_log=true)
+            end
+        end
+    end=#
+end=#
+
+
+
+
 
 function set_small!(aos, opa, small=1e-30)
     otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)

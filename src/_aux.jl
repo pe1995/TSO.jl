@@ -172,6 +172,11 @@ load_scipy_interpolate!(mod=scipy_interpolate) = begin
     scipy_loaded[] = true
 end
 
+load_numpy!(mod=numpy) = begin
+    PythonCall.pycopy!(mod, pyimport("numpy"))
+    numpy_loaded[] = true
+end
+
 include_helper(name) = joinpath(dirname(@__FILE__), name)
 
 function ingredients(path::String)
@@ -203,6 +208,12 @@ join_full(arr...; with_what="_", add_start=true, kwargs...) = begin
         add_start ? join(["", a...], with_what; kwargs...) : join(a, with_what; kwargs...)
     end
 end
+
+
+
+
+
+
 
 
 ## Saving as HDF5
@@ -244,12 +255,30 @@ function reload(s::Type{S}, path::String; mmap=false) where {S}
     s(fvals...)
 end
 
+reload(path::String; mmap=false) = begin
+    fid = TSO.HDF5.h5open(path, "r")
+    if "lnEi" in keys(fid)
+        reload(SqEoS, path; mmap=mmap)
+    else
+        reload(SqOpacity, path; mmap=mmap)
+    end
+end
+
 add_to_hdf5!(fid, fname, val)       = fid["$(fname)"] = val
 add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
+
+
+
+
+
+
+
+
+
 
 """
     bin_assignment(path)

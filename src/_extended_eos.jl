@@ -34,6 +34,15 @@ function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxit
     end
 end
 
+lookup(eos::ExtendedEoS, opa::OpacityTable, args...; kwargs...) = lookup(eos.eos, opa, args...; kwargs...)
+lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
+
+
+
+
+
+
+
 function ideal_entropy(T, rho, mu)    
     m_particle = mu * m_u
     R_spec = KBoltzmann / m_particle
@@ -45,6 +54,14 @@ function ideal_entropy(T, rho, mu)
     # Sackur-Tetrode Equation
     R_spec * (log(n_quantum / n) + 2.5)
 end
+
+
+
+
+
+
+
+
 
 """
 	add_gradients!(eos)
@@ -60,42 +77,54 @@ function gradients!(eos_extended)
 	χₜ = similar(eos.lnPg)
 	χᵨ = similar(eos.lnPg)
 	cᵥ = similar(eos.lnPg)
+	dlnRoss_dlnT = similar(eos.lnPg)
+	dlnRoss_dlnRho = similar(eos.lnPg)
 
 	@inbounds for j in eachindex(eos.lnRho)
 		@inbounds for i in eachindex(eos.lnT)
-			dE, dT, dP = if (i>1) &&(i<nT)
+			dE, dT, dP, dRoss = if (i>1) &&(i<nT)
 				eos.lnEi[i+1, j] - eos.lnEi[i-1, j], 
 				eos.lnT[i+1    ] - eos.lnT[i-1],
-				eos.lnPg[i+1, j] - eos.lnPg[i-1, j]
+				eos.lnPg[i+1, j] - eos.lnPg[i-1, j],
+				eos.lnRoss[i+1, j] - eos.lnRoss[i-1, j]
 			elseif i==1
 				eos.lnEi[i+1, j] - eos.lnEi[i, j], 
 				eos.lnT[i+1]     - eos.lnT[i],
-				eos.lnPg[i+1, j] - eos.lnPg[i, j]
+				eos.lnPg[i+1, j] - eos.lnPg[i, j],
+				eos.lnRoss[i+1, j] - eos.lnRoss[i, j]
 			elseif i==nT
 				eos.lnEi[i, j] - eos.lnEi[i-1, j], 
 				eos.lnT[i]     - eos.lnT[i-1],
-				eos.lnPg[i, j] - eos.lnPg[i-1, j]
+				eos.lnPg[i, j] - eos.lnPg[i-1, j],
+				eos.lnRoss[i, j] - eos.lnRoss[i-1, j]
 			end
 			cᵥ[i, j] = max(dE/dT * exp(eos.lnEi[i, j] - eos.lnT[i]), 1e-12)
 			χₜ[i, j] = max(dP/dT, 1e-12)
+			dlnRoss_dlnT[i, j] = dRoss / dT
 	
-			dP, dR = if (j>1) &&(j<nRho)
+			dP, dR, dRoss = if (j>1) &&(j<nRho)
 				eos.lnRho[j+1] - eos.lnRho[j-1],
-				eos.lnPg[i, j+1] - eos.lnPg[i, j-1]
+				eos.lnPg[i, j+1] - eos.lnPg[i, j-1],
+				eos.lnRoss[i, j+1] - eos.lnRoss[i, j-1]
 			elseif j==1
 				eos.lnRho[j+1] - eos.lnRho[j],
-				eos.lnPg[i, j+1] - eos.lnPg[i, j]
+				eos.lnPg[i, j+1] - eos.lnPg[i, j],
+				eos.lnRoss[i, j+1] - eos.lnRoss[i, j]
 			elseif j==nRho
 				eos.lnRho[j] - eos.lnRho[j-1],
-				eos.lnPg[i, j] - eos.lnPg[i, j-1]
+				eos.lnPg[i, j] - eos.lnPg[i, j-1],
+				eos.lnRoss[i, j] - eos.lnRoss[i, j-1]
 			end
 			χᵨ[i, j] = max(dP/dR, 1e-12)
+			dlnRoss_dlnRho[i, j] = dRoss / dR
+			dlnRoss_dlnT[i, j] = dlnRoss_dlnT[i, j] - χₜ[i, j] / χᵨ[i, j]*dlnRoss_dlnRho[i, j]
 		end
 	end
 
 	eos_extended.extensions[:χₜ] = χₜ
 	eos_extended.extensions[:χᵨ] = χᵨ
 	eos_extended.extensions[:cᵥ] = cᵥ
+	eos_extended.extensions[:dlnκ_dlnT] = dlnRoss_dlnT
 
 	χₜ, χᵨ, cᵥ
 end

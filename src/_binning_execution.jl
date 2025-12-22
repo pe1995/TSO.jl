@@ -278,19 +278,37 @@ _convert_fromT_toE(aos, opa, folder_new,
             @info "Limiting the internal energy (log) to $(lnEimax) on the energy grid." 
             @info "The original limits was $(lnEimax_orig)." 
         end
-        @info "The upper limit will have an effect on $(count(mask)/length(mask))% of points in the rho-T table."
+        @info "The upper limit will have an effect on $(count(mask)/length(mask)*100)% of points in the rho-T table."
     end
 
+    #@show log10(exp(minimum(eos_new.lnEi))) log10(exp(maximum(eos_new.lnEi)))
     eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false);
     aosE = @axed eosE
+    #@show log10(exp(minimum(eosE.lnEi))) log10(exp(maximum(eosE.lnEi)))
 
+    # do not allow values larger than in the original table
+    for (i, l) in enumerate(opaE.λ)
+        limit_beyond!(view(opaE.κ, :, :, i), view(opa_new.κ, :, :, i))
+        limit_beyond!(view(opaE.src, :, :, i), view(opa_new.src, :, :, i))
+    end
+    limit_beyond!(eosE.lnPg, eos_new.lnPg)
+    limit_beyond!(eosE.lnNe, eos_new.lnNe)
+    limit_beyond!(eosE.lnRoss, eos_new.lnRoss)
+    limit_beyond!(eosE.lnT, eos_new.lnT)
+    
     TSO.fill_nan!(aosE, opaE)
-    TSO.set_limits!(aosE, opaE)
+    #TSO.set_limits!(aosE, opaE)
 
     for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new, name=name)
 
     save(opaE, joinpath(folder_new, "binned_opacities$(name).hdf5"))
     save(eosE, joinpath(folder_new, "eos$(name).hdf5"))
+end
+
+
+function limit_beyond!(new_arr, old_arr; set_to=NaN)
+    m = (new_arr .> maximum(old_arr)) .|| (new_arr .< minimum(old_arr))
+    new_arr[m] .= set_to
 end
 
 """
@@ -320,7 +338,7 @@ _get_e_limit(eos, opa, av_path, lnEi_stretch) = begin
     lnEimin = minimum(model.lnEi)
     lnEimax = maximum(model.lnEi)
 
-    lnEilimit = lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch
+    lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch
 end
 
 
