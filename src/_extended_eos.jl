@@ -3,6 +3,11 @@
 	extensions::Dict = Dict()
 end
 
+@kwdef struct ExtendedOpacity
+	opa 
+	extensions::Dict = Dict()
+end
+
 function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxiter=200, tol=1e-8)
     if what == :lnRho
         rho_min = minimum(eos.eos.lnRho)
@@ -38,6 +43,23 @@ lookup(eos::ExtendedEoS, opa::OpacityTable, args...; kwargs...) = lookup(eos.eos
 lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
 
 
+function extended_lookup(eos, opa::ExtendedOpacity, what, density_var, energy_var, args...)
+    if what in fieldnames(RegularOpacityTable)
+        lookup(eos, opa, what, density_var, energy_var)
+	elseif what in keys(opa.extensions)
+		second_axis = EnergyAxis(eos).unirange
+        rho_axis    = DensityAxis(eos).unirange
+        ip = linear_interpolation((second_axis, rho_axis), view(opa.extensions[what], :, :, args...), extrapolation_bc=Line())
+		u = UniformLookup((x1, x2) -> ip(x1, x2))
+		lookup(u, density_var, energy_var)
+	else
+		error("Given $(what) is not included in the extenden Opacity.")
+    end
+end
+lookup(eos, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos, opa, args...; kwargs...)
+
+
+
 
 
 
@@ -61,14 +83,43 @@ end
 
 
 
+function gradients!(eos, opa_extended::ExtendedOpacity)
+	aos = @axed eos
+	@assert !is_internal_energy(aos)
+	opa = opa_extended.opa
 
+	nT, nRho = size(eos)
+	dS_dT = similar(opa.src)
+
+	@inbounds for k in axes(opa.src, 3)
+		@inbounds for j in eachindex(eos.lnRho)
+			@inbounds for i in eachindex(eos.lnT)
+				dS, dT = if (i>1) &&(i<nT)
+					log(opa.src[i+1, j, k]) - log(opa.src[i-1, j, k]), 
+					eos.lnT[i+1] - eos.lnT[i-1]
+				elseif i==1
+					log(opa.src[i+1, j, k]) - log(opa.src[i, j, k]), 
+					eos.lnT[i+1] - eos.lnT[i]
+				elseif i==nT
+					log(opa.src[i, j, k]) - log(opa.src[i-1, j, k]), 
+					eos.lnT[i] - eos.lnT[i-1]
+				end
+				dS_dT[i, j, k] = exp(log(opa.src[i, j, k]) - eos.lnT[i]) * dS / dT
+			end
+		end
+	end
+
+	opa_extended.extensions[:dS_dT] = dS_dT
+
+	dS_dT
+end
 
 """
 	add_gradients!(eos)
 
 Compute χₜ, χᵨ, and cᵥ for the given EoS. 
 """
-function gradients!(eos_extended)
+function gradients!(eos_extended::ExtendedEoS)
 	eos = eos_extended.eos
 	aos = @axed eos
 	@assert !is_internal_energy(aos)

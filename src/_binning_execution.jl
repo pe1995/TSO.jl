@@ -299,6 +299,21 @@ _convert_fromT_toE(aos, opa, folder_new,
     TSO.fill_nan!(aosE, opaE)
     #TSO.set_limits!(aosE, opaE)
 
+    # artificially remove sharp edges in the table at low density (test)
+    #=tlim = lookup(eosE, :lnEi, eosE.lnRho, fill!(similar(eosE.lnRho), log(4500)))
+	κ_limit = [lookup(eosE, opaE, :κ, eosE.lnRho, tlim, b) for b in eachindex(opaE.λ)]
+	rho_limit = 1e-1
+	
+	κ_limited = deepcopy(opaE.κ)	
+	for j in axes(κ_limited, 2)
+		for i in axes(κ_limited, 1)
+			if (eosE.lnEi[i] <= tlim[j]) & ((eosE.lnRho[j] |> exp) < rho_limit)
+				κ_limited[i, j, :] .= [κ_limit[b][j] for b in eachindex(opaE.λ)]
+			end
+		end
+	end
+    opaE.κ .= κ_limited=#
+
     for_dispatch(eosE, opaE.κ, opaE.src, ones(eltype(opaE.src), size(opaE.src)...), folder_new, name=name)
 
     save(opaE, joinpath(folder_new, "binned_opacities$(name).hdf5"))
@@ -320,16 +335,16 @@ the internal energy is cut where the models internal energy ends (+lnEi_stretch*
 convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...) = begin
     eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
     opa = reload(SqOpacity, joinpath(table_folder, "binned_opacities.hdf5"));
-    lnEilimit = _get_e_limit(eos, opa, av_path, lnEi_stretch)
+    lnEimin, lnEilimit = _get_e_limit(eos, opa, av_path, lnEi_stretch)
 
     # also save per unit volume
     eos_ev = deepcopy(eos)
 	for j in axes(eos_ev.lnEi, 2)
 		eos_ev.lnEi[:, j] .+= eos_ev.lnRho[j]
 	end
-    lnEilimit_V = _get_e_limit(eos_ev, opa, av_path, lnEi_stretch)
+    lnEimin_V, lnEilimit_V = _get_e_limit(eos_ev, opa, av_path, lnEi_stretch)
 
-    convert_fromT_toE(table_folder, folder_new; lnEimax=lnEilimit, lnEimax_V=lnEilimit_V, kwargs...)
+    convert_fromT_toE(table_folder, folder_new; lnEimin=lnEimin, lnEimax=lnEilimit, lnEimin_V=lnEimin_V, lnEimax_V=lnEilimit_V, kwargs...)
 end
 
 _get_e_limit(eos, opa, av_path, lnEi_stretch) = begin
@@ -338,7 +353,16 @@ _get_e_limit(eos, opa, av_path, lnEi_stretch) = begin
     lnEimin = minimum(model.lnEi)
     lnEimax = maximum(model.lnEi)
 
-    lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch
+    # determin the temperature minimum
+    tmin = minimum(eos.lnT)
+
+    # lookup the corresponding internal energy curve
+    lnEi_min_curve = eos.lnEi[1, :]
+
+    # use the median to avoid overly small lower limits
+    lnEimin = median(lnEi_min_curve)
+
+    (lnEimin, lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch)
 end
 
 
