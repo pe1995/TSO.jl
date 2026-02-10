@@ -91,7 +91,7 @@ function gradients!(eos, opa_extended::ExtendedOpacity)
 	nT, nRho = size(eos)
 	dS_dT = similar(opa.src)
 
-	@inbounds for k in axes(opa.src, 3)
+	Threads.@threads for k in axes(opa.src, 3)
 		@inbounds for j in eachindex(eos.lnRho)
 			@inbounds for i in eachindex(eos.lnT)
 				dS, dT = if (i>1) &&(i<nT)
