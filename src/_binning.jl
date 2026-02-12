@@ -1635,13 +1635,21 @@ _binned_from_regular(opa::SqOpacity) = BinnedOpacities(opa)
 _binned_from_regular(opa::SqOpacity, eos::SqEoS)   = _binned_from_regular(opa, @axed(eos))
 _binned_from_regular(opa::SqOpacity, eos::AxedEoS) = begin
     opa_new = deepcopy(opa)
-    _, rr   = meshgrid(eos)
-    rr     .= exp.(rr)
-    for i in eachindex(opa.λ)
-        opa_new.κ[:, :, i] .*= rr
+    _binned_from_regular!(opa_new, eos)  
+end
+
+_binned_from_regular!(opa::SqOpacity, eos::SqEoS) = _binned_from_regular!(opa, @axed(eos))
+_binned_from_regular!(opa::SqOpacity, eos::AxedEoS) = begin
+    _, rr = meshgrid(eos)
+    rr .= exp.(rr)
+    weights = ω_midpoint(opa.λ)
+
+    Threads.@threads for i in eachindex(opa.λ)
+        opa.κ[:, :, i] .*= rr
+        opa.src[:, :, i] .*= weights[i]
     end
     
-    BinnedOpacities(opa_new)
+    BinnedOpacities(opa)
 end
 
 
@@ -1654,6 +1662,12 @@ macro binned(opa, eos)
     opa_l = esc(opa)
     eos_l = esc(eos)
     :(_binned_from_regular($opa_l, $eos_l))
+end
+
+macro binned!(opa, eos)
+    opa_l = esc(opa)
+    eos_l = esc(eos)
+    :(_binned_from_regular!($opa_l, $eos_l))
 end
 
 """
