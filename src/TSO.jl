@@ -51,7 +51,7 @@ export ω_midpoint
 export lookup, lookup_function, bisect
 export tabulate
 export reset_bins
-export @binned
+export @binned, @binned!
 
 ## EoS
 export rosseland_opacity!, rosseland_opacity, transfer_rosseland!, upsample

@@ -265,6 +265,7 @@ energy_variable(aos::AxedEoS) = EnergyAxis(aos).name
 
 ## Convenience
 meshgrid(aos::A) where {A<:AxedEoS}     = meshgrid(EnergyAxis(aos).values, DensityAxis(aos).values)
+meshgrid(aos::A) where {A<:RegularEoSTable} = meshgrid(@axed(aos))
 size(aos::A) where {A<:AxedEoS}         = (EnergyAxis(aos).length, DensityAxis(aos).length)
 size(eos::A) where {A<:RegularEoSTable} = size(@axed(eos))
 

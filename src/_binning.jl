@@ -1642,7 +1642,7 @@ _binned_from_regular!(opa::SqOpacity, eos::SqEoS) = _binned_from_regular!(opa, @
 _binned_from_regular!(opa::SqOpacity, eos::AxedEoS) = begin
     _, rr = meshgrid(eos)
     rr .= exp.(rr)
-    weights = ω_midpoint(opa.λ)
+    weights = ω_midpoint(opa)
 
     Threads.@threads for i in eachindex(opa.λ)
         opa.κ[:, :, i] .*= rr
