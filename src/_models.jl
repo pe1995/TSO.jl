@@ -149,14 +149,7 @@ lnT_to_lnEi(eos::RegularEoSTable, lnρ, lnT) = lookup(AxedEoS(eos), :lnEi, lnρ,
 
 Return the z coordinate of the optical surface
 """
-function optical_surface(model::OpticalModel1D)
-    mask = sortperm(log10.(model.τ))
-    linear_interpolation(
-        Interpolations.deduplicate_knots!(log10.(model.τ[mask]), move_knots=true), 
-        model.z[mask],
-        extrapolation_bc=Line()
-    )(0.0)
-end
+optical_surface(model::OpticalModel1D) = optical_surface(model.τ, model.z)
 
 """
     optical_surface!(model)
@@ -165,7 +158,14 @@ Move the 0 point to the optical surface.
 """
 optical_surface!(model::OpticalModel1D) = model.z .= model.z .- optical_surface(model)
 
-
+optical_surface(tau, z) = begin
+    mask = sortperm(log10.(tau))
+    linear_interpolation(
+        Interpolations.deduplicate_knots!(log10.(tau[mask]), move_knots=true), 
+        z[mask],
+        extrapolation_bc=Line()
+    )(0.0)
+end
 
 #================================================================ Utilities ==#
 
