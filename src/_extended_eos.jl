@@ -6,7 +6,7 @@ end
 @kwdef struct ExtendedOpacity
 	opa 
 	extensions::Dict = Dict()
-	binned::Bool = false
+	binned::Bool = all(diff(opa.λ) .== 1) ? true : false
 	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
 end
 
