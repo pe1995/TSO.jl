@@ -6,6 +6,8 @@ end
 @kwdef struct ExtendedOpacity
 	opa 
 	extensions::Dict = Dict()
+	binned::Bool = false
+	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
 end
 
 function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxiter=200, tol=1e-8)

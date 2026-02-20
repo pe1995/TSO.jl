@@ -27,7 +27,7 @@ end
 
 Skip loading of the source function. 
 """
-reload(s_loc::Type{MiniOpacityTable}, path::String; binned) = begin
+reload(s_loc::Type{MiniOpacityTable}, path::String; binned=false) = begin
     fid   = HDF5.h5open(path, "r")
 
     λ = get_from_hdf5(Array, fid, :λ)
