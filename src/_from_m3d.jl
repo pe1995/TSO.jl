@@ -72,7 +72,6 @@ function get_opacity(run, from="opa")
 	)
 
 	chi  = chi[:, :, :] 
-	#l = Base.convert.(eltype(chi), run.lam)
 	l = Base.convert.(eltype(chi), reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
 	if !issorted(l)
 		@warn "Wavelength array appears to be not sorted. This may indicate a bug."

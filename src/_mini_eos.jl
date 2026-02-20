@@ -58,11 +58,32 @@ function lookup(eos::E, s::MiniOpacityTable, v::Symbol, lnρ::AbstractFloat, lnT
     end
 end
 
+"""
+    lookup_variable(s::MiniOpacityTable, v::Symbol)
+
+Return a lookup function for the given variable. The function will take the following arguments:
+v==:src 
+    - T: Temperature
+    - i: Index of the wavelength bin
+v==:dS_dT
+    - T: Temperature
+    - i: Index of the wavelength bin
+v==:κ
+    - eos: EoS table
+    - lnρ: Logarithm of density
+    - lnT: Logarithm of temperature
+    - i: Index of the wavelength bin
+v==:other
+    - eos: EoS table
+    - lnρ: Logarithm of density
+    - lnT: Logarithm of temperature
+    - i: Index of the wavelength bin
+"""
 lookup_variable(s::MiniOpacityTable, v::Symbol) = begin
     if v == :src
-        return (lnT, i) -> Bλ_fast(s.opacity.λ[i], exp(lnT)) * s.weights[i]
+        return (T, i) -> Bλ_fast(s.opacity.λ[i], T) * s.weights[i]
     elseif v == :dS_dT
-        return (lnT, i) -> dBdTλ_fast(s.opacity.λ[i], exp(lnT)) * s.weights[i]
+        return (T, i) -> dBdTλ_fast(s.opacity.λ[i], T) * s.weights[i]
     elseif v == :κ
         return (eos, lnρ, lnT, i) -> lookup(eos, s.opacity, :κ, lnρ, lnT, i) * exp(lnρ)
     else
