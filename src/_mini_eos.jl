@@ -48,11 +48,11 @@ end
 
 function lookup(eos::E, s::MiniOpacityTable, v::Symbol, lnρ::AbstractFloat, lnT::AbstractFloat, i::Int) where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}}
     if v == :src
-        return Bλ_fast(s.opacity.λ[i], exp(lnT)) * s.weights[i]
+        return Bλ_fast(s.opacity.λ[i], exp(lnT))
     elseif v == :dS_dT
-        return dBdTλ_fast(s.opacity.λ[i], exp(lnT)) * s.weights[i]
+        return dBdTλ_fast(s.opacity.λ[i], exp(lnT))
     elseif v == :κ
-        return lookup(eos, s.opacity, :κ, lnρ, lnT, i) * exp(lnρ)
+        return lookup(eos, s.opacity, :κ, lnρ, lnT, i)
     else
         return lookup(eos,s.opacity, v, lnρ, lnT, i)
     end
@@ -81,11 +81,11 @@ v==:other
 """
 lookup_variable(s::MiniOpacityTable, v::Symbol) = begin
     if v == :src
-        return (T, i) -> Bλ_fast(s.opacity.λ[i], T) * s.weights[i]
+        return (T, i) -> Bλ_fast(s.opacity.λ[i], T)
     elseif v == :dS_dT
-        return (T, i) -> dBdTλ_fast(s.opacity.λ[i], T) * s.weights[i]
+        return (T, i) -> dBdTλ_fast(s.opacity.λ[i], T) 
     elseif v == :κ
-        return (eos, lnρ, lnT, i) -> lookup(eos, s.opacity, :κ, lnρ, lnT, i) * exp(lnρ)
+        return (eos, lnρ, lnT, i) -> lookup(eos, s.opacity, :κ, lnρ, lnT, i) 
     else
         return (eos, lnρ, lnT, i) -> lookup(eos,s.opacity, v, lnρ, lnT, i)
     end
