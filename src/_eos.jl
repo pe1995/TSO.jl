@@ -1,4 +1,6 @@
-#========================== functionality ====================================#
+# ============================================================================
+# Functionality (no longer in use)
+# ============================================================================
 
 """
 Switch between different grids of the EoS table.
@@ -422,14 +424,9 @@ function derivative(t::RegularEoSTable)
     tab_new
 end
 
-
-
-
-
-
-
-
-#=========== Unify EoS and opacities on common internal Energy grid ==========#
+# ============================================================================
+# Unify EoS and opacities on common internal Energy grid
+# ============================================================================
 
 function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoSTable, O<:OpacityTable, T2<:AbstractFloat}
     nEiBin  = length(lnEi_new)
@@ -652,19 +649,14 @@ common_grid(a1, a2) = begin
     collect(range(aMin, aMax,length=aLen))
 end
 
-
 function cut(opacities::O, λ_lo, λ_hi) where {O<:OpacityTable}
     mask = (opacities.λ .>= λ_lo ) .& (opacities.λ .< λ_hi)
     RegularOpacityTable(opacities.κ[:, :, mask], deepcopy(opacities.κ_ross), opacities.src[:, :, mask], opacities.λ[mask], copy(opacities.optical_depth)) 
 end
 
-
-
-
-
-
-
-#================= Interaction of EoS with TS in/output ======================#
+# ============================================================================
+# Interaction of EoS with TS in/output
+# ============================================================================
 
 function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
     sT = length(lnT)
@@ -976,11 +968,9 @@ get_TSO_index(name) = begin
     d_col, e_r
 end
 
-
-
-
-
-#============================ Planck function ================================#
+# ============================================================================
+# Planck function
+# ============================================================================
 
 function Bλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
@@ -1086,12 +1076,9 @@ end
     B[]
 end
 
-
-
-
-
-
-#=========================== Rosseland opacity ===============================#
+# ============================================================================
+# compute Rosseland opacity 
+# ============================================================================
 
 """
     new_rosseland_opacity(eos, opacities)
@@ -1126,8 +1113,6 @@ _rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
     lnRoss
 end
 
-
-
 _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
     lnRoss .= 0.0
     B = similar(lnRoss)
@@ -1155,24 +1140,29 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
 end
 
 _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
-    BChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
-    RossChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
-    dbnuChunk = Ref(eltype(opacity)(0.0))
+    T_op = eltype(opacity)
+    BChunk = zeros(T_op, length(axis_val), length(lnRho))
+    RossChunk = zeros(T_op, length(axis_val), length(lnRho))
 
-    @inbounds for k in chunk
-        @inbounds for j in eachindex(lnRho)
-            @inbounds for i in eachindex(axis_val)
-                δBν!(dbnuChunk, l[k], T[i, j])
-                RossChunk[i, j] += weights[k] * 1 / opacity[i, j, k] * dbnuChunk[]
-                BChunk[i, j] += weights[k] * dbnuChunk[]
-            end
-        end
-    end
+    _rosseland_opacity_chunk_core!(chunk, BChunk, RossChunk, lnRho, axis_val, T, l, weights, opacity)
 
     return [BChunk, RossChunk]
 end
 
+_rosseland_opacity_chunk_core!(chunk, BChunk, RossChunk, lnRho, axis_val, T, l, weights, opacity) = begin
+    @inbounds for k in chunk
+        wk = weights[k]
+        lk = l[k] 
+        @inbounds for j in eachindex(lnRho)
+            for i in eachindex(axis_val)
+                dbnuChunk = dBdTλ_fast(lk, T[i, j])
 
+                RossChunk[i, j] += dbnuChunk / opacity[i, j, k] * wk
+                BChunk[i, j] += dbnuChunk * wk
+            end
+        end
+    end
+end
 
 _rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin
     B::Float32 = Float32(0.0)
@@ -1196,7 +1186,6 @@ end
 
 rosseland_opacity!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity!(lnRoss, AxedEoS(eos), args...; kwargs...) 
 rosseland_opacity(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity(AxedEoS(eos), args...; kwargs...)
-
 
 """
     rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities))    
@@ -1227,10 +1216,9 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
     
 end
 
-
-
-
-
+# ============================================================================
+# transfer Rosseland opacity between EoS and OpacityTable
+# ============================================================================
 
 """
     transfer_rosseland(from, to)
@@ -1242,13 +1230,9 @@ transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:EoSTable} = eos.lnRoss 
 transfer_rosseland!(eos::E, opa::OpacityTable) where {E<:AxedEoS}  = opa.κ_ross .= exp.(eos.eos.lnRoss);
 transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnRoss .= log.(opa.κ_ross);
 
-
-
-
-
-
-
-#===================== Optical depth related functions =======================#
+# ============================================================================
+# Optical depth related functions
+# ============================================================================
 
 _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
@@ -1347,10 +1331,6 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
     return τ_ross, τ_λ
 end
 
-
-
-
-
 function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
@@ -1401,11 +1381,6 @@ end
 
 rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), opacities, model; kwargs...)
 rosseland_optical_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), model; kwargs...)
-
-
-
-
-
 
 function rosseland_depth(eos::E, opacities, model::AbstractModel) where {E<:AxedEoS}
     # Model z, ρ and T in cgs
@@ -1458,11 +1433,9 @@ end
 rosseland_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractModel; kwargs...)  = rosseland_depth(@axed(eos), opacities, model; kwargs...)
 rosseland_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_depth(@axed(eos), model; kwargs...)
 
-
-
-
-
-
+# ============================================================================
+# formation height
+# ============================================================================
 
 """
     formation_height(model, eos, opacities, τ_ross, τ_λ)
@@ -1537,9 +1510,6 @@ end
 optical_depth(eos::RegularEoSTable,    args...; kwargs...) = optical_depth(AxedEoS(eos),    args...; kwargs...)
 formation_height(model, eos::RegularEoSTable, args...; kwargs...) = formation_height(model, AxedEoS(eos), args...; kwargs...)
 
-
-
-
 """
 Convert a monochromatic EoS into a binned EoS format
 """
@@ -1552,11 +1522,9 @@ toKappaLog!(opacities, eos) = begin
     opacities.κ .= log.(opacities.κ) 
 end
 
-
-
-
-
-#=================== Shift the Energy grid by a constant =====================#
+# ============================================================================
+# Shift the Energy grid by a constant
+# ============================================================================
 
 """
     shift_energy(eos, opacities, shift_amount)
@@ -1582,14 +1550,9 @@ shift_energy(eos::RegularEoSTable, args...; kwargs...) = shift_energy(AxedEoS(eo
 
 e_shifted(e, offset) = log(exp(e) + offset)
 
-
-
-
-
-
-
-
-#============ replace the EoS corresponding to a given opacity table =========#
+# ============================================================================
+# replace the EoS corresponding to a given opacity table
+# ============================================================================
 
 """
     replace(eos_old, eos_new, opacities)
@@ -1651,12 +1614,9 @@ end
     extrapolate(interpolate((x, y), z, Gridded(Linear())), Line())                                                                                     
 end
 
-
-
-
-
-#====================== New Interpolation interface ==========================#
-
+# ============================================================================
+# New Interpolation interface
+# ============================================================================
 #= Please note that there is a new interpolation interface.                  =#
 #= It does only partly rely on the lookup interface, however                 =#
 #= it utilized the shape of the eos tables and should be much faster.        =#
@@ -1664,8 +1624,9 @@ end
 
 include("_interpolations.jl")
 
-
-#= Timer setup =#
+# ============================================================================
+# Timer setup
+# ============================================================================
 const rosseland_time = Ref(false)
 const optical_depth_time = Ref(false)
 const formation_height_time = Ref(false)

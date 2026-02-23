@@ -789,13 +789,15 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
                     opa.κ[mask2, j, k] .= 1.0f-30
                 end
 
-                mask2  .= nan_or_inf.(log.(view(opa.src, :, j, k)))
-                nmask2 .= .!mask2
-                cm = count(mask2)
-                if (cm<=lm2-2) & (cm>0)
-                    opa.src[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.src, nmask2, j, k)), view(xc2, mask2)) .|> exp
-                elseif cm>0
-                    opa.src[mask2, j, k] .= 1.0f-30
+                if size(opa.src) != (1, 1, 1)
+                    mask2  .= nan_or_inf.(log.(view(opa.src, :, j, k)))
+                    nmask2 .= .!mask2
+                    cm = count(mask2)
+                    if (cm<=lm2-2) & (cm>0)
+                        opa.src[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.src, nmask2, j, k)), view(xc2, mask2)) .|> exp
+                    elseif cm>0
+                        opa.src[mask2, j, k] .= 1.0f-30
+                    end
                 end
             end
         end
@@ -848,11 +850,13 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
                     opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
                 end
 
-                mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
-                nmask .= .!mask
-                cm = count(mask)
-                if (cm<=lm-2) & (cm>0)
-                    opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
+                if size(opa.src) != (1, 1, 1)
+                    mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
+                    nmask .= .!mask
+                    cm = count(mask)
+                    if (cm<=lm-2) & (cm>0)
+                        opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
+                    end
                 end
             end
         end
@@ -941,9 +945,12 @@ function set_small!(aos, opa, small=1e-30)
 
             if !isnothing(opa)
                 opa.κ_ross[i, j]     = check(opa.κ_ross[i, j],     small)  ? opa.κ_ross[i, j]     : small
+                has_src = size(opa.src) != (1, 1, 1)
                 @inbounds for k in eachindex(opa.λ)
                     opa.κ[i, j, k]     = check(opa.κ[i, j, k],   small)  ? opa.κ[i, j, k]    : small
-                    opa.src[i, j, k]   = check(opa.src[i, j, k], small)  ? opa.src[i, j, k]  : small
+                    if has_src
+                        opa.src[i, j, k]   = check(opa.src[i, j, k], small)  ? opa.src[i, j, k]  : small
+                    end
                 end
             end
         end
@@ -962,9 +969,12 @@ function set_large!(aos, opa, large=1e30)
             
             if !isnothing(opa)
                 opa.κ_ross[i, j]     = check_large(opa.κ_ross[i, j],     large)  ? opa.κ_ross[i, j]     : large
+                has_src = size(opa.src) != (1, 1, 1)
                 @inbounds for k in eachindex(opa.λ)
                     opa.κ[i, j, k]     = check_large(opa.κ[i, j, k],   large)  ? opa.κ[i, j, k]    : large
-                    opa.src[i, j, k]   = check_large(opa.src[i, j, k], large)  ? opa.src[i, j, k]  : large
+                    if has_src
+                        opa.src[i, j, k]   = check_large(opa.src[i, j, k], large)  ? opa.src[i, j, k]  : large
+                    end
                 end
             end
         end
