@@ -65,54 +65,6 @@ function EoSTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3, vm
 	outputname
 end
 
-"""
-    computeEosTable(model; folder, linelist, λ_file, λs, λe, δλ, δlnT, δlnρ, FeH, nν,
-				in_log=true, slurm=false, m3dis_kwargs=Dict(), abund_file, tmolim, kwargs...)
-
-Compute opacity and EoS tables using M3D.
-"""
-function computeEoSTable(model; folder, linelist, λ_file, λs, λe, δλ, δlnT, δlnρ, FeH, nν,
-				in_log=true, slurm=false, m3dis_kwargs=Dict(), abund_file, tmolim, kwargs...)
-	spec_para = (!isnothing(λ_file)) ? Dict(:lam_file=>λ_file, :in_air=>false) : Dict(:daa=>δλ, :aa_blue=>λs, :aa_red=>λe, :in_log=>in_log, :in_air=>false)
-    MUST.whole_spectrum(
-		model, 
-		namelist_kwargs=(
-			:model_folder=>folder,
-			:linelist=>nothing,
-			:absmet=>nothing,
-			:linelist_params=>(:linelist_folder=>linelist,),
-			:atom_params=>(:atom_file=>"", ),
-			:spectrum_params=>(spec_para...,),
-			:atmos_params=>(
-				:dims=>1, 
-				:atmos_format=>"Text",
-				:use_rho=>true, 
-				:use_ne=>false,
-				:FeH=>FeH,
-				:nz=>2,
-				:amr=>false
-			),
-			:m3d_params=>(
-				:n_nu=>nν, 
-				:ilambd=>0,
-				:short_scheme=>"disk_center",
-				:long_scheme=>"none",
-				:make_eos=>true
-			),
-			:composition_params=>(
-                :abund_file=>abund_file,
-				:ldtemp=>δlnT,
-				:ldrho=>δlnρ,
-				:tmolim=>tmolim,
-				:mhd_eos=>false,
-			),
-            kwargs...
-		),
-		m3dis_kwargs=m3dis_kwargs,
-		slurm=slurm
-	)
-end
-
 # ============================================================================
 # Get Opacity and EoS tables from TUMULT
 # ============================================================================
@@ -149,7 +101,7 @@ function _get_opacity_lazy(run, from)
 	end
 	T = dtype_str == "float64" ? Float64 : Float32
 
-	tmpfile = tempname() * ".bin"
+	tmpfile = tempname(pwd()) * ".bin"
 	
 	# The original array has shape (N_lam, N_T, N_rho)
 	# The output needs to be permuted to (N_T, N_rho, N_lam)
@@ -303,7 +255,7 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
     S = if mini
         fill!(similar(pg, 1, 1, 1), 1.0)
     elseif mmap
-        tmpfile_S = tempname() * ".bin"
+        tmpfile_S = tempname(pwd()) * ".bin"
         S = Mmap.mmap(open(tmpfile_S, "w+"), Array{eltype(chi), ndims(chi)}, size(chi))
         fill!(S, 1.0)
 		S
