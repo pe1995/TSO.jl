@@ -15,6 +15,7 @@ using Clustering
 using ThreadsX
 using TimerOutputs
 using ImageFiltering
+using LoopVectorization
 import Clustering.assignments
 
 import Base.size

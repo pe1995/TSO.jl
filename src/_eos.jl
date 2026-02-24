@@ -1091,77 +1091,95 @@ rosseland_opacity(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:A
     lnRoss
 end
 
-_rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
-    B::Float32 = 0.0
-    lnRoss .= 0.0
-    
-    @inbounds for j in eachindex(lnRho)
-        @inbounds for i in eachindex(axis_val)
-            B  = Float32(0.0)
-            @inbounds for k in eachindex(l)
-                lnRoss[i, j] += weights[k] * 1 / opacity[i, j, k] * δBν(l[k], T[i, j])
-                B += weights[k] * δBν(l[k], T[i, j])
-            end
-            lnRoss[i, j] /= B
-            lnRoss[i, j] = if 1.0 / lnRoss[i, j] == 0
-                NaN
-            else
-                log(1.0 / lnRoss[i, j])
-            end
-        end
-    end
-    lnRoss
-end
+_rosseland_opacity!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T)
 
 _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
-    lnRoss .= 0.0
-    B = similar(lnRoss)
+    T_op = eltype(opacity)
+    
+    invT = zeros(T_op, size(T))
+    @inbounds for i in eachindex(T)
+        invT[i] = T[i] > 1e-1 ? 1.0 / T[i] : 0.0
+    end
 
-    # make backup chunk arrays for intermediate sum storage
-    chunks = Iterators.partition(eachindex(l), length(l) ÷ Threads.nthreads()) |> collect
+    nl = length(l)
+    nt = length(axis_val)
+    nr = length(lnRho)
+
+    wk_c1c2_arr = zeros(T_op, nl)
+    c2_arr = zeros(T_op, nl)
+    @inbounds for k in 1:nl
+        wk = T_op(weights[k])
+        lk = T_op(l[k])
+        Λ  = lk * T_op(aa_to_cm)
+        c2 = T_op(hc_k) / Λ
+        c1 = T_op(twohc2) / (Λ^5)
+        
+        c2_arr[k] = c2
+        wk_c1c2_arr[k] = wk * c1 * c2
+    end
+    
+    # Partition the large frequency dimension into chunks.
+    # We spawn exactly one Task per chunk, and allocate its local grid inside the Task.
+    n_chunks = Threads.nthreads()
+    chunk_size = cld(nl, n_chunks)
+    chunks = Iterators.partition(1:nl, chunk_size) |> collect
+    
     tasks = map(chunks) do chunk
-        Threads.@spawn _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity)
+        Threads.@spawn begin
+            l_ross = zeros(T_op, nt, nr)
+            l_b    = zeros(T_op, nt, nr)
+            
+            @inbounds for k in chunk
+                wk_c1c2 = wk_c1c2_arr[k]
+                c2      = c2_arr[k]
+                
+                for j in 1:nr
+                    @turbo for i in 1:nt
+                        iT = invT[i, j]
+                        
+                        x = c2 * iT
+                        E = exp(x)
+                        
+                        E_minus_1 = ifelse(iT > 0.0, E - 1.0, 1.0)
+                        
+                        dbnuChunk_wk = (wk_c1c2 * iT * iT * E) / (E_minus_1 * E_minus_1)
+                        val = ifelse(iT > 0.0, dbnuChunk_wk, zero(T_op))
+                        
+                        op = opacity[i, j, k]
+                        
+                        l_ross[i, j] += val / op
+                        l_b[i, j]    += val
+                    end
+                end
+            end
+            return (l_ross, l_b)
+        end
     end
 
     results = fetch.(tasks)
-    BChunk = getindex.(results, 1)
-    RossChunk = getindex.(results, 2)
+    
+    ross_sum = zeros(T_op, nt, nr)
+    b_sum    = zeros(T_op, nt, nr)
+    
+    for (r, b) in results
+        ross_sum .+= r
+        b_sum    .+= b
+    end
 
-    lnRoss .= sum(RossChunk)
-    B = sum(BChunk)
-                
-    lnRoss ./= B
-
-    zero_mask = lnRoss.==0.0
-    lnRoss[zero_mask] .= NaN
-    lnRoss[.!zero_mask] .= log.(1.0 ./ lnRoss[.!zero_mask])
-
-    lnRoss
-end
-
-_rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
-    T_op = eltype(opacity)
-    BChunk = zeros(T_op, length(axis_val), length(lnRho))
-    RossChunk = zeros(T_op, length(axis_val), length(lnRho))
-
-    _rosseland_opacity_chunk_core!(chunk, BChunk, RossChunk, lnRho, axis_val, T, l, weights, opacity)
-
-    return [BChunk, RossChunk]
-end
-
-_rosseland_opacity_chunk_core!(chunk, BChunk, RossChunk, lnRho, axis_val, T, l, weights, opacity) = begin
-    @inbounds for k in chunk
-        wk = weights[k]
-        lk = l[k] 
-        @inbounds for j in eachindex(lnRho)
-            for i in eachindex(axis_val)
-                dbnuChunk = dBdTλ_fast(lk, T[i, j])
-
-                RossChunk[i, j] += dbnuChunk / opacity[i, j, k] * wk
-                BChunk[i, j] += dbnuChunk * wk
+    lnRoss .= 0.0
+    @inbounds for j in 1:nr
+        for i in 1:nt
+            b = b_sum[i, j]
+            if b > 0.0
+                r = ross_sum[i, j] / b
+                lnRoss[i, j] = (r == 0) ? T_op(NaN) : log(1.0 / r)
+            else
+                lnRoss[i, j] = T_op(NaN)
             end
         end
     end
+
+    return lnRoss
 end
 
 _rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin

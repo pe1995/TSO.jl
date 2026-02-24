@@ -1,7 +1,7 @@
 name = "TSO"
 uuid = "65303bd6-8358-47a4-91b9-056454446fac"
-authors = ["Philipp Eitner <eitner@mpia.de> and contributors"]
 version = "0.4.3"
+authors = ["Philipp Eitner <eitner@mpia.de> and contributors"]
 
 [deps]
 BSplineKit = "093aae92-e908-43d7-9660-e50ee39d5a0a"
@@ -13,6 +13,7 @@ Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
@@ -21,6 +22,7 @@ ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
+LoopVectorization = "0.12.173"
 julia = "1"
 
 [extras]
