@@ -10,6 +10,9 @@ end
 	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
 end
 
+opacity(opa::ExtendedOpacity) = opa.opa
+wavelength(opa::ExtendedOpacity) = wavelength(opa.opa)
+
 function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxiter=200, tol=1e-8)
     if what == :lnRho
         rho_min = minimum(eos.eos.lnRho)

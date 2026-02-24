@@ -43,6 +43,13 @@ reload(s_loc::Type{MiniOpacityTable}, path::String; binned=false) = begin
 end
 
 # ============================================================================
+# Accessor
+# ============================================================================
+
+opacity(opa::MiniOpacityTable) = opa.opacity
+wavelength(opa::MiniOpacityTable) = wavelength(opa.opacity)
+
+# ============================================================================
 # Modified lookup function
 # ============================================================================
 

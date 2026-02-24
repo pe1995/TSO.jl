@@ -115,6 +115,9 @@ macro axed(eos)
     :(AxedEoS($(eos_l)))
 end
 
+opacity(opa::RegularOpacityTable) = opa
+wavelength(opa::RegularOpacityTable) = opa.λ
+
 
 
 
