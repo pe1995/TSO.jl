@@ -1,6 +1,6 @@
 name = "TSO"
 uuid = "65303bd6-8358-47a4-91b9-056454446fac"
-version = "0.4.3"
+version = "0.5.0"
 authors = ["Philipp Eitner <eitner@mpia.de> and contributors"]
 
 [deps]
