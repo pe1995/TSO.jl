@@ -1,3 +1,6 @@
+# ============================================================================
+# Extended EoS -- Flexible extension of the EoS for arbitrary quantities
+# ============================================================================
 @kwdef struct ExtendedEoS
 	eos 
 	extensions::Dict = Dict()
@@ -10,8 +13,33 @@ end
 	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
 end
 
+# ============================================================================
+# Access functions
+# ============================================================================
+
 opacity(opa::ExtendedOpacity) = opa.opa
 wavelength(opa::ExtendedOpacity) = wavelength(opa.opa)
+extended(opa::RegularOpacityTable) = ExtendedOpacity(opa=opa)
+extended(eos::RegularEoSTable) = ExtendedEoS(eos=eos)
+
+get_data(eos::ExtendedEoS, opa::ExtendedOpacity, var::Symbol) = begin
+    Typ = eltype(eos.eos.lnPg)
+    if var in fieldnames(typeof(eos.eos))
+        return getfield(eos.eos, var)::AbstractArray{Typ}
+    elseif var in keys(eos.extensions)
+        return eos.extensions[var]::AbstractArray{Typ}
+    elseif var in fieldnames(typeof(opa.opa))
+        return getfield(opa.opa, var)::AbstractArray{Typ}
+    elseif var in keys(opa.extensions)
+        return opa.extensions[var]::AbstractArray{Typ}
+    else
+        error("Variable $var not found in tables")
+    end
+end
+
+# ============================================================================
+# Extend general lookup interface
+# ============================================================================
 
 function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxiter=200, tol=1e-8)
     if what == :lnRho
@@ -44,10 +72,6 @@ function extended_lookup(eos::ExtendedEoS, what, pressure_var, energy_var; maxit
     end
 end
 
-lookup(eos::ExtendedEoS, opa::OpacityTable, args...; kwargs...) = lookup(eos.eos, opa, args...; kwargs...)
-lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
-
-
 function extended_lookup(eos, opa::ExtendedOpacity, what, density_var, energy_var, args...)
     if what in fieldnames(RegularOpacityTable)
         lookup(eos, opa, what, density_var, energy_var)
@@ -61,14 +85,270 @@ function extended_lookup(eos, opa::ExtendedOpacity, what, density_var, energy_va
 		error("Given $(what) is not included in the extenden Opacity.")
     end
 end
+
+lookup(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = lookup(eos.eos, opa, args...; kwargs...)
+lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
 lookup(eos, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos, opa, args...; kwargs...)
 
+# ============================================================================
+# Bilinear interpolation coefficients
+# ============================================================================
 
+global LOG_INTERPOLATED_VARS = [:κ, :κ_ross, :src]
+struct InterpCoefs{T<:AbstractFloat}
+    idx::Int        
+    w_low::T  
+    w_high::T 
+end
 
+_is_log_interpolated(var::Symbol) = var in LOG_INTERPOLATED_VARS
+add_log_interpolated(var::Symbol) = push!(LOG_INTERPOLATED_VARS, var)
 
+weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray) = begin
+    grid_T = eos.eos.lnT
+    grid_Rho = eos.eos.lnRho
+    
+    #T = eltype(grid_T)
+    T = eltype(lnT)
+    
+    coefs_T = Array{InterpCoefs{T}}(undef, size(lnT))
+    coefs_Rho = Array{InterpCoefs{T}}(undef, size(lnrho))
+    
+    @inbounds for j in eachindex(lnT)
+        coefs_T[j] = linear_interpolation_weights(grid_T, lnT[j])
+        coefs_Rho[j] = linear_interpolation_weights(grid_Rho, lnrho[j])
+    end
+    
+    coefs_Rho, coefs_T
+end
 
+function linear_interpolation_weights(grid_nodes, val)
+    #T = eltype(grid_nodes)
+    T = eltype(val)
+    val_T = Base.convert(T, val)
+    
+    if val_T <= first(grid_nodes)
+        return InterpCoefs{T}(1, one(T), zero(T))
+    elseif val_T >= last(grid_nodes)
+        return InterpCoefs{T}(length(grid_nodes)-1, zero(T), one(T))
+    end
+    
+    i = searchsortedlast(grid_nodes, val_T)
+    
+    x0 = grid_nodes[i]
+    x1 = grid_nodes[i+1]
+    w_high = (val_T - x0) / (x1 - x0)
+    w_low  = one(T) - w_high
+    
+    return InterpCoefs{T}(i, w_low, w_high)
+end
+    
+# ============================================================================
+# Fast lookup function for multiple quantities
+# ============================================================================
 
+sample(eos::RegularEoSTable, args...; kwargs...) =  sample(extended(eos), args...; kwargs...)
+sample(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) =  sample(eos, extended(opa), args...; kwargs...)
+sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables, lnrho::Number, lnT::Number, args...) = begin
+    res = sample(eos, opa, variables, [lnrho], [lnT], args...)
+    return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
+end
 
+function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, lnrho::AbstractArray{T}, lnT::AbstractArray{T}, args...) where {T<:AbstractFloat}
+    results = map(variables) do var
+        data = get_data(eos, opa, var)
+        if ndims(data) == 2
+            similar(lnrho, eltype(lnrho))
+        else
+            if length(args) > 0
+                k = args[1]
+                if k isa Integer
+                    similar(lnrho, eltype(lnrho))
+                else
+                    similar(lnrho, eltype(lnrho), (length(k), size(lnrho)...))
+                end
+            else
+                similar(lnrho, eltype(lnrho), (size(data, 3), size(lnrho)...))
+            end
+        end
+    end
+    sample!(results, eos, opa, variables, lnrho, lnT, args...)
+    results
+end
+
+sample!(results::Union{Tuple, AbstractArray}, eos::RegularEoSTable, args...; kwargs...) = sample!(results, extended(eos), args...; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample!(results, eos, extended(opa), args...; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, lnrho::AbstractArray{T}, lnT::AbstractArray{T}, args...) where {T<:AbstractFloat} = begin
+    coefs_Rho, coefs_T = weights(eos, lnrho, lnT)
+    sample!(results, eos, opa, variables, coefs_Rho, coefs_T, args...)
+    results
+end
+
+function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}) where {T2<:AbstractFloat}
+    for (i, var) in enumerate(variables)
+        data = get_data(eos, opa, var)
+        is_log = _is_log_interpolated(var)
+        _interpolate_var!(results[i], data, coefs_Rho, coefs_T, is_log)
+    end
+    
+    return results
+end
+
+function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}, k::Union{Integer, AbstractUnitRange}) where {T2<:AbstractFloat}
+    for (i, var) in enumerate(variables)
+        data = get_data(eos, opa, var)
+        is_log = _is_log_interpolated(var)
+        _interpolate_var!(results[i], data, coefs_Rho, coefs_T, k, is_log)
+    end
+    
+    return results
+end
+
+# ============================================================================
+# Core interpolation
+# ============================================================================
+
+_interpolate_var!(result::AbstractArray{T3}, data::AbstractArray{T}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}, is_log::Bool) where {T<:AbstractFloat, T2<:AbstractFloat, T3<:AbstractFloat} = begin
+    if ndims(data) == 2
+        @inbounds for j in 1:length(coefs_T)
+            result[j] = _interpolate_point_2d(data, coefs_Rho[j], coefs_T[j], is_log)
+        end
+    elseif ndims(data) == 3
+        n3 = size(data, 3)
+        @inbounds for j in 1:length(coefs_T)
+            cr = coefs_Rho[j]
+            ct = coefs_T[j]
+            for k in 1:n3
+                result[k + (j-1)*n3] = _interpolate_point_3d(data, cr, ct, k, is_log)
+            end
+        end
+    end
+end
+
+_interpolate_var!(result::AbstractArray{T3}, data::AbstractArray{T}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}, k::Union{Integer, AbstractUnitRange}, is_log::Bool) where {T<:AbstractFloat, T2<:AbstractFloat, T3<:AbstractFloat} = begin
+    if ndims(data) == 2
+        @inbounds for j in 1:length(coefs_T)
+            result[j] = _interpolate_point_2d(data, coefs_Rho[j], coefs_T[j], is_log)
+        end
+    elseif ndims(data) == 3
+        if k isa Integer
+            @inbounds for j in 1:length(coefs_T)
+                result[j] = _interpolate_point_3d(data, coefs_Rho[j], coefs_T[j], k, is_log)
+            end
+        else
+            nk = length(k)
+            @inbounds for j in 1:length(coefs_T)
+                cr = coefs_Rho[j]
+                ct = coefs_T[j]
+                for (ik, kidx) in enumerate(k)
+                    result[ik + (j-1)*nk] = _interpolate_point_3d(data, cr, ct, kidx, is_log)
+                end
+            end
+        end
+    end
+end
+
+@inline function _interpolate_point_2d(data::AbstractArray{T}, cr::InterpCoefs{T2}, ct::InterpCoefs{T2}, is_log::Bool) where {T<:AbstractFloat, T2<:AbstractFloat}
+    it, ir = ct.idx, cr.idx
+    w00 = ct.w_low  * cr.w_low
+    w10 = ct.w_high * cr.w_low
+    w01 = ct.w_low  * cr.w_high
+    w11 = ct.w_high * cr.w_high
+    
+    if is_log
+        val = w00 * log(data[it,   ir  ]) +
+              w10 * log(data[it+1, ir  ]) +
+              w01 * log(data[it,   ir+1]) +
+              w11 * log(data[it+1, ir+1])
+        return exp(val)
+    else
+        return w00 * data[it,   ir  ] +
+               w10 * data[it+1, ir  ] +
+               w01 * data[it,   ir+1] +
+               w11 * data[it+1, ir+1]
+    end
+end
+
+@inline function _interpolate_point_3d(data::AbstractArray{T}, cr::InterpCoefs{T2}, ct::InterpCoefs{T2}, k::Int, is_log::Bool) where {T<:AbstractFloat, T2<:AbstractFloat}
+    it, ir = ct.idx, cr.idx
+    w00 = ct.w_low  * cr.w_low
+    w10 = ct.w_high * cr.w_low
+    w01 = ct.w_low  * cr.w_high
+    w11 = ct.w_high * cr.w_high
+    
+    if is_log
+        val = w00 * log(data[it,   ir,   k]) +
+              w10 * log(data[it+1, ir,   k]) +
+              w01 * log(data[it,   ir+1, k]) +
+              w11 * log(data[it+1, ir+1, k])
+        return exp(val)
+    else
+        return w00 * data[it,   ir,   k] +
+               w10 * data[it+1, ir,   k] +
+               w01 * data[it,   ir+1, k] +
+               w11 * data[it+1, ir+1, k]
+    end
+end
+
+# ============================================================================
+# Documentation
+# ============================================================================
+
+"""
+    sample!(results, eos, opa, variables, lnrho, lnT, [k])
+    sample!(results, eos, opa, variables, coefs_Rho, coefs_T, [k])
+
+In-place, mutating version of `sample`.
+
+This function is optimized for repeatedly evaluating tables without memory allocations. 
+By manually passing the precomputed interpolation weights, you avoid binary tree search grid lookups entirely!
+
+# Examples
+```julia
+# 1) Pre-allocate output arrays matching your array variable
+results = (similar(lnrho), similar(lnrho))
+
+# 2) Pre-compute interpolation coefficients for a fixed grid of coordinates
+w_Rho, w_T = weights(eos, lnrho, lnT)
+
+# 3) Repeatedly evaluate over different wavelength slices without any allocations or indexing algorithms!
+for k in 1:100
+    sample!(results, eos, opa, (:κ, :src), w_Rho, w_T, k)
+    # ... use results[1] and results[2] matrix blocks
+end
+```
+"""
+sample!
+
+"""
+    sample(eos, opa, variables, lnrho, lnT, [k])
+
+Perform highly optimized interpolation on extended EOS and opacity tables.
+
+# Arguments
+- `eos`: An `ExtendedEoS` table.
+- `opa`: An `ExtendedOpacity` table.
+- `variables`: A collection (e.g., `Tuple` or `AbstractArray`) of symbols measuring what to interpolate (e.g., `[:κ, :κ_ross]`).
+- `lnrho`, `lnT`: Logarithm values of the density and temperature. Can be a scalar `Number` or an `AbstractArray{<:AbstractFloat}`.
+- `k` (optional): An `Integer` index or `AbstractUnitRange` of indices to slice the 3rd dimension (e.g., wavelength) of 3D opacity arrays. If omitted, interpolates all wavelengths.
+
+# Examples
+```julia
+# Scalar point lookup
+κ, κ_ross = sample(eos, opa, (:κ, :κ_ross), -10.0, 8.5)
+
+# Array lookup
+κ_arr, = sample(eos, opa, [:κ], lnrho_array, lnt_array)
+
+# Array lookup sliced over a wavelength chunk
+κ_slice, = sample(eos, opa, [:κ], lnrho_array, lnt_array, 1:50)
+```
+"""
+sample
+
+# ============================================================================
+# Ideal gas entropy
+# ============================================================================
 
 function ideal_entropy(T, rho, mu)    
     m_particle = mu * m_u
@@ -82,11 +362,9 @@ function ideal_entropy(T, rho, mu)
     R_spec * (log(n_quantum / n) + 2.5)
 end
 
-
-
-
-
-
+# ============================================================================
+# Table gradients for pre-computation
+# ============================================================================
 
 function gradients!(eos, opa_extended::ExtendedOpacity)
 	aos = @axed eos
@@ -184,6 +462,10 @@ function gradients!(eos_extended::ExtendedEoS)
 
 	χₜ, χᵨ, cᵥ
 end
+
+# ============================================================================
+# Thermodynamic quantities for pre-computation
+# ============================================================================
 
 """
     add_thermodynamics!(eos_extended)

@@ -766,7 +766,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
             eos.lnRoss[mask2, j] .= 1.0f-30
         end
 
-
         for m in eachindex(opacities)
             opa = opacities[m]
 

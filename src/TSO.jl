@@ -40,7 +40,10 @@ abstract type AbstractRadiationField end
 ## Tables
 export OpacityTable, EoSTable, SqOpacity, SqEoS
 export for_dispatch
-export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy, opacity, wavelength
+export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
+
+## fast lookup and extended tables interfac
+export opacity, wavelength, extended, sample, sample!, weights
 
 ## Aux
 export save, reload, meshgrid
