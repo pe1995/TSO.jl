@@ -24,6 +24,21 @@ begin
     d = abs.((permutedims(k1, (2, 1)) .- k2) ./ k2)
     @show maximum(d) minimum(d)
 
-    k1, k2
+    # test rosseland
+    reset_timer!(timer)
+    r1 = @timeit timer "old" TSO.rosseland_opacity_old(@axed(eos), opa)
+    r2 = @timeit timer "new" rosseland_opacity(@axed(eos), opa)
+    show(timer)
+    println("")
+    @show eltype(r1) eltype(r2)
+    @show typeof(r1) typeof(r2)
+    @show size(r1) size(r2)
+    @show r1[100,100]
+    @show r2[100,100]
+    @show any(isnan, r1)
+    @show any(isnan, r2)
+    
+    d = abs.((r1 .- r2) ./ r2)
+    @show maximum(d) minimum(d)
 end
 

@@ -1118,8 +1118,6 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
         wk_c1c2_arr[k] = wk * c1 * c2
     end
     
-    # Partition the large frequency dimension into chunks.
-    # We spawn exactly one Task per chunk, and allocate its local grid inside the Task.
     n_chunks = Threads.nthreads()
     chunk_size = cld(nl, n_chunks)
     chunks = Iterators.partition(1:nl, chunk_size) |> collect
@@ -1143,12 +1141,18 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
                         E_minus_1 = ifelse(iT > 0.0, E - 1.0, 1.0)
                         
                         dbnuChunk_wk = (wk_c1c2 * iT * iT * E) / (E_minus_1 * E_minus_1)
-                        val = ifelse(iT > 0.0, dbnuChunk_wk, zero(T_op))
+
+                        val = ifelse((dbnuChunk_wk == dbnuChunk_wk) & (dbnuChunk_wk >= 1e-30), dbnuChunk_wk, T_op(1e-30))
+                        val = ifelse(iT > 0.0, val, T_op(1e-30))
                         
                         op = opacity[i, j, k]
                         
-                        l_ross[i, j] += val / op
-                        l_b[i, j]    += val
+                        val_valid = (op > 0.0)
+                        vop = ifelse(val_valid, val / op, zero(T_op))
+                        vb  = ifelse(val_valid, val, zero(T_op))
+                        
+                        l_ross[i, j] += vop
+                        l_b[i, j]    += vb
                     end
                 end
             end
@@ -1180,6 +1184,30 @@ _rosseland_opacityX!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
     end
 
     return lnRoss
+end
+
+_rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity) = begin
+    BChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    RossChunk = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    dbnuChunk = Ref(eltype(opacity)(0.0))
+
+    @inbounds for k in chunk
+        @inbounds for j in eachindex(lnRho)
+            @inbounds for i in eachindex(axis_val)
+                δBν!(dbnuChunk, l[k], T[i, j])
+                val = weights[k] * dbnuChunk[]
+                if !isnan(val) && val > 0.0
+                    op = opacity[i, j, k]
+                    if op > 0.0
+                        RossChunk[i, j] += val / op
+                        BChunk[i, j] += val
+                    end
+                end
+            end
+        end
+    end
+
+    return [BChunk, RossChunk]
 end
 
 _rosseland_opacity2!(lnRoss, lnRho, axis_val, l, weights, opacity, db) = begin
@@ -1232,6 +1260,64 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
         lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T
     )    
     
+end
+
+_rosseland_opacity_old!(lnRoss, lnRho, axis_val, l, weights, opacity, T) = begin
+    chunk_size = cld(length(l), Threads.nthreads())
+    chunks = Iterators.partition(eachindex(l), chunk_size) |> collect
+
+    tasks = map(chunks) do chunk
+        Threads.@spawn _rosseland_opacity_chunk(chunk, lnRho, axis_val, T, l, weights, opacity)
+    end
+    results = fetch.(tasks)
+
+    l_b = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    l_ross = zeros(eltype(opacity), length(axis_val), length(lnRho))
+    for res in results
+        l_b .+= res[1]
+        l_ross .+= res[2]
+    end
+
+    @inbounds for j in eachindex(lnRho)
+        @inbounds for i in eachindex(axis_val)
+            b = l_b[i, j]
+            if b > 0.0
+                r = l_ross[i, j] / b
+                lnRoss[i, j] = (r == 0) ? eltype(opacity)(NaN) : log(1.0 / r)
+            else
+                lnRoss[i, j] = eltype(opacity)(NaN)
+            end
+        end
+    end
+end
+
+rosseland_opacity_old!(lnRoss, eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity_old!(lnRoss, AxedEoS(eos), args...; kwargs...) 
+rosseland_opacity_old(eos::E, args...; kwargs...) where {E<:RegularEoSTable} = rosseland_opacity_old(AxedEoS(eos), args...; kwargs...)
+
+function rosseland_opacity_old!(lnRoss, aos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS}
+    eos      = aos.eos 
+    axis_val = aos.energy_axes.values
+    
+    T = zeros(eltype(eos.lnT), aos.energy_axes.length, aos.density_axes.length)
+    if ndims(eos.lnT) == 2
+        T .= exp.(eos.lnT)
+    else
+        puff_up!(T, exp.(eos.lnT))
+    end
+
+    if Threads.nthreads() > 1
+        @info "Computing old rosseland opacity with $(Threads.nthreads()) threads."
+    end
+
+    @optionalTiming rosseland_time _rosseland_opacity_old!(
+        lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T
+    )    
+end
+
+rosseland_opacity_old(eos::E, opacities; weights=ω_midpoint(opacities)) where {E<:AxedEoS} = begin
+    lnRoss = similar(eos.eos.lnRoss)
+    rosseland_opacity_old!(lnRoss, eos, opacities, weights=weights)
+    lnRoss
 end
 
 # ============================================================================
