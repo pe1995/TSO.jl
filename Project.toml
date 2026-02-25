@@ -1,6 +1,6 @@
 name = "TSO"
 uuid = "65303bd6-8358-47a4-91b9-056454446fac"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Philipp Eitner <eitner@mpia.de> and contributors"]
 
 [deps]
@@ -22,7 +22,6 @@ ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-LoopVectorization = "0.12.173"
 julia = "1"
 
 [extras]
