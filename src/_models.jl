@@ -285,7 +285,6 @@ function flip!(model::AbstractModel; depth=false)
             end
         end
 
-        # now it is top to bottom, so the first z value should be the smallest
         if model.z[1] > model.z[end]
             model.z .*= -1
         end

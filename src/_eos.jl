@@ -1375,6 +1375,7 @@ _optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     τ = zeros(eltype(opacities.κ), length(z), length(chunk))
     ρκ = zeros(eltype(opacities.κ), length(z))
     ρ = exp.(lnρ)
+    #rk = sample(eos, opacities, :κ, lnρ, lnE, chunk)
 
     # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
     @inbounds for (i, k) in enumerate(chunk)
