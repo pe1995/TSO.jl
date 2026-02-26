@@ -308,7 +308,7 @@ _invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::Abst
     return lnrho, lnT
 end
 
-function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=500, tol=1e-6) where {T}
+function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=200, tol=1e-6) where {T}
     result_array = similar(target_array)
     grid = getfield(eos.eos.eos, target_var)
     val_min_global = minimum(grid)
@@ -345,7 +345,9 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                 a_rad = 7.5657e-15 # erg cm^-3 K^-4
                 lnT_val = 0.25 * (lnP_val + log(3.0) - log(a_rad))
             end
-            return lnP_val + log(1.2 * m_u) - log(KBoltzmann) - lnT_val
+            
+            mu_guess = 0.607
+            return lnP_val + log(mu_guess * m_u) - log(KBoltzmann) - lnT_val
         else
             return abs(f_min) < abs(f_max) ? v_min : v_max
         end
@@ -363,14 +365,32 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
             weights(eos, known_val_arr, mid_arr)
         end
         
+        v_ideal = calc_fallback(val_min_global, val_max_global, 0.0, 0.0, target_val)
+        
         v_min = val_min_global
         v_max = val_max_global
         
-        f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
-        f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
+        if is_finding_rho
+            v_min_tight = max(val_min_global, v_ideal - 2.0)
+            v_max_tight = min(val_max_global, v_ideal + 2.0)
+            
+            f_min_tight = eval_coord(v_min_tight, coefs_Rho, coefs_T) - target_val
+            f_max_tight = eval_coord(v_max_tight, coefs_Rho, coefs_T) - target_val
+            
+            if sign(f_min_tight) != sign(f_max_tight) && f_max_tight > f_min_tight
+                v_min = v_min_tight
+                v_max = v_max_tight
+                f_min = f_min_tight
+                f_max = f_max_tight
+            else
+                f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
+                f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
+            end
+        else
+            f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
+            f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
+        end
 
-        v_ideal = calc_fallback(v_min, v_max, f_min, f_max, target_val)
-        
         for i in 1:maxiter
             v_mid = (v_min + v_max)/2
             f_mid = eval_coord(v_mid, coefs_Rho, coefs_T) - target_val
@@ -380,17 +400,17 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                 break
             end
             
-            # If the interval is inverted or does not natively bracket the root,
-            # we discard the half that moves away from the ideal gas estimate.
-            # This allows it to wander to a valid root instead of picking blindly.
             if is_invalid(f_min, f_max)
                 if v_ideal > v_mid
-                    v_min = v_mid
-                    f_min = f_mid
+                    v_min = v_min + abs(v_min - v_mid) / 2.0
+                    v_max = min(val_max_global, v_max + abs(v_min - v_mid) / 2.0)
                 else
-                    v_max = v_mid
-                    f_max = f_mid
+                    v_max = v_max - abs(v_max - v_mid) / 2.0
+                    v_min = max(val_min_global, v_min - abs(v_max - v_mid) / 2.0)
                 end
+                
+                f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
+                f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
             else
                 # Regular bisection
                 if sign(f_mid) == sign(f_min)

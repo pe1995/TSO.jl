@@ -34,8 +34,11 @@ begin
     sample(eos, opa, (:lnT, :κ), lnrho, lnei_true)
     @timeit timer "lnrho_sampled_1" lnrho_sampled_1, = sample(eos, (:lnRho,), lnpg_true, lnt)
     @timeit timer "lnT_sampled_1" lnT_sampled_1, = sample(eos, (:lnT,), lnrho, lnei_true)
-    @timeit timer "lnrho_sampled_2" lnrho_sampled_2, _ = sample(eos, opa, (:lnRho, :κ), lnpg_true, lnt)
-    @timeit timer "lnT_sampled_2" lnT_sampled_2, _ = sample(eos, opa, (:lnT, :κ), lnrho, lnei_true)
+    #@timeit timer "lnrho_sampled_2" lnrho_sampled_2, _ = sample(eos, opa, (:lnRho, :κ), lnpg_true, lnt)
+    #@timeit timer "lnT_sampled_2" lnT_sampled_2, _ = sample(eos, opa, (:lnT, :κ), lnrho, lnei_true)
+
+    @show lnrho_sampled_1[99]
+    @show lnrho[99]
 
     println("---------------")
     println("new:")
@@ -46,13 +49,13 @@ begin
     d_T = abs.((lnT_sampled_1 .- lnt) ./ lnt)
     @show maximum(d_T) minimum(d_T)
 
-    d_rho2 = abs.((lnrho_sampled_2 .- lnrho) ./ lnrho)
-    @show maximum(d_rho2) minimum(d_rho2)
+    #d_rho2 = abs.((lnrho_sampled_2 .- lnrho) ./ lnrho)
+    #@show maximum(d_rho2) minimum(d_rho2)
     
-    d_T2 = abs.((lnT_sampled_2 .- lnt) ./ lnt)
-    @show maximum(d_T2) minimum(d_T2)
+    #d_T2 = abs.((lnT_sampled_2 .- lnt) ./ lnt)
+    #@show maximum(d_T2) minimum(d_T2)
 
-    println("---------------")
+    #=println("---------------")
     println("old:")
 
     lnpg_true = lookup(eos, :lnPg, lnrho, lnt)
@@ -68,7 +71,7 @@ begin
     @show maximum(d_rho) minimum(d_rho)
     
     d_T = abs.((lnT_sampled_1 .- lnt) ./ lnt)
-    @show maximum(d_T) minimum(d_T)
+    @show maximum(d_T) minimum(d_T)=#
 
     println("")
     show(timer)
