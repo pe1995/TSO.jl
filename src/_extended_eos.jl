@@ -22,6 +22,8 @@ wavelength(opa::ExtendedOpacity) = wavelength(opa.opa)
 extended(opa::RegularOpacityTable) = ExtendedOpacity(opa=opa)
 extended(eos::RegularEoSTable) = ExtendedEoS(eos=@axed(eos))
 extended(eos::AxedEoS) = ExtendedEoS(eos=eos)
+table(eos::ExtendedEoS) = table(eos.eos)
+table(opa::ExtendedOpacity) = opa.opa
 
 get_data(eos::ExtendedEoS, var::Symbol) = begin
     Typ = eltype(eos.eos.eos.lnPg)

@@ -117,7 +117,8 @@ end
 
 opacity(opa::RegularOpacityTable) = opa
 wavelength(opa::RegularOpacityTable) = opa.λ
-
+table(eos::AxedEoS) = table(eos.eos)
+table(eos::RegularEoSTable) = eos
 
 
 

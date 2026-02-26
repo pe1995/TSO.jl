@@ -43,7 +43,7 @@ export for_dispatch
 export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
 ## fast lookup and extended tables interfac
-export opacity, wavelength, extended, sample, sample!, weights
+export opacity, wavelength, extended, sample, sample!, weights, table
 
 ## Aux
 export save, reload, meshgrid
