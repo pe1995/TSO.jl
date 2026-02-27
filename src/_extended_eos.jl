@@ -19,9 +19,9 @@ end
 
 opacity(opa::ExtendedOpacity) = opa.opa
 wavelength(opa::ExtendedOpacity) = wavelength(opa.opa)
-extended(opa::RegularOpacityTable) = ExtendedOpacity(opa=opa)
-extended(eos::RegularEoSTable) = ExtendedEoS(eos=@axed(eos))
-extended(eos::AxedEoS) = ExtendedEoS(eos=eos)
+extended(opa::RegularOpacityTable; kwargs...) = ExtendedOpacity(;opa=opa, kwargs...)
+extended(eos::RegularEoSTable; kwargs...) = ExtendedEoS(;eos=@axed(eos), kwargs...)
+extended(eos::AxedEoS; kwargs...) = ExtendedEoS(;eos=eos, kwargs...)
 table(eos::ExtendedEoS) = table(eos.eos)
 table(opa::ExtendedOpacity) = opa.opa
 
