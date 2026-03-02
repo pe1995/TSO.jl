@@ -152,6 +152,11 @@ function linear_interpolation_weights(grid_nodes, val)
     end
     
     i = searchsortedlast(grid_nodes, val_T)
+    if i == length(grid_nodes)
+        return InterpCoefs{T}(length(grid_nodes)-1, zero(T), one(T))
+    elseif i == 0
+        return InterpCoefs{T}(1, one(T), zero(T))
+    end
     
     x0 = grid_nodes[i]
     x1 = grid_nodes[i+1]
