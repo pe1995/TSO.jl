@@ -1252,9 +1252,9 @@ function rosseland_opacity!(lnRoss, aos::E, opacities; weights=ω_midpoint(opaci
 
     #db = permutedims(δBν(opacities.λ, T), (3, 1, 2))
     #_rosseland_opacity2!(lnRoss, eos.lnRho, axis_val, opacities.λ, weights, permutedims(opacities.κ, (3, 1, 2)), db)
-    if Threads.nthreads() > 1
-        @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
-    end
+    #if Threads.nthreads() > 1
+    #    @info "Computing rosseland opacity with $(Threads.nthreads()) threads."
+    #end
 
     @optionalTiming rosseland_time _rosseland_opacityX!(
         lnRoss, eos.lnRho, axis_val, opacities.λ, weights, opacities.κ, T
@@ -1419,7 +1419,7 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
         ρκ = zeros(T, length(lnρ))
         _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
     else
-        @info "Computing table optical depth with $(Threads.nthreads()) threads."
+        #@info "Computing table optical depth with $(Threads.nthreads()) threads."
         _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
     end
 

@@ -314,7 +314,7 @@ function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)
 	end
 
 	if compute_ross
-		@info "Computing table Rosseland opacity. This may take a few minutes."
+		@info "⏳ Computing table Rosseland opacity."
 		rosseland_opacity!(eos.lnRoss, @axed(eos), opa)
 		transfer_rosseland!(@axed(eos), opa)
 		if !isnothing(scat)
