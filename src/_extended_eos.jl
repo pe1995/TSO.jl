@@ -705,7 +705,7 @@ function gradients!(eos_extended::ExtendedEoS)
 			χₜ[i, j] = max(dP/dT, 1e-12)
 			dlnRoss_dlnT[i, j] = dRoss / dT
 	
-			dP, dR, dRoss = if (j>1) &&(j<nRho)
+			dR, dP, dRoss = if (j>1) &&(j<nRho)
 				eos.lnRho[j+1] - eos.lnRho[j-1],
 				eos.lnPg[i, j+1] - eos.lnPg[i, j-1],
 				eos.lnRoss[i, j+1] - eos.lnRoss[i, j-1]
