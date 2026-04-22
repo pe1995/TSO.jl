@@ -96,7 +96,7 @@ assignments(a::Array{T, 1}) where {T} = a
 Quadrant(; λ_lims, κ_lims, nbins, stripes=nothing) = Quadrant(λ_lims, κ_lims, nbins, stripes)
 Quadrant(λ_lims, κ_lims, nbins; stripes=nothing) = Quadrant(λ_lims, κ_lims, nbins, stripes)
 
-
+opacity(o::BinnedOpacities) = o.opacities
 
 ## Functions for filling the bins
 fill(::Type{<:OpacityBins}; kwargs...) = error("Please use specific binning methods.")
@@ -1416,7 +1416,7 @@ end
 
 
 function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothing; 
-    transition_model=nothing, corr_χ=nothing, corr_S=nothing) where {E<:AxedEoS}
+    transition_model=nothing, logg=nothing, corr_χ=nothing, corr_S=nothing) where {E<:AxedEoS}
     eos = aos.eos
     eaxis = is_internal_energy(aos)
 
@@ -1475,17 +1475,31 @@ function box_integrated_v4(binning, weights, aos::E, opacities, scattering=nothi
 
     κ_ross = T(1.0) ./χRBox
 
-    wthin, wthick = if isnothing(transition_model)
-        @warn "No transition model was provided to the binning. "*
+    logg_val = if !isnothing(logg)
+        logg
+    elseif !isnothing(transition_model)
+        hasproperty(transition_model, :logg) ? transition_model.logg : transition_model
+    else
+        nothing
+    end
+
+    wthin, wthick = if isnothing(logg_val)
+        @warn "No logg was provided to the binning. "*
               "The binnig will only be valid for the sun!"
         wthin_l = exp.(T(-1.5e7) .* κ_ross)
-        wthick_l = T(1.0) .- wthin_l
-        wthin_l, wthick_l
+        wthin_l, T(1.0) .- wthin_l
     else
-        pure_rosseland = RegularOpacityTable(
-            κ_ross, opacities.κ_ross, SBox, collect(T, 1:radBins), false
-        )
-        opacity_transition(aos, pure_rosseland, transition_model)
+        g = T(exp10(logg_val))
+        wthin_l = zeros(T, size(κ_ross)...)
+        @inbounds for k in 1:radBins
+            for j in 1:rhoBins
+                for i in 1:AxBins
+                    τ = κ_ross[i, j, k] * exp(eos.lnPg[i, j]) / (ρ[j] * g)
+                    wthin_l[i, j, k] = exp(T(-2.0) * τ)
+                end
+            end
+        end
+        wthin_l, T(1.0) .- wthin_l
     end
 
     ## Opacity
@@ -1516,6 +1530,7 @@ end
 box_integrated_v4(binning, weights, eos::E, opacities, scattering; kwargs...) where {E<:RegularEoSTable} = box_integrated_v4(binning, weights, AxedEoS(eos), opacities, scattering; kwargs...)
 box_integrated_v4(binning, weights, eos::E, opacities; kwargs...) where {E<:RegularEoSTable} = box_integrated_v4(binning, weights, AxedEoS(eos), opacities; kwargs...)
 
+include("_advanced_binning.jl")
 
 
 #================= Extensions of EoS functions for binned opacities ====================#

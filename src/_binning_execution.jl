@@ -328,9 +328,8 @@ end
 
 """
     convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...)
-
-Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. If needed, 
-the internal energy is cut where the models internal energy ends (+lnEi_stretch*absolute difference top-bottom).
+    
+Convert the binned opacities + eos from a T-ρ to a Eint-ρ grid. If needed, the internal energy is cut where the models internal energy ends (+lnEi_stretch*absolute difference top-bottom).
 """
 convert_fromT_toE(table_folder, folder_new, av_path; lnEi_stretch=1.0, kwargs...) = begin
     eos = reload(SqEoS, joinpath(table_folder, "eos.hdf5"))
@@ -365,7 +364,6 @@ _get_e_limit(eos, opa, av_path, lnEi_stretch) = begin
     (lnEimin, lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch)
 end
 
-
 function create_E_from_T(table_folder, name="", av_path=nothing; 
                                 upsample=2048,
                                 name_extension="DIS_MARCS_E",
@@ -378,3 +376,5 @@ function create_E_from_T(table_folder, name="", av_path=nothing;
         convert_fromT_toE(table_folder, new_table_name, upsample=upsample)
     end
 end
+
+include("_temp2eint.jl")
