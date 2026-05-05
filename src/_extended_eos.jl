@@ -144,6 +144,10 @@ function linear_interpolation_weights(grid_nodes, val)
     #T = eltype(grid_nodes)
     T = eltype(val)
     val_T = Base.convert(T, val)
+
+    if isnan(val_T)
+        return InterpCoefs{T}(1, T(NaN), T(NaN))
+    end
     
     if val_T <= first(grid_nodes)
         return InterpCoefs{T}(1, one(T), zero(T))

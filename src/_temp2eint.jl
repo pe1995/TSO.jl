@@ -32,14 +32,8 @@ function remap_T_to_E(aos::AxedEoS, opa::SqOpacity;
         eos_new.lnEi[mask] .= lnEimax
 
         if !isnothing(lnEimin)
-            #@info "Limiting the internal energy (log) between $(lnEimin) - $(lnEimax) on the energy grid." 
-            #@info "The original limits were $(minimum(eos_new.lnEi)) - $(lnEimax_orig)." 
             eos_new.lnEi[eos_new.lnEi.<=lnEimin] .= lnEimin
-        else
-            #@info "Limiting the internal energy (log) to $(lnEimax) on the energy grid." 
-            #@info "The original limits was $(lnEimax_orig)." 
         end
-        #@info "The upper limit will have an effect on $(count(mask)/length(mask)*100)% of points in the rho-T table."
     end
 
     eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false)
