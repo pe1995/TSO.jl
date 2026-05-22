@@ -223,11 +223,15 @@ end
 
 Save the given Table (SqEoS or SqOpacity) at the given path.
 """
-function save(s::T, path) where {T<:AbstractTable}
+function save(s::T, path; additional_data...) where {T<:AbstractTable}
     fid = HDF5.h5open(path, "w")
 
     for fname in fieldnames(typeof(s))
         add_to_hdf5!(fid, fname, getfield(s, fname))
+    end
+
+    for (key, value) in additional_data
+        add_to_hdf5!(fid, key, value)
     end
 
     close(fid)
@@ -242,25 +246,33 @@ Reload the given type of table (SqEoS or SqOpacity) from the given path.
 If mmap=true, the memory intensive fields will be loaded as mmaps 
 through the HDF5 capabilities.
 """
-function reload(s::Type{S}, path::String; mmap=false) where {S}
+function reload(s::Type{S}, path::String; mmap=false, additional_data=false) where {S}
     fid   = HDF5.h5open(path, "r")
     fvals = Any[]
+    fnames = fieldnames(s)
 
-    for (fname, ftype) in zip(fieldnames(s), fieldtypes(s))
+    for (fname, ftype) in zip(fnames, fieldtypes(s))
         append!(fvals, [get_from_hdf5(ftype, fid, fname; mmap=mmap)])
+    end
+
+    add_dat = if additional_data
+        extra_keys = filter(k -> Symbol(k) ∉ fnames, keys(fid))
+        Dict(Symbol(k) => get_from_hdf5(Any, fid, Symbol(k); mmap=mmap) for k in extra_keys)
+    else
+        Dict{Symbol,Any}()
     end
 
     close(fid)
 
-    s(fvals...)
+    isempty(add_dat) ? s(fvals...) : (s(fvals...), add_dat)
 end
 
-reload(path::String; mmap=false) = begin
+reload(path::String; mmap=false, kwargs...) = begin
     fid = TSO.HDF5.h5open(path, "r")
     if "lnEi" in keys(fid)
-        reload(SqEoS, path; mmap=mmap)
+        reload(SqEoS, path; mmap=mmap, kwargs...)
     else
-        reload(SqOpacity, path; mmap=mmap)
+        reload(SqOpacity, path; mmap=mmap, kwargs...)
     end
 end
 
@@ -270,10 +282,6 @@ add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
     
-
-
-
-
 
 
 
