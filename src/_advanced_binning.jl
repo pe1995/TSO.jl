@@ -40,11 +40,6 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     end
 
     ρ = exp.(eos.lnRho)
-
-    #if Threads.nthreads() > 1
-    #    @info "Binning opacities with $(Threads.nthreads()) threads."
-    #end
-
     scat = remove_from_thin ? scattering.κ : nothing
     
     # Run the multithreaded orchestrator
@@ -66,8 +61,7 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     end
 
     wthin, wthick = if isnothing(logg_val)
-        @warn "No logg was provided to the binning. " *
-              "The binning will only be valid for the sun!"
+        @warn "No logg was provided to the binning. The binning will only be valid for the sun!"
         wthin_l = exp.(T_type(-1.5e7) .* κ_ross)
         wthin_l, T_type(1.0) .- wthin_l
     else
@@ -87,6 +81,9 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     opacity_table = wthin .* κBox .+ wthick .* κ_ross     
     ϵ_table = @. ifelse(χBox > 1e-30, κBox / χBox, 1.0)
     S_table = SBox 
+
+    @. opacity_table = max(opacity_table, T_type(1e-30))
+    @. S_table = max(S_table, T_type(1e-30))
 
     return BinnedOpacities(
         SqOpacity(
@@ -149,6 +146,9 @@ function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_
     
     @. κBox = wthin * κBox + wthick * κ_ross 
     
+    @. κBox = max(κBox, T_type(1e-30))
+    @. SBox = max(SBox, T_type(1e-30))
+
     # Returns the updated binned arrays directly
     return (κBox=κBox, SBox=SBox, χBox=χBox, χRBox=χRBox)
 end
@@ -260,6 +260,9 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
         end
     end
 
+    @. κBox = max(κBox, T_type(1e-30))
+    @. SBox = max(SBox, T_type(1e-30))
+
     return (κBox=κBox, SBox=SBox, χBox=χBox, χRBox=χRBox)
 end
 
@@ -353,7 +356,7 @@ end
 @inline get_corr_val(x::Nothing, T_type, I::Vararg{Int}) = T_type(1.0)
 @inline get_corr_val(x::AbstractArray, T_type, I::Vararg{Int}) = T_type(x[I...])
 @inline get_abs_k(κ, κ_scat::Nothing, I::Vararg{Int}) = κ[I...]
-@inline get_abs_k(κ, κ_scat::AbstractArray, I::Vararg{Int}) = κ[I...] - κ_scat[I...]
+@inline get_abs_k(κ, κ_scat::AbstractArray, I::Vararg{Int}) = max(κ[I...] - κ_scat[I...], zero(eltype(κ)))
 
 function _bin_core!(W_assign::AbstractMatrix, chunk, 
                     rhoBins, AxBins, weights, κ, κ_scat, src, Temp, λ, bnC, dbnC, 
@@ -397,7 +400,7 @@ function _bin_core!(W_assign::AbstractMatrix, chunk,
                     w_b  = w_eff * b_val
                     w_db = w_eff * db_val
 
-                    inv_κ = 1.0 / κ_val
+                    inv_κ = ifelse(κ_val > 1e-30, 1.0 / κ_val, T_type(0.0))
                     
                     χBoxChunk[i, j, b]  += κ_val * w_b
                     χRBoxChunk[i, j, b] += inv_κ * w_db
