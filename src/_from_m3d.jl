@@ -290,15 +290,19 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 	#	add_opacities!(chi, scat)
 	#end
 
-	# compute rosseland opacity
-	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
-	fill_nan!(aos, chi, scat)
-	fill_nan!(aos500)
+	@info "⏳ Interpolating NaN."
+	nan_mask_ross = fill_nan!(aos, chi, scat)
+	nan_mask_500 = fill_nan!(aos500)
+
+	@info "⏳ Limit the opacity."
 	set_limits!(aos, chi, small=1e-30, large=1e30)
 	set_limits!(aos, scat, small=1e-30, large=1e30)
 	set_limits!(aos500, small=1e-30, large=1e30)
 
-	eos, eos500, chi, scat
+	# compute rosseland opacity
+	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
+
+	eos, eos500, chi, scat, nan_mask_ross, nan_mask_500
 end
 
 function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)

@@ -710,223 +710,178 @@ end
 
 #=================================================================== NaN handling ===#
 
+@inline nan_or_inf(a) = isnan(a) | !isfinite(a)
 @inline interpolate_at(x, y, x0; bc=Flat()) = linear_interpolation(Interpolations.deduplicate_knots!(deepcopy(x), move_knots=true), y, extrapolation_bc=bc).(x0)
+"""
+    _lerp_flat(x_knots, y_knots, n, x_query)
 
-nan_or_inf(a) = isnan(a) | !isfinite(a)
+Zero-allocation piecewise linear interpolation with flat (constant) extrapolation.
+`n` is the number of valid knots in the buffer arrays.
+"""
+@inline function _lerp_flat(x_knots, y_knots, n, x_query)
+    @inbounds x_query <= x_knots[1] && return y_knots[1]
+    @inbounds x_query >= x_knots[n] && return y_knots[n]
 
-function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS} 
-    eos = aos.eos
-    xc    = DensityAxis(aos).values
-    mask  = falses(length(xc))
-    nmask = similar(mask)
-    lm    = length(mask)
-
-    xc2    = EnergyAxis(aos).values
-    mask2  = falses(length(xc2))
-    nmask2 = similar(mask2)
-    lm2    = length(mask2)
-
-    var = getfield(aos.eos, dependent_energy_variable(aos))
-
-    ## the other direction
-    for j in eachindex(xc)
-        mask2  .= nan_or_inf.(view(var, :, j))
-        nmask2 .= .!mask2
-        cm = count(mask2)
-        if (cm<=lm2-2) & (cm>0)
-            var[mask2, j] .= interpolate_at(view(xc2, nmask2), view(var, nmask2, j), view(xc2, mask2))
-        elseif cm>0
-            var[mask2, j] .= 1.0f-30
-        end
-
-        mask2  .= nan_or_inf.(view(eos.lnPg, :, j))
-        nmask2 .= .!mask2
-        cm = count(mask2)
-        if (cm<=lm2-2) & (cm>0)
-            eos.lnPg[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnPg, nmask2, j), view(xc2, mask2))
-        elseif cm>0
-            eos.lnPg[mask2, j] .= 1.0f-30
-        end
-
-        mask2  .= nan_or_inf.(view(eos.lnNe, :, j))
-        nmask2 .= .!mask2
-        cm = count(mask2)
-        if (cm<=lm2-2) & (cm>0)
-            eos.lnNe[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnNe, nmask2, j), view(xc2, mask2))
-        elseif cm>0
-            eos.lnNe[mask2, j] .= 1.0f-30
-        end
-
-        mask2  .= nan_or_inf.(view(eos.lnRoss, :, j))
-        nmask2 .= .!mask2
-        cm = count(mask2)
-        if (cm<=lm2-2) & (cm>0)
-            eos.lnRoss[mask2, j] .= interpolate_at(view(xc2, nmask2), view(eos.lnRoss, nmask2, j), view(xc2, mask2))
-        elseif cm>0
-            eos.lnRoss[mask2, j] .= 1.0f-30
-        end
-
-        for m in eachindex(opacities)
-            opa = opacities[m]
-
-            mask2  .= nan_or_inf.(log.(view(opa.κ_ross, :, j)))
-            nmask2 .= .!mask2
-            cm = count(mask2)
-            if (cm<=lm2-2) & (cm>0)
-                opa.κ_ross[mask2, j] .= interpolate_at(view(xc2, nmask2), log.(view(opa.κ_ross, nmask2, j)), view(xc2, mask2)) .|> exp
-            elseif cm>0
-                opa.κ_ross[mask2, j] .= 1.0f-30
-            end
-            
-            for k in eachindex(opa.λ)
-                mask2  .= nan_or_inf.(log.(view(opa.κ, :, j, k)))
-                nmask2 .= .!mask2
-                cm = count(mask2)
-                if (cm<=lm2-2) & (cm>0)
-                    opa.κ[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.κ, nmask2, j, k)), view(xc2, mask2)) .|> exp
-                elseif cm>0
-                    opa.κ[mask2, j, k] .= 1.0f-30
-                end
-
-                if size(opa.src) != (1, 1, 1)
-                    mask2  .= nan_or_inf.(log.(view(opa.src, :, j, k)))
-                    nmask2 .= .!mask2
-                    cm = count(mask2)
-                    if (cm<=lm2-2) & (cm>0)
-                        opa.src[mask2, j, k] .= interpolate_at(view(xc2, nmask2), log.(view(opa.src, nmask2, j, k)), view(xc2, mask2)) .|> exp
-                    elseif cm>0
-                        opa.src[mask2, j, k] .= 1.0f-30
-                    end
-                end
-            end
-        end
-    end
-
-    for i in eachindex(xc2)
-        mask  .= nan_or_inf.(view(var, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            var[i, mask] .= interpolate_at(view(xc, nmask), view(var, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnPg, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnPg[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnPg, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnNe, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnNe[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnNe, i, nmask), view(xc, mask))
-        end
-
-        mask  .= nan_or_inf.(view(eos.lnRoss, i, :))
-        nmask .= .!mask
-        cm = count(mask)
-        if (cm<=lm-2) & (cm>0)
-            eos.lnRoss[i, mask] .= interpolate_at(view(xc, nmask), view(eos.lnRoss, i, nmask), view(xc, mask))
-        end
-
-        for m in eachindex(opacities)
-            opa = opacities[m]
-
-            mask  .= nan_or_inf.(log.(view(opa.κ_ross, i, :)))
-            nmask .= .!mask
-            cm = count(mask)
-            if (cm<=lm-2) & (cm>0)
-                opa.κ_ross[i, mask] .= interpolate_at(view(xc, nmask), log.(view(opa.κ_ross, i, nmask)), view(xc, mask)) .|> exp
-            end
-            
-            for k in eachindex(opa.λ)
-                mask  .= nan_or_inf.(log.(view(opa.κ, i, :, k)))
-                nmask .= .!mask
-                cm = count(mask)
-                if (cm<=lm-2) & (cm>0)
-                    opa.κ[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.κ, i, nmask, k)), view(xc, mask)) .|> exp
-                end
-
-                if size(opa.src) != (1, 1, 1)
-                    mask  .= nan_or_inf.(log.(view(opa.src, i, :, k)))
-                    nmask .= .!mask
-                    cm = count(mask)
-                    if (cm<=lm-2) & (cm>0)
-                        opa.src[i, mask, k] .= interpolate_at(view(xc, nmask), log.(view(opa.src, i, nmask, k)), view(xc, mask)) .|> exp
-                    end
-                end
-            end
-        end
-    end
-end
-
-function repair_line!(y_view, x_coords; is_log=false, fallback=nothing)
-    work_y = is_log ? log.(y_view) : y_view
-    bad_mask = nan_or_inf.(work_y)    
-    if !any(bad_mask)
-        return
-    end
-
-    good_mask = .!bad_mask
-    n_good    = count(good_mask)
-    if n_good >= 2
-        repaired_vals = interpolate_at(
-            view(x_coords, good_mask), 
-            view(work_y, good_mask), 
-            view(x_coords, bad_mask)
-        )
-        
-        if is_log
-            y_view[bad_mask] .= exp.(repaired_vals)
+    # Binary search for the interval [lo, lo+1] containing x_query
+    lo, hi = 1, n
+    @inbounds while hi - lo > 1
+        mid = (lo + hi) >> 1
+        if x_knots[mid] <= x_query
+            lo = mid
         else
-            y_view[bad_mask] .= repaired_vals
+            hi = mid
         end
-    elseif fallback !== nothing
-        @warn "Fallback value used."
-        y_view[bad_mask] .= fallback
+    end
+
+    @inbounds begin
+        t = (x_query - x_knots[lo]) / (x_knots[hi] - x_knots[lo])
+        return y_knots[lo] + t * (y_knots[hi] - y_knots[lo])
     end
 end
 
-#=function fill_nan!(aos::A, opacities::OpacityTable...) where {A<:AxedEoS}
-    eos = aos.eos
-    
-    x_density = DensityAxis(aos).values
-    x_energy  = EnergyAxis(aos).values
-    main_var = getfield(eos, dependent_energy_variable(aos))
-    fallback_val = 1.0f-30
+"""
+    _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y; is_log, fallback)
 
-    for j in eachindex(x_density)
-        repair_line!(view(main_var, :, j),   x_energy, fallback=fallback_val)
-        repair_line!(view(eos.lnPg, :, j),   x_energy, fallback=fallback_val)
-        repair_line!(view(eos.lnNe, :, j),   x_energy, fallback=fallback_val)
-        repair_line!(view(eos.lnRoss, :, j), x_energy, fallback=fallback_val)
+Interpolate NaN/Inf values in `y_slice` using the coordinate array `x_coords`.
+Operates in-place with pre-allocated buffers (`buf_x`, `buf_y`) to avoid allocations.
+If `is_log=true`, the data is interpolated in log space (input/output stays linear).
+Returns `true` if any NaN/Inf was found (and `row_mask` is filled accordingly).
+"""
+function _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y;
+                           is_log=false, fallback=1.0f-30)
+    # Detect NaN/Inf (and non-positive values when working in log space)
+    @inbounds for i in eachindex(y_slice)
+        if is_log
+            row_mask[i] = nan_or_inf(y_slice[i]) || y_slice[i] <= 0
+        else
+            row_mask[i] = nan_or_inf(y_slice[i])
+        end
+    end
+    n_bad = count(row_mask)
+    n_bad == 0 && return false
 
-        for opa in opacities
-            repair_line!(view(opa.κ_ross, :, j), x_energy, is_log=true, fallback=fallback_val)
-            @inbounds for k in eachindex(opa.λ)
-                repair_line!(view(opa.κ, :, j, k),   x_energy, is_log=true, fallback=fallback_val)
-                repair_line!(view(opa.src, :, j, k), x_energy, is_log=true, fallback=fallback_val)
+    n_good = length(row_mask) - n_bad
+    if n_good >= 2
+        # Pack good points into pre-allocated buffers
+        k = 0
+        @inbounds for i in eachindex(x_coords)
+            if !row_mask[i]
+                k += 1
+                buf_x[k] = x_coords[i]
+                buf_y[k] = is_log ? log(y_slice[i]) : y_slice[i]
+            end
+        end
+
+        @inbounds for i in eachindex(x_coords)
+            if row_mask[i]
+                val = _lerp_flat(buf_x, buf_y, k, x_coords[i])
+                y_slice[i] = is_log ? exp(val) : val
+            end
+        end
+    else
+        # Too few good points — use fallback
+        @inbounds for i in eachindex(y_slice)
+            if row_mask[i]
+                y_slice[i] = fallback
+            end
+        end
+    end
+    return true
+end
+
+"""
+    fill_nan!(aos, opacities...; fallback=1.0f-30)
+
+Repair NaN/Inf values in the EoS and opacity tables by linear interpolation.
+Two passes are performed:
+  1. At constant ρ (column), interpolate across the energy/T axis — primary direction.
+  2. At constant T (row), interpolate across log ρ — fallback for points that
+     could not be repaired in pass 1 (fewer than 2 good neighbours in T).
+
+Returns a `Matrix{Bool}` of size `(nE, nρ)` that is `true` at every `(T, ρ)` grid
+point where *any* field originally contained NaN or Inf.
+"""
+function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {A<:AxedEoS}
+    eos   = aos.eos
+    x_rho = DensityAxis(aos).values     
+    x_e   = EnergyAxis(aos).values      
+    nE    = length(x_e)
+    nρ    = length(x_rho)
+
+    nan_mask = falses(nE, nρ)           
+    var      = getfield(eos, dependent_energy_variable(aos))
+    lfallback = log(fallback)
+
+    has_opacities = length(opacities) > 0
+
+    # Pass 1: constant ρ, interpolate across T/energy axis
+    col_mask = Vector{Bool}(undef, nE)
+    buf_xe   = similar(x_e)
+    buf_ye   = similar(x_e)
+
+    @inbounds for j in 1:nρ
+        for field in (view(var, :, j), view(eos.lnPg, :, j),
+                      view(eos.lnNe, :, j), view(eos.lnRoss, :, j))
+            had = _interpolate_at!(field, x_e, col_mask, buf_xe, buf_ye;
+                                    is_log=false, fallback=lfallback)
+            had && (view(nan_mask, :, j) .|= col_mask)
+        end
+
+        if has_opacities
+            for opa in opacities
+                had = _interpolate_at!(view(opa.κ_ross, :, j), x_e, col_mask,
+                                       buf_xe, buf_ye; is_log=true, fallback=fallback)
+                had && (view(nan_mask, :, j) .|= col_mask)
+
+                @inbounds for k in eachindex(opa.λ)
+                    had = _interpolate_at!(view(opa.κ, :, j, k), x_e, col_mask,
+                                           buf_xe, buf_ye; is_log=true, fallback=fallback)
+                    had && (view(nan_mask, :, j) .|= col_mask)
+
+                    if size(opa.src) != (1, 1, 1)
+                        had = _interpolate_at!(view(opa.src, :, j, k), x_e, col_mask,
+                                               buf_xe, buf_ye; is_log=true, fallback=fallback)
+                        had && (view(nan_mask, :, j) .|= col_mask)
+                    end
+                end
             end
         end
     end
 
-    #=for i in eachindex(x_energy)
-        repair_line!(view(main_var, i, :),   x_density)
-        repair_line!(view(eos.lnPg, i, :),   x_density)
-        repair_line!(view(eos.lnNe, i, :),   x_density)
-        #repair_line!(view(eos.lnRoss, i, :), x_density)
+    # Pass 2: constant T, interpolate across ρ (fallback)
+    row_mask = Vector{Bool}(undef, nρ)
+    buf_x    = similar(x_rho)
+    buf_y    = similar(x_rho)
 
-        for opa in opacities
-            #repair_line!(view(opa.κ_ross, i, :), x_density, is_log=true)
-            @inbounds for k in eachindex(opa.λ)
-                #repair_line!(view(opa.κ, i, :, k),   x_density, is_log=true)
-                repair_line!(view(opa.src, i, :, k), x_density, is_log=true)
+    @inbounds for i in 1:nE
+        for field in (view(var, i, :), view(eos.lnPg, i, :),
+                      view(eos.lnNe, i, :), view(eos.lnRoss, i, :))
+            _interpolate_at!(field, x_rho, row_mask, buf_x, buf_y;
+                              is_log=false, fallback=lfallback)
+        end
+
+        if has_opacities
+            for opa in opacities
+                _interpolate_at!(view(opa.κ_ross, i, :), x_rho, row_mask,
+                                  buf_x, buf_y; is_log=true, fallback=fallback)
+
+                @inbounds for k in eachindex(opa.λ)
+                    _interpolate_at!(view(opa.κ, i, :, k), x_rho, row_mask,
+                                      buf_x, buf_y; is_log=true, fallback=fallback)
+
+                    if size(opa.src) != (1, 1, 1)
+                        _interpolate_at!(view(opa.src, i, :, k), x_rho, row_mask,
+                                          buf_x, buf_y; is_log=true, fallback=fallback)
+                    end
+                end
             end
         end
-    end=#
-end=#
+    end
+
+    return Base.convert(Array{Bool, 2}, nan_mask)
+end
+
+fill_nan!(eos::RegularEoSTable, args...; kwargs...) = fill_nan!(AxedEoS(eos), args...; kwargs...)
 
 
 
