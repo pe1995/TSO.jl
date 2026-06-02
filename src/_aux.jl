@@ -264,7 +264,7 @@ function reload(s::Type{S}, path::String; mmap=false, additional_data=false) whe
 
     close(fid)
 
-    isempty(add_dat) ? s(fvals...) : (s(fvals...), add_dat)
+    additional_data ? (s(fvals...), add_dat) : s(fvals...)
 end
 
 reload(path::String; mmap=false, kwargs...) = begin
