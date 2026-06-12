@@ -101,7 +101,7 @@ function _get_opacity_lazy(run, from)
 	end
 	T = dtype_str == "float64" ? Float64 : Float32
 
-	tmpfile = tempname(pwd()) * ".bin"
+	tmpfile = tempname(pwd(), suffix=".bin")
 	
 	# The original array has shape (N_lam, N_T, N_rho)
 	# The output needs to be permuted to (N_T, N_rho, N_lam)
@@ -255,7 +255,7 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
     S = if mini
         fill!(similar(pg, 1, 1, 1), 1.0)
     elseif mmap
-        tmpfile_S = tempname(pwd()) * ".bin"
+        tmpfile_S = tempname(pwd(), suffix=".bin")
         S = Mmap.mmap(open(tmpfile_S, "w+"), Array{eltype(chi), ndims(chi)}, size(chi))
         fill!(S, 1.0)
 		S
