@@ -48,6 +48,10 @@ export opacity, wavelength, extended, sample, sample!, weights, table
 ## Aux
 export save, reload, meshgrid
 
+## Table Info
+export TableInfo, has_table_info, find_table_info, matches
+export composition_to_string
+
 ## Binning 
 export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning, DensityBinning, ClusterBinning
 export binning
@@ -90,6 +94,7 @@ const generalTimer = TimerOutput()
 
 #= Source files =#
 include("_aux.jl")
+include("_eos_info.jl")
 include("_communication.jl")
 include("_tables.jl")
 include("_mini_eos.jl")
