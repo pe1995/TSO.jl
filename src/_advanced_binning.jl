@@ -23,6 +23,10 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     T_type  = eltype(eos.lnRho)
 
     # Allocate required arrays locally
+    ϵ_table       = zeros(T_type, AxBins, rhoBins, radBins)
+    opacity_table = zeros(T_type, AxBins, rhoBins, radBins)
+    S_table       = zeros(T_type, AxBins, rhoBins, radBins)
+
     χBox   = zeros(T_type, AxBins, rhoBins, radBins)
     χRBox  = zeros(T_type, AxBins, rhoBins, radBins)
     κ_ross = zeros(T_type, AxBins, rhoBins, radBins)
@@ -78,12 +82,10 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
         wthin_l, T_type(1.0) .- wthin_l
     end
 
-    opacity_table = wthin .* κBox .+ wthick .* κ_ross     
-    ϵ_table = @. ifelse(χBox > 1e-30, κBox / χBox, 1.0)
-    S_table = SBox 
-
+    @. opacity_table = wthin .* κBox .+ wthick .* κ_ross     
+    @. ϵ_table = ifelse(χBox > 1e-30, κBox / χBox, 1.0)
+    @. S_table = max(SBox, T_type(1e-30))
     @. opacity_table = max(opacity_table, T_type(1e-30))
-    @. S_table = max(S_table, T_type(1e-30))
 
     return BinnedOpacities(
         SqOpacity(
