@@ -577,6 +577,12 @@ function reverse_adiabatic_extrapolation(model, rho_bottom, T_bottom, eos; τbot
 		tau_top[] = minimum(log10.(τ)) 
 	end
 	ao = @optical a[] eos
+	
+	if log(rho_bottom) <= maximum(model_opt_cut.lnρ)
+		@warn "Predicted bottom density (logρ=$(log(rho_bottom))) is lower than current model maximum density ($(maximum(model_opt_cut.lnρ))). Skipping reverse extrapolation."
+		return model_opt_cut
+	end
+
 	a = flip(
 		cut(
 			flip(ao, depth=true), 
