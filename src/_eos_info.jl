@@ -176,6 +176,7 @@ function save(info::TableInfo, directory::String)
     # Merge extras (extras cannot overwrite core keys)
     for (k, v) in info.extras
         k in _TABLE_INFO_CORE_KEYS && continue
+        isnothing(v) && continue
         data[k] = v
     end
 
