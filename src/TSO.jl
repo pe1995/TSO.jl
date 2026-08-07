@@ -40,6 +40,7 @@ abstract type AbstractRadiationField end
 ## Tables
 export OpacityTable, EoSTable, SqOpacity, SqEoS
 export for_dispatch
+export for_dispatch_T
 export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
 ## fast lookup and extended tables interfac

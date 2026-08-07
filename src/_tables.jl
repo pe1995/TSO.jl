@@ -720,6 +720,37 @@ function for_dispatch(eos::EoSTable, χ, S, ϵ, folder::String; name="")
     tabparam(eos, size(χ, 3), folder, eos_file="eostable$(name).dat", opacity_file="rhoei_radtab$(name).dat", tabparam_file="tabparam$(name).in")
 end
 
+"""
+Write the NATIVE rho-T binned opacity (κ) and source (S) in DISPATCH format, for the
+`square_gas_T` EOS variant. Companion to `for_dispatch`, but on the temperature grid:
+only the opacity/source radiation table (`rhoei_radtab_T.dat`) and its `tabparam_T.in`
+are written — NO `eostable_T.dat`, because `square_gas_T` obtains all thermodynamics
+(T, pg, ne, ross, gamma) from the standard rho-E `eostable.dat` and looks up κ/S on this
+rho-T table using that T. `eos` here is the native rho-T table (`aos.eos`): `eos.lnT`
+is the 1-D temperature axis and `size(eos.lnPg) == (nT, nRho)`, so `tabparam` auto-fills
+the "Ei" namelist slots with the log-T extrema (nEiBin=nT, EiMin/EiMax=Tmin/Tmax).
+"""
+function for_dispatch_T(eos::EoSTable, χ, S, ϵ, folder::String; name="_T")
+    !isdir(folder) && mkdir(folder)
+
+    # The Fortran square_gas_T reader indexes the T axis with a uniform (x-min)/stp+1
+    # formula, so the native log-T grid MUST be uniform. Fail loudly at generation time
+    # rather than silently emit a table the Fortran side will misread.
+    eax = EnergyAxis(eos)
+    if !eax.is_uniform
+        error("for_dispatch_T: temperature axis ($(eax.name)) is not uniform in log; " *
+              "the DISPATCH square_gas_T reader assumes a uniform log-T grid.")
+    end
+
+    f = FortranFile(joinpath(folder, "rhoei_radtab$(name).dat"), "w", access="direct", recl=prod(size(S))*4)
+    FortranFiles.write(f, rec=1, log.(ϵ))
+    FortranFiles.write(f, rec=2, log.(S))
+    FortranFiles.write(f, rec=3, log.(χ))
+    close(f)
+
+    tabparam(eos, size(χ, 3), folder, eos_file="eostable$(name).dat", opacity_file="rhoei_radtab$(name).dat", tabparam_file="tabparam$(name).in")
+end
+
 for_dispatch(eos::EoSTable, opacities::OpacityTable, folder::String; name="") = begin
     eos_table_name = folder
 

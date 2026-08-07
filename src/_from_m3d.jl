@@ -76,7 +76,8 @@ function _get_opacity(run, from)
 	)
 
 	chi  = chi[:, :, :] 
-	l = Base.convert.(eltype(chi), reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
+	#l = Base.convert.(eltype(chi), reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
+	l = Base.convert.(eltype(chi), pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64)))
 	if !issorted(l)
 		@warn "Wavelength array appears to be not sorted. This may indicate a bug."
 		m = sortperm(l)
@@ -250,8 +251,24 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 		nothing, nothing
 	end
 
+	assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=compute_ross, mini=mini, mmap=mmap)
+end
+
+"""
+    assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
+
+Build the `SqEoS` + `SqOpacity` tables from raw EoS quantities and opacity cubes,
+regardless of their origin (a dispatch run via [`collect_opacity`] or the
+standalone HOP engine via [`compute_eos_HOP`]).
+
+Layout follows `get_eos`/`get_opacity`: `rho` (log, `nρ`), `temp` (log, `nT`),
+`E`/`pg`/`ne`/`χ500` (log, `nT×nρ`), `l` the wavelength axis, and `chi`/`scat` the
+opacity cubes `nT×nρ×nλ` (`scat` may be `nothing`). The element type of `chi`,
+`pg` and `l` must agree — `κ`, `κ_ross` and `src` share a single element type.
+"""
+function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
 	ross = fill!(similar(pg), 1.0)
-    
+
     S = if mini
         fill!(similar(pg, 1, 1, 1), 1.0)
     elseif mmap
@@ -284,17 +301,9 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 		nothing
 	end
 
-	# add scattering opacity to normal opacity
-	#if !isnothing(scat)
-	#	@info "Adding scattering opacity to absorption."
-	#	add_opacities!(chi, scat)
-	#end
-
-	#@info "⏳ Interpolating NaN."
 	nan_mask_ross = fill_nan!(aos, chi, scat)
 	nan_mask_500 = fill_nan!(aos500)
 
-	#@info "⏳ Limit the opacity."
 	set_limits!(aos, chi, small=1e-30, large=1e30)
 	set_limits!(aos, scat, small=1e-30, large=1e30)
 	set_limits!(aos500, small=1e-30, large=1e30)
@@ -318,7 +327,6 @@ function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)
 	end
 
 	if compute_ross
-		#@info "⏳ Computing table Rosseland opacity."
 		rosseland_opacity!(eos.lnRoss, @axed(eos), opa)
 		transfer_rosseland!(@axed(eos), opa)
 		if !isnothing(scat)
