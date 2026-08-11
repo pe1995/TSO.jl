@@ -89,7 +89,7 @@ end
 
 function extended_lookup(eos, opa::ExtendedOpacity, what, density_var, energy_var, args...)
     if what in fieldnames(RegularOpacityTable)
-        lookup(eos, opa, what, density_var, energy_var)
+        lookup(eos, opacity(opa), what, density_var, energy_var)
 	elseif what in keys(opa.extensions)
 		second_axis = EnergyAxis(eos).unirange
         rho_axis    = DensityAxis(eos).unirange
@@ -104,6 +104,7 @@ end
 lookup(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = lookup(eos.eos, opa, args...; kwargs...)
 lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
 lookup(eos, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos, opa, args...; kwargs...)
+lookup(eos::ExtendedEoS, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos.eos, opa, args...; kwargs...)
 
 # ============================================================================
 # Bilinear interpolation coefficients
@@ -128,6 +129,20 @@ weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray) = begin
     coefs_Rho = weights_axis(lnrho, grid_Rho)
     
     return coefs_Rho, coefs_T
+end
+
+weights(eos::RegularEoSTable, args...; kwargs...) = weights(extended(eos), args...; kwargs...)
+weights(eos::AxedEoS, args...; kwargs...) = weights(extended(eos), args...; kwargs...)
+
+"""
+    weights(eos; coordinates...)
+
+Keyword version, accepting the same named (and possibly linear) coordinates as [`sample`](@ref),
+e.g. `weights(eos, rho=rho, T=T)`.
+"""
+weights(eos::ExtendedEoS; kwargs...) = begin
+    given, _ = _coord_kwargs(kwargs)
+    weights(eos, _grid_coords(eos, given)...)
 end
 
 weights_axis(x, grid) = begin
@@ -178,11 +193,11 @@ sample(eos::RegularEoSTable, args...; kwargs...) =  sample(extended(eos), args..
 sample(eos::AxedEoS, args...; kwargs...) = sample(extended(eos), args...; kwargs...)
 sample(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample(eos, extended(opa), args...; kwargs...)
 
-sample(eos::ExtendedEoS, variables, coord1::Number, coord2::Number, args...) = begin
+sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...) = begin
     res = sample(eos, variables, [coord1], [coord2], args...)
     return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
 end
-sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables, coord1::Number, coord2::Number, args...) = begin
+sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...) = begin
     res = sample(eos, opa, variables, [coord1], [coord2], args...)
     return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
 end
@@ -190,9 +205,9 @@ end
 function sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...) where {T<:AbstractFloat}
     lnrho = coord1
     lnT   = coord2
-    
-    results = map(var -> similar(lnrho, eltype(lnrho)), variables)
-    
+
+    results = _allocate_results(eos, variables, lnrho)
+
     sample!(results, eos, variables, lnrho, lnT, args...)
     results
 end
@@ -201,7 +216,19 @@ function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, 
     lnrho = coord1
     lnT   = coord2
 
-    results = map(variables) do var
+    results = _allocate_results(eos, opa, variables, lnrho, args...)
+    sample!(results, eos, opa, variables, lnrho, lnT, args...)
+    results
+end
+
+"""
+Allocate the output containers matching `variables`, the shape of the coordinates and,
+for 3D opacity arrays, the requested wavelength slice.
+"""
+_allocate_results(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, lnrho) = map(var -> similar(lnrho, eltype(lnrho)), variables)
+
+function _allocate_results(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, lnrho, args...)
+    map(variables) do var
         if var == :lnRho || (var == energy_variable(eos.eos))
             similar(lnrho, eltype(lnrho))
         else
@@ -222,8 +249,6 @@ function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, 
             end
         end
     end
-    sample!(results, eos, opa, variables, lnrho, lnT, args...)
-    results
 end
 
 sample!(results::Union{Tuple, AbstractArray}, eos::RegularEoSTable, args...; kwargs...) = sample!(results, extended(eos), args...; kwargs...)
@@ -295,6 +320,161 @@ function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::Ex
     end
     
     return results
+end
+
+# ============================================================================
+# Keyword interface -- name the coordinates instead of ordering them
+# ============================================================================
+
+"""
+Mapping of accepted coordinate keywords to the log-quantity they represent.
+Keywords that do not start with `ln` are converted to their logarithm automatically.
+"""
+const COORDINATE_KWARGS = Dict(
+    :lnRho => :lnRho, :rho => :lnRho, :Rho => :lnRho, :ρ => :lnRho,
+    :lnT   => :lnT,   :T   => :lnT,
+    :lnEi  => :lnEi,  :Ei  => :lnEi,
+    :lnPg  => :lnPg,  :Pg  => :lnPg
+)
+
+_needs_log(name::Symbol) = !startswith(String(name), "ln")
+
+sample(eos::ExtendedEoS, variables::Symbol...; kwargs...) = begin
+    res = _sample_kwargs(eos, nothing, variables; kwargs...)
+    length(variables) == 1 ? first(res) : res
+end
+sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Symbol...; kwargs...) = begin
+    res = _sample_kwargs(eos, opa, variables; kwargs...)
+    length(variables) == 1 ? first(res) : res
+end
+
+sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs(eos, nothing, variables; kwargs...)
+sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs(eos, opa, variables; kwargs...)
+
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Symbol...; kwargs...) = _sample_kwargs!(results, eos, nothing, variables; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Symbol...; kwargs...) = _sample_kwargs!(results, eos, opa, variables; kwargs...)
+
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, nothing, variables; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, opa, variables; kwargs...)
+
+"""
+    _sample_kwargs(eos, opa_or_nothing, variables; coordinates..., [k])
+
+Backend of the keyword interface. The named coordinates are converted to the grid
+coordinates (`lnRho`, energy axis) of the table -- inverting the table where necessary --
+after which the regular weight based machinery is used.
+"""
+function _sample_kwargs(eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, kwargs...)
+    _check_wavelength_index(opa, k)
+    cRho, cT, scalar = _resolve_coefs(eos, coefs_Rho, coefs_T; kwargs...)
+    kargs = isnothing(k) ? () : (k,)
+
+    template = similar(cRho, _coef_eltype(cRho))
+    results = isnothing(opa) ? _allocate_results(eos, variables, template) : _allocate_results(eos, opa, variables, template, kargs...)
+    if isnothing(opa)
+        sample!(results, eos, variables, cRho, cT)
+    else
+        sample!(results, eos, opa, variables, cRho, cT, kargs...)
+    end
+
+    scalar ? map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), results) : results
+end
+
+"""
+    _sample_kwargs!(results, eos, opa_or_nothing, variables; coordinates..., [k])
+
+Backend of the mutating keyword interface. See [`_sample_kwargs`](@ref). Instead of
+coordinates, the precomputed weights may be passed as `coefs_Rho` + `coefs_T`, which is
+the allocation free way of repeatedly evaluating the tables on a fixed set of points.
+"""
+function _sample_kwargs!(results, eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, kwargs...)
+    _check_wavelength_index(opa, k)
+    cRho, cT, _ = _resolve_coefs(eos, coefs_Rho, coefs_T; kwargs...)
+
+    if isnothing(opa)
+        sample!(results, eos, variables, cRho, cT)
+    else
+        isnothing(k) ? sample!(results, eos, opa, variables, cRho, cT) : sample!(results, eos, opa, variables, cRho, cT, k)
+    end
+
+    results
+end
+
+_check_wavelength_index(opa, k) = (isnothing(opa) && !isnothing(k)) && error("The wavelength index `k` needs an opacity table, the EoS alone has no wavelength axis.")
+_coef_eltype(coefs::AbstractArray{InterpCoefs{T}}) where {T<:AbstractFloat} = T
+
+"""
+Either take the interpolation weights as they are given, or build them from the named coordinates.
+Also returns whether all coordinates were scalars.
+"""
+function _resolve_coefs(eos::ExtendedEoS, coefs_Rho, coefs_T; kwargs...)
+    if !isnothing(coefs_Rho) || !isnothing(coefs_T)
+        (isnothing(coefs_Rho) || isnothing(coefs_T)) && error("Precomputed weights need both `coefs_Rho` and `coefs_T`.")
+        isempty(kwargs) || error("Got coordinates $(Tuple(keys(kwargs))) together with precomputed weights, give either one or the other.")
+        return coefs_Rho, coefs_T, false
+    end
+
+    given, scalar = _coord_kwargs(kwargs)
+    lnrho, lnT = _grid_coords(eos, given)
+    cRho, cT = weights(eos, lnrho, lnT)
+
+    cRho, cT, scalar
+end
+
+"""
+Collect the coordinate keywords, convert them to logarithms where needed and bring them
+to a common shape + element type. Returns the coordinates and whether all of them were scalars.
+"""
+function _coord_kwargs(kwargs)
+    given = Dict{Symbol, Any}()
+    for (name, value) in kwargs
+        haskey(COORDINATE_KWARGS, name) || error("Unknown coordinate keyword `$name`. Available: $(join(sort(String.(collect(keys(COORDINATE_KWARGS)))), ", ")).")
+        var = COORDINATE_KWARGS[name]
+        haskey(given, var) && error("Coordinate $var was given more than once (via `$name`).")
+        given[var] = _needs_log(name) ? log.(value) : value
+    end
+    isempty(given) && error("No coordinates given. Available: $(join(sort(String.(collect(keys(COORDINATE_KWARGS)))), ", ")).")
+
+    scalar = all(v isa Number for v in values(given))
+    T = float(mapreduce(eltype, promote_type, values(given)))
+    shape = scalar ? (1,) : size(first(v for v in values(given) if !(v isa Number)))
+
+    for (var, value) in given
+        given[var] = if value isa Number
+            Base.fill(Base.convert(T, value), shape)
+        else
+            size(value) == shape || error("Coordinate $var has size $(size(value)), expected $shape.")
+            Base.convert(Array{T}, value)
+        end
+    end
+
+    given, scalar
+end
+
+"""
+Convert whatever coordinates were given into the (density, energy) grid axes of the table.
+"""
+function _grid_coords(eos::ExtendedEoS, given)
+    grid_energy_var = energy_variable(eos.eos)
+    dependent_energy_var = dependent_energy_variable(eos.eos)
+
+    lnrho = get(given, :lnRho, nothing)
+    lnT = get(given, grid_energy_var, nothing)
+
+    # Whatever is missing has to be inverted from the table
+    if isnothing(lnrho) && !isnothing(lnT) && haskey(given, :lnPg)
+        lnrho = _invert(eos, :lnRho, :lnPg, given[:lnPg], lnT)
+    end
+    if isnothing(lnT) && !isnothing(lnrho) && haskey(given, dependent_energy_var)
+        lnT = _invert(eos, grid_energy_var, dependent_energy_var, given[dependent_energy_var], lnrho)
+    end
+
+    if isnothing(lnrho) || isnothing(lnT)
+        error("Can not construct (:lnRho, $(grid_energy_var)) from the given coordinates $(Tuple(keys(given))). "*
+              "Give one of (lnRho, rho, ρ) or (lnPg, Pg), together with one of ($(grid_energy_var), $(dependent_energy_var)) or their linear counterparts.")
+    end
+
+    lnrho, lnT
 end
 
 # ============================================================================
@@ -570,11 +750,17 @@ end
 """
     sample!(results, eos, opa, variables, lnrho, lnT, [k])
     sample!(results, eos, opa, variables, coefs_Rho, coefs_T, [k])
+    sample!(results, eos, [opa], variables...; coordinates..., [k=k])
+    sample!(results, eos, [opa], variables...; coefs_Rho=w_Rho, coefs_T=w_T, [k=k])
 
 In-place, mutating version of `sample`.
 
-This function is optimized for repeatedly evaluating tables without memory allocations. 
+This function is optimized for repeatedly evaluating tables without memory allocations.
 By manually passing the precomputed interpolation weights, you avoid binary tree search grid lookups entirely!
+
+The keyword form accepts the same named coordinates as [`sample`](@ref), or -- for the
+allocation free loop -- the precomputed weights as `coefs_Rho` + `coefs_T`. Coordinates and
+weights are mutually exclusive.
 
 # Examples
 ```julia
@@ -582,12 +768,17 @@ By manually passing the precomputed interpolation weights, you avoid binary tree
 results = (similar(lnrho), similar(lnrho))
 
 # 2) Pre-compute interpolation coefficients for a fixed grid of coordinates
-w_Rho, w_T = weights(eos, lnrho, lnT)
+w_Rho, w_T = weights(eos, lnrho, lnT)   # or: weights(eos, rho=rho, T=T)
 
 # 3) Repeatedly evaluate over different wavelength slices without any allocations or indexing algorithms!
 for k in 1:100
     sample!(results, eos, opa, (:κ, :src), w_Rho, w_T, k)
     # ... use results[1] and results[2] matrix blocks
+end
+
+# The same loop with named arguments
+for k in 1:100
+    sample!(results, eos, opa, :κ, :src, coefs_Rho=w_Rho, coefs_T=w_T, k=k)
 end
 ```
 """
@@ -595,15 +786,26 @@ sample!
 
 """
     sample(eos, opa, variables, lnrho, lnT, [k])
+    sample(eos, [opa], variables...; coordinates..., [k=k])
 
 Perform highly optimized interpolation on extended EOS and opacity tables.
 
 # Arguments
 - `eos`: An `ExtendedEoS` table.
 - `opa`: An `ExtendedOpacity` table.
-- `variables`: A collection (e.g., `Tuple` or `AbstractArray`) of symbols measuring what to interpolate (e.g., `[:κ, :κ_ross]`).
+- `variables`: A collection (e.g., `Tuple` or `AbstractArray`) of symbols measuring what to interpolate (e.g., `[:κ, :κ_ross]`). In the keyword form the variables may also be passed as plain arguments (e.g. `:κ, :κ_ross`).
 - `lnrho`, `lnT`: Logarithm values of the density and temperature. Can be a scalar `Number` or an `AbstractArray{<:AbstractFloat}`.
 - `k` (optional): An `Integer` index or `AbstractUnitRange` of indices to slice the 3rd dimension (e.g., wavelength) of 3D opacity arrays. If omitted, interpolates all wavelengths.
+
+# Coordinate keywords
+Instead of relying on the (variable dependent) order of `coord1, coord2`, the coordinates may
+be named: `lnRho`, `lnT`, `lnEi`, `lnPg`, or their linear counterparts `rho` (`ρ`), `T`, `Ei`, `Pg`,
+which are converted to their logarithm automatically. Any pair that pins down the two grid axes
+of the table works, whatever is missing is inverted from the table, e.g. giving `lnPg` + `lnT`
+inverts for the density. Because the coordinates are named, a variable that is both requested
+and given (e.g. `sample(eos, :lnPg, :lnT, lnRho=..., lnT=...)`) is simply passed through.
+Scalars and arrays may be mixed, a scalar is then broadcast to the shape of the array.
+When exactly one variable is requested as a plain argument, its result is returned unwrapped.
 
 # Examples
 ```julia
@@ -615,6 +817,11 @@ Perform highly optimized interpolation on extended EOS and opacity tables.
 
 # Array lookup sliced over a wavelength chunk
 κ_slice, = sample(eos, opa, [:κ], lnrho_array, lnt_array, 1:50)
+
+# The same, with named coordinates
+lnPg = sample(eos, :lnPg, lnRho=lnrho_array, lnT=lnt_array)
+lnPg, lnNe = sample(eos, :lnPg, :lnNe, rho=rho_array, T=T_array)
+κ_slice = sample(eos, opa, :κ, lnRho=lnrho_array, lnT=lnt_array, k=1:50)
 ```
 """
 sample

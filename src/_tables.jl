@@ -698,7 +698,7 @@ tabparam(eos::EoSTable, nradbins, folder::String; eos_file="eostable.dat", opaci
 """
 Write the EoS + binned opacities in the same format as in Tabgen, so that it can be read by dispatch.
 """
-function for_dispatch(eos::EoSTable, χ, S, ϵ, folder::String; name="")
+function for_dispatch(eos::EoSTable, χ::AbstractArray, S::AbstractArray, ϵ::AbstractArray, folder::String; name="")
     !isdir(folder) && mkdir(folder) 
 
     f = FortranFile(joinpath(folder, "rhoei_radtab$(name).dat"), "w", access="direct", recl=prod(size(S))*4)
