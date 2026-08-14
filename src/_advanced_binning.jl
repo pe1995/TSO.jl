@@ -269,6 +269,179 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
 end
 
 # ============================================================================
+# Pre-planned 1D binning
+# ============================================================================
+
+"""
+    Binning1DPlan{T}
+
+The part of [`advanced_binning_1d_quick`](@ref) that does not depend on the bin
+assignment: the Planck functions, `1/κ` and `κ - κ_scat`. Only `W_assign`
+changes during a binning optimization, so these are evaluated once and each call
+is left with a weighted sum over wavelength.
+
+Each field is an `Nz × nlambda` matrix with the wavelength weight `w_k` folded
+into the quantity that gets accumulated:
+
+  - `Aχ`  : `w_k · B_λ · κ`          → `χBox`
+  - `AχR` : `w_k · dB/dT · 1/κ`      → `χRBox`
+  - `AS`  : `w_k · src`              → `SBox`
+  - `AB`  : `w_k · B_λ`              → Planck normalization
+  - `AdB` : `w_k · dB/dT`            → Rosseland normalization
+  - `Aκ`  : `w_k · B_λ · (κ - κ_scat)` → `κBox`
+
+Build with [`binning_1d_plan`](@ref).
+"""
+struct Binning1DPlan{T<:AbstractFloat}
+    Aχ::Matrix{T}
+    AχR::Matrix{T}
+    AS::Matrix{T}
+    AB::Matrix{T}
+    AdB::Matrix{T}
+    Aκ::Matrix{T}
+    ρ::Vector{T}
+    Pg::Vector{T}
+end
+
+Base.size(p::Binning1DPlan) = size(p.Aχ)          # (Nz, nlambda)
+
+"""
+    binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d; kwargs...)
+
+Build a [`Binning1DPlan`](@ref). Arguments are those of
+[`advanced_binning_1d_quick`](@ref) without `W_assign`.
+"""
+function binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
+                         κ_scat_1d=nothing, corr_χ_1d=nothing, corr_S_1d=nothing)
+    T_type  = eltype(κ_1d)
+    Nz      = length(ρ_1d)
+    nlambda = length(λ)
+
+    Aχ  = Matrix{T_type}(undef, Nz, nlambda)
+    AχR = Matrix{T_type}(undef, Nz, nlambda)
+    AS  = Matrix{T_type}(undef, Nz, nlambda)
+    AB  = Matrix{T_type}(undef, Nz, nlambda)
+    AdB = Matrix{T_type}(undef, Nz, nlambda)
+    Aκ  = Matrix{T_type}(undef, Nz, nlambda)
+
+    @inbounds for k in 1:nlambda
+        w_k = T_type(weights[k])
+        λ_k = λ[k]
+
+        @fastmath @simd for j in 1:Nz
+            bnC  = T_type(Bλ_fast(λ_k, Temp_1d[j]))
+            dbnC = T_type(dBdTλ_fast(λ_k, Temp_1d[j]))
+
+            c_χ = get_corr_val(corr_χ_1d, T_type, j, k)
+            c_S = get_corr_val(corr_S_1d, T_type, j, k)
+
+            κ_val = T_type(κ_1d[j, k]) * c_χ
+            inv_κ = ifelse(κ_val > 1e-30, T_type(1.0) / κ_val, T_type(0.0))
+            k_abs = T_type(get_abs_k(κ_1d, κ_scat_1d, j, k)) * c_χ
+
+            w_bnC  = w_k * bnC
+            w_dbnC = w_k * dbnC
+
+            Aχ[j, k]  = κ_val * w_bnC
+            AχR[j, k] = inv_κ * w_dbnC
+            AS[j, k]  = w_k * T_type(src_1d[j, k]) * c_S
+            AB[j, k]  = w_bnC
+            AdB[j, k] = w_dbnC
+            Aκ[j, k]  = k_abs * w_bnC
+        end
+    end
+
+    Binning1DPlan(Aχ, AχR, AS, AB, AdB, Aκ,
+                  Vector{T_type}(T_type.(ρ_1d)), Vector{T_type}(T_type.(Pg_1d)))
+end
+
+"""
+    advanced_binning_1d_quick(plan::Binning1DPlan, W_assign; logg=nothing)
+
+Same result as the full [`advanced_binning_1d_quick`](@ref), from a
+[`Binning1DPlan`](@ref) built beforehand for this atmosphere and opacity table.
+"""
+function advanced_binning_1d_quick(plan::Binning1DPlan{T_type}, W_assign::AbstractMatrix;
+                                   logg=nothing) where {T_type}
+    Nz, nlambda = size(plan)
+    radBins = size(W_assign, 2)
+
+    size(W_assign, 1) == nlambda ||
+        throw(DimensionMismatch("W_assign has $(size(W_assign, 1)) wavelengths, plan has $nlambda"))
+
+    χBox  = zeros(T_type, Nz, radBins)
+    χRBox = zeros(T_type, Nz, radBins)
+    κBox  = zeros(T_type, Nz, radBins)
+    SBox  = zeros(T_type, Nz, radBins)
+    B_norm  = zeros(T_type, Nz, radBins)
+    dB_norm = zeros(T_type, Nz, radBins)
+
+    Aχ, AχR, AS, AB, AdB, Aκ = plan.Aχ, plan.AχR, plan.AS, plan.AB, plan.AdB, plan.Aκ
+
+    @inbounds for k in 1:nlambda
+        for b in 1:radBins
+            frac = T_type(W_assign[k, b])
+
+            @turbo for j in 1:Nz
+                χBox[j, b]    += Aχ[j, k]  * frac
+                χRBox[j, b]   += AχR[j, k] * frac
+                SBox[j, b]    += AS[j, k]  * frac
+                B_norm[j, b]  += AB[j, k]  * frac
+                dB_norm[j, b] += AdB[j, k] * frac
+                κBox[j, b]    += Aκ[j, k]  * frac
+            end
+        end
+    end
+
+    ρ_1d, Pg_1d = plan.ρ, plan.Pg
+
+    @inbounds for b in 1:radBins
+        @turbo for j in 1:Nz
+            ρ_j = ρ_1d[j]
+            bn  = B_norm[j, b]
+            dbn = dB_norm[j, b]
+
+            χBox[j, b] = ifelse(bn > 1e-30, (χBox[j, b] / bn) * ρ_j, T_type(0.0))
+            κBox[j, b] = ifelse(bn > 1e-30, (κBox[j, b] / bn) * ρ_j, T_type(0.0))
+
+            χR_tmp = ifelse(dbn > 1e-30, χRBox[j, b] / dbn, T_type(0.0))
+            χRBox[j, b] = ifelse(χR_tmp > 1e-30, χR_tmp / ρ_j, T_type(0.0))
+        end
+    end
+
+    if isnothing(logg)
+        @inbounds @simd for i in eachindex(κBox)
+            χR_val = χRBox[i]
+            κ_ross = ifelse(χR_val > 1e-30, 1.0 / χR_val, T_type(0.0))
+
+            wthin   = exp(T_type(-1.5e7) * κ_ross)
+            κBox[i] = wthin * κBox[i] + (T_type(1.0) - wthin) * κ_ross
+        end
+    else
+        g = T_type(exp10(logg))
+
+        @inbounds for b in 1:radBins
+            @simd for z in 1:Nz
+                χR_val = χRBox[z, b]
+                κ_ross = ifelse(χR_val > 1e-30, 1.0 / χR_val, T_type(0.0))
+
+                τ_val  = (κ_ross * Pg_1d[z]) / (ρ_1d[z] * g)
+                wthin  = exp(T_type(-2.0) * τ_val)
+                wthick = T_type(1.0) - wthin
+
+                κBox[z, b] = wthin * κBox[z, b] + wthick * κ_ross
+            end
+        end
+    end
+
+    @. κBox = max(κBox, T_type(1e-30))
+    @. SBox = max(SBox, T_type(1e-30))
+
+    to3d(A) = reshape(A, 1, Nz, radBins)   # (1, Nz, radBins) layout, no copy
+    return (κBox=to3d(κBox), SBox=to3d(SBox), χBox=to3d(χBox), χRBox=to3d(χRBox))
+end
+
+# ============================================================================
 # Submission and collection of binning tasks
 # ============================================================================
 
