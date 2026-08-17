@@ -45,6 +45,7 @@ export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
 ## fast lookup and extended tables interfac
 export opacity, wavelength, extended, sample, sample!, weights, table
+export dispatch_eos_reader, dispatch_lookup_generator
 
 ## Aux
 export save, reload, meshgrid
@@ -113,6 +114,7 @@ include("_from_m3d.jl")
 include("_binning_execution.jl")
 include("_extend.jl")
 include("_extended_eos.jl")
+include("_dispatch_hooks.jl")
 
 
 #= List of timers =#

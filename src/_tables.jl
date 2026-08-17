@@ -696,6 +696,20 @@ end
 tabparam(eos::EoSTable, nradbins, folder::String; eos_file="eostable.dat", opacity_file="rhoei_radtab.dat", tabparam_file="tabparam.in") = tabparam(folder, eos_file, opacity_file, tabparam_file, size(eos.lnPg)..., nradbins, exp.(limits(eos))...)
 
 """
+    dispatch_axes(folder, lnRho, lnE; name="")
+
+Write the tabulated axes next to `eostable.dat` as `eosaxes\$(name).dat`, so the
+Fortran side can bracket-search them instead of assuming a uniform grid.
+"""
+function dispatch_axes(folder::String, lnRho, lnE; name="")
+    open(joinpath(folder, "eosaxes$(name).dat"), "w") do f
+        write(f, Int32(length(lnRho)), Int32(length(lnE)))
+        write(f, Float64.(collect(lnRho)))
+        write(f, Float64.(collect(lnE)))
+    end
+end
+
+"""
 Write the EoS + binned opacities in the same format as in Tabgen, so that it can be read by dispatch.
 """
 function for_dispatch(eos::EoSTable, χ::AbstractArray, S::AbstractArray, ϵ::AbstractArray, folder::String; name="")
@@ -716,6 +730,8 @@ function for_dispatch(eos::EoSTable, χ::AbstractArray, S::AbstractArray, ϵ::Ab
     f = FortranFile(joinpath(folder, "eostable$(name).dat"), "w", access="direct", recl=prod(size(eos.lnT))*4*4)
     FortranFiles.write(f, rec=1, eos_table)
     close(f)
+
+    dispatch_axes(folder, eos.lnRho, eos.lnEi, name=name)
 
     tabparam(eos, size(χ, 3), folder, eos_file="eostable$(name).dat", opacity_file="rhoei_radtab$(name).dat", tabparam_file="tabparam$(name).in")
 end
@@ -747,6 +763,8 @@ function for_dispatch_T(eos::EoSTable, χ, S, ϵ, folder::String; name="_T")
     FortranFiles.write(f, rec=2, log.(S))
     FortranFiles.write(f, rec=3, log.(χ))
     close(f)
+
+    dispatch_axes(folder, eos.lnRho, eos.lnT, name=name)
 
     tabparam(eos, size(χ, 3), folder, eos_file="eostable$(name).dat", opacity_file="rhoei_radtab$(name).dat", tabparam_file="tabparam$(name).in")
 end
@@ -785,6 +803,7 @@ function save_tables(aos, opa, eos_table_name, table_folder=nothing)
     !isdir(eos_table_name) && mkdir(eos_table_name) 
     mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
     mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
+    isfile("eosaxes.dat") && mv("eosaxes.dat", joinpath(eos_table_name, "eosaxes.dat"), force=true)
     mv("rhoei_radtab.dat",      joinpath(eos_table_name, "rhoei_radtab.dat"),      force=true)
     mv("binned_opacities.hdf5", joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
 
