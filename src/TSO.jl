@@ -44,7 +44,7 @@ export for_dispatch_T
 export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
 ## fast lookup and extended tables interfac
-export opacity, wavelength, extended, sample, sample!, weights, table
+export opacity, wavelength, extended, sample, sample!, weights, weights!, table
 export dispatch_eos_reader, dispatch_lookup_generator
 
 ## Aux

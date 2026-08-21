@@ -148,12 +148,43 @@ end
 weights_axis(x, grid) = begin
     T = eltype(x)
     coefs = Array{InterpCoefs{T}}(undef, size(x))
-    
+    weights_axis!(coefs, x, grid)
+end
+
+"""
+    weights_axis!(coefs, x, grid)
+
+In-place [`weights_axis`](@ref), writing into a caller-owned array.
+"""
+weights_axis!(coefs, x, grid) = begin
     @inbounds for j in eachindex(x)
         coefs[j] = linear_interpolation_weights(grid, x[j])
     end
     return coefs
 end
+
+"""
+    weights!(coefs_Rho, coefs_T, eos, lnrho, lnT)
+
+In-place [`weights`](@ref): fill caller-owned coefficient arrays instead of
+allocating new ones.
+
+For callers that evaluate the tables repeatedly on arrays of the same size -- a
+hydrodynamics solver sampling the equation of state once per cell per timestep,
+say -- where the two coefficient arrays would otherwise be allocated and
+discarded on every call.
+"""
+weights!(coefs_Rho::AbstractArray{InterpCoefs{T}}, coefs_T::AbstractArray{InterpCoefs{T}},
+         eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray) where {T<:AbstractFloat} = begin
+    weights_axis!(coefs_T, lnT, EnergyAxis(eos.eos).values)
+    weights_axis!(coefs_Rho, lnrho, DensityAxis(eos.eos).values)
+    return coefs_Rho, coefs_T
+end
+
+weights!(coefs_Rho, coefs_T, eos::RegularEoSTable, args...) =
+    weights!(coefs_Rho, coefs_T, extended(eos), args...)
+weights!(coefs_Rho, coefs_T, eos::AxedEoS, args...) =
+    weights!(coefs_Rho, coefs_T, extended(eos), args...)
 
 function linear_interpolation_weights(grid_nodes, val)
     #T = eltype(grid_nodes)
