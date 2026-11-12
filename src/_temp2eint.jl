@@ -2,20 +2,13 @@
 # Clean data-structure variants for T -> Ei conversion
 # ============================================================================
 
-"""
-    remap_T_to_E(aos::AxedEoS, opa::SqOpacity; kwargs...)
-
-Convert the given AxedEoS and SqOpacity from a Temperature grid to an Internal Energy grid structurally, without any file I/O.
-Returns the newly interpolated `(eosE, opaE)`.
-"""
 function remap_T_to_E(aos::AxedEoS, opa::SqOpacity;
-    upsample=1000, extend=false, 
-    downD=0.4, downE=0.1, upD=0.01, upE=0.01, 
+    upsample=1000, extend=false,
+    downD=0.4, downE=0.1, upD=0.01, upE=0.01,
     lnEimin=nothing, lnEimax=nothing)
 
     # possibly extrapolate EoS
     eos_new, opa_new = if extend
-        #@info "Extrapolating EoS beyond limits."
         TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
     else
         aos.eos, opa
@@ -48,17 +41,12 @@ function remap_T_to_E(aos::AxedEoS, opa::SqOpacity;
     limit_beyond!(eosE.lnNe, eos_new.lnNe)
     limit_beyond!(eosE.lnRoss, eos_new.lnRoss)
     limit_beyond!(eosE.lnT, eos_new.lnT)
-    
+
     TSO.fill_nan!(aosE, opaE)
-    
+
     return eosE, opaE
 end
 
-"""
-    get_e_limit(eos::SqEoS, model_lnEi::AbstractArray, lnEi_stretch=1.0)
-
-Extract the internal energy boundaries given an EoS and a stellar model's internal energy generically.
-"""
 function get_e_limit(eos::SqEoS, model_lnEi::AbstractArray, lnEi_stretch=1.0)
     lnEimin = minimum(model_lnEi)
     lnEimax = maximum(model_lnEi)
@@ -73,4 +61,9 @@ function get_e_limit(eos::SqEoS, model_lnEi::AbstractArray, lnEi_stretch=1.0)
     lnEimin = median(lnEi_min_curve)
 
     return (lnEimin, lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch)
+end
+
+function limit_beyond!(new_arr, old_arr; set_to=NaN)
+    m = (new_arr .> maximum(old_arr)) .|| (new_arr .< minimum(old_arr))
+    new_arr[m] .= set_to
 end

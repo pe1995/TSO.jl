@@ -1,19 +1,16 @@
-# =============================================================================
+# ============================================================================
 # EoS hooks for the MUST.jl snapshot conversion
-# =============================================================================
+# ============================================================================
 #
 # `MUST.snapshotBox` takes an
 # `eos_reader` + `lookup_generator` pair to use an EoS from outside instead:
 #
 #   MUST.snapshotBox(
 #       snap; folder=rundir,
-#       eos_reader=TSO.dispatch_eos_reader(eos_dir),
-#       lookup_generator=TSO.dispatch_lookup_generator
 #   )
 #
 # where `eos_dir` is the table directory the run's `table_loc` points at.
 #
-# =============================================================================
 
 const dispatch_eos_quantities = [:T, :kr, :Pg, :Ne]
 const dispatch_eos_variables = Dict(:T=>:lnT, :kr=>:lnRoss, :Pg=>:lnPg, :Ne=>:lnNe)

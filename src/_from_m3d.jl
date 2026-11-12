@@ -11,9 +11,9 @@ function eosTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3)
 
 	z = [-1.0, 1.0]
 	saveAsText(
-		joinpath(path, "TSO-M3D"), 
-		z=z, 
-		T=[minT, maxT], 
+		joinpath(path, "TSO-M3D"),
+		z=z,
+		T=[minT, maxT],
 		ρ=[minρ, maxρ]
 	)
 
@@ -32,7 +32,7 @@ function saveAsText(path_new; z, T, ρ, vmic=1.0)
 	if first(z) > last(z)
 		z .*= -1
 	end
-	
+
 	open(path_new, "w") do f
 		write(f, "TSO-M3D-table-column\n")
 		write(f, "$(k)\n")
@@ -55,9 +55,9 @@ function EoSTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3, vm
 
 	z = [-1.0, 1.0]
 	TSO.saveAsText(
-		joinpath(path, outputname), 
-		z=z, 
-		T=[minT, maxT], 
+		joinpath(path, outputname),
+		z=z,
+		T=[minT, maxT],
 		ρ=[minρ, maxρ],
 		vmic=vmic
 	)
@@ -71,12 +71,11 @@ end
 
 function _get_opacity(run, from)
 	chi = pyconvert(
-		Array, 
+		Array,
 		run.run.read_patch_save(from, concat=true, fdim=0, lazy=false)[0]
 	)
 
-	chi  = chi[:, :, :] 
-	#l = Base.convert.(eltype(chi), reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
+	chi  = chi[:, :, :]
 	l = Base.convert.(eltype(chi), pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64)))
 	if !issorted(l)
 		@warn "Wavelength array appears to be not sorted. This may indicate a bug."
@@ -93,7 +92,7 @@ end
 
 function _get_opacity_lazy(run, from)
 	chi_lazy = run.run.read_patch_save(from, concat=true, fdim=0, lazy=true)[0]
-	
+
 	shape = pyconvert(Tuple, chi_lazy.shape)
 	if pytruth(pybuiltins.hasattr(chi_lazy, "dtype"))
 		dtype_str = pyconvert(String, pybuiltins.str(chi_lazy.dtype))
@@ -103,7 +102,7 @@ function _get_opacity_lazy(run, from)
 	T = dtype_str == "float64" ? Float64 : Float32
 
 	tmpfile = tempname(pwd(), suffix=".bin")
-	
+
 	# The original array has shape (N_lam, N_T, N_rho)
 	# The output needs to be permuted to (N_T, N_rho, N_lam)
 	permuted_shape = (shape[2], shape[3], shape[1])
@@ -112,22 +111,22 @@ function _get_opacity_lazy(run, from)
 	if pytruth(pybuiltins.hasattr(chi_lazy, "mlist"))
 		caxis = pyconvert(Int, chi_lazy.caxis) + 1 # Julia is 1-indexed
 		cstarts = pyconvert(Vector{Int}, chi_lazy.cstart)
-		
+
 		mlist = pybuiltins.list(chi_lazy.mlist)
 		for (i, m) in enumerate(mlist)
 			m_array = pyconvert(Array, m)
-			
+
 			start_idx = cstarts[i] + 1
 			end_idx = start_idx + size(m_array, caxis) - 1
-			
+
 			indices_raw = Any[Colon() for _ in 1:length(shape)]
 			indices_raw[caxis] = start_idx:end_idx
-			
+
 			permuted_chunk = permutedims(m_array, (2, 3, 1))
 			permuted_caxis = caxis == 1 ? 3 : (caxis == 2 ? 1 : 2)
 			indices = Any[Colon() for _ in 1:length(permuted_shape)]
 			indices[permuted_caxis] = start_idx:end_idx
-			
+
 			chi_mmap[indices...] .= permuted_chunk
 		end
 	else
@@ -135,16 +134,16 @@ function _get_opacity_lazy(run, from)
 		chunk_size = max(1, 100_000_000 ÷ (prod(shape[2:end])))
 		for i in 1:chunk_size:shape[1]
 			end_idx = min(i + chunk_size - 1, shape[1])
-			
+
 			chunk = pyconvert(Array, chi_lazy[i-1:end_idx-1]) # python is 0-indexed
 			permuted_chunk = permutedims(chunk, (2, 3, 1))
-			
+
 			chi_mmap[.., i:end_idx] .= permuted_chunk
 		end
 	end
 
 	l = Base.convert.(T, reverse(pyconvert(Array, numpy.fromfile(joinpath("$(run.run.sfolder)", "out_lam.bin"), dtype=numpy.float64))))
-	
+
 	if !issorted(l)
 		@warn "Wavelength array appears to be not sorted. This may indicate a bug."
 		m = sortperm(l)
@@ -162,13 +161,6 @@ function _get_opacity_lazy(run, from)
 	return l, chi_mmap
 end
 
-"""
-    get_opacity(run, from="opa"; mmap=false)
-
-Extract EoS + Opacities from given run. Return arrays.
-If `mmap=true`, it writes Python chunks to a Julia-mapped file 
-instead of holding everything in RAM, which is more memory-efficient.
-"""
 function get_opacity(run, from="opa"; mmap=false)
 	if !numpy_loaded[]
         load_numpy!()
@@ -181,11 +173,6 @@ function get_opacity(run, from="opa"; mmap=false)
     end
 end
 
-"""
-    get_opacity(run)
-
-Extract EoS + Opacities from given run. Return arrays
-"""
 function get_eos(run)
     temp = pyconvert(Array, run.run.temp)[:, 1]
     rho  = pyconvert(Array, run.run.rho)[:, :]
@@ -193,9 +180,9 @@ function get_eos(run)
     pg   = pyconvert(Array, run.run.pg)[:, :]
     E    = pyconvert(Array, run.run.E)[:, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
     χ500 = pyconvert(Array, run.run.chi)[:, :]
-	
+
 	#=eos = pyconvert(
-		Array, 
+		Array,
 		run.run.read_patch_save("eos", concat=false)[1,1]
 	)
 
@@ -204,7 +191,7 @@ function get_eos(run)
     ne   = eos[3, :, :]
     pg   = eos[4, :, :]
     E    = eos[5, :, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)=#
-	
+
 	E[E .< 1e-30] .= NaN
 	E[E .> 1e30] .= NaN
 
@@ -216,7 +203,7 @@ function get_eos(run)
 
 	χ500[χ500 .< 1e-30] .= NaN
 	χ500[χ500 .> 1e30] .= NaN
-	
+
 	log.(rho[1, :]), log.(temp), log.(E), log.(pg), log.(ne), log.(χ500 ./ rho)
 end
 
@@ -234,13 +221,6 @@ end
 # Convert Opacity and EoS from TUMULT to RegularOpacityTable
 # ============================================================================
 
-"""
-    collect_opacity(run; compute_ross=false, mini=false, mmap=false)
-
-Extract EoS + Opacities from given run. Collect them together in a table.
-If `mini=true`, it skips memory allocation for the Source function array `S`.
-If `mmap=true`, it uses file memory-mapping for parsing the NumPy arrays and creating `S`.
-"""
 function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 	rho, temp, E, pg, ne, χ500 = get_eos(run)
 	l, chi = get_opacity(run, "opa"; mmap=mmap)
@@ -254,18 +234,6 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 	assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=compute_ross, mini=mini, mmap=mmap)
 end
 
-"""
-    assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
-
-Build the `SqEoS` + `SqOpacity` tables from raw EoS quantities and opacity cubes,
-regardless of their origin (a dispatch run via [`collect_opacity`] or the
-standalone HOP engine via [`compute_eos_HOP`]).
-
-Layout follows `get_eos`/`get_opacity`: `rho` (log, `nρ`), `temp` (log, `nT`),
-`E`/`pg`/`ne`/`χ500` (log, `nT×nρ`), `l` the wavelength axis, and `chi`/`scat` the
-opacity cubes `nT×nρ×nλ` (`scat` may be `nothing`). The element type of `chi`,
-`pg` and `l` must agree — `κ`, `κ_ross` and `src` share a single element type.
-"""
 function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
 	ross = fill!(similar(pg), 1.0)
 
@@ -288,7 +256,6 @@ function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ros
 	)
     aos = @axed eos
     aos500 = @axed eos500
-
 
 	chi = TSO.SqOpacity(
 		chi, ross, S, l, false

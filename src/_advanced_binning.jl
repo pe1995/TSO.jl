@@ -4,9 +4,9 @@
 
 const USE_BINNING_THREADS = Ref(true)
 
-function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, scattering=nothing; 
+function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, scattering=nothing;
                           transition_model=nothing, logg=nothing, corr_χ=nothing, corr_S=nothing) where {E<:AxedEoS}
-    
+
     radBins = size(W_assign, 2)
     eos = aos.eos
     eaxis = is_internal_energy(aos)
@@ -45,11 +45,11 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
 
     ρ = exp.(eos.lnRho)
     scat = remove_from_thin ? scattering.κ : nothing
-    
+
     # Run the multithreaded orchestrator
     _advanced_binning_X!(
         B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
-        opacities.λ, W_assign, Temp, weights, 
+        opacities.λ, W_assign, Temp, weights,
         opacities.κ, opacities.src, scat;
         corr_χ=corr_χ, corr_S=corr_S
     )
@@ -82,7 +82,7 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
         wthin_l, T_type(1.0) .- wthin_l
     end
 
-    @. opacity_table = wthin .* κBox .+ wthick .* κ_ross     
+    @. opacity_table = wthin .* κBox .+ wthick .* κ_ross
     @. ϵ_table = ifelse(χBox > 1e-30, κBox / χBox, 1.0)
     @. S_table = max(SBox, T_type(1e-30))
     @. opacity_table = max(opacity_table, T_type(1e-30))
@@ -91,8 +91,8 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
         SqOpacity(
             opacity_table, opacities.κ_ross, S_table,
             collect(T_type, 1:radBins), false
-        ), 
-        ϵ_table, 
+        ),
+        ϵ_table,
         wthin
     )
 end
@@ -106,14 +106,14 @@ end
 # Binning for 1D atmospheres
 # ============================================================================
 
-function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d; 
+function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
                              κ_scat_1d=nothing, corr_χ_1d=nothing, corr_S_1d=nothing, logg=nothing)
-    
+
     radBins = size(W_assign, 2)
     Nz = length(ρ_1d)
     nlambda = length(λ)
     T_type = eltype(κ_1d)
-    
+
     # Allocate locally
     χBox   = zeros(T_type, 1, Nz, radBins)
     χRBox  = zeros(T_type, 1, Nz, radBins)
@@ -130,24 +130,24 @@ function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_
     scat_3d = isnothing(κ_scat_1d) ? nothing : reshape(κ_scat_1d, 1, Nz, nlambda)
     corr_X  = isnothing(corr_χ_1d) ? nothing : reshape(corr_χ_1d, 1, Nz, nlambda)
     corr_S  = isnothing(corr_S_1d) ? nothing : reshape(corr_S_1d, 1, Nz, nlambda)
-    
+
     _advanced_binning_X!(
         B, δB, SBox, κBox, χBox, χRBox, χ_thin,
-        ρ_1d, λ, W_assign, Temp_2d, weights, κ_3d, src_3d, scat_3d; 
+        ρ_1d, λ, W_assign, Temp_2d, weights, κ_3d, src_3d, scat_3d;
         corr_χ=corr_X, corr_S=corr_S
     )
-    
+
     @. κ_ross = ifelse(χRBox > 1e-30, 1.0 / χRBox, 0.0)
-    
+
     wthin, wthick = if isnothing(logg)
         wthin_l = exp.(T_type(-1.5e7) .* κ_ross)
         wthin_l, T_type(1.0) .- wthin_l
     else
         opacity_transition_1d(κ_ross, ρ_1d, Pg_1d, logg)
     end
-    
-    @. κBox = wthin * κBox + wthick * κ_ross 
-    
+
+    @. κBox = wthin * κBox + wthick * κ_ross
+
     @. κBox = max(κBox, T_type(1e-30))
     @. SBox = max(SBox, T_type(1e-30))
 
@@ -155,19 +155,19 @@ function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_
     return (κBox=κBox, SBox=SBox, χBox=χBox, χRBox=χRBox)
 end
 
-function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d; 
+function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
                              κ_scat_1d=nothing, corr_χ_1d=nothing, corr_S_1d=nothing, logg=nothing)
-    
+
     radBins = size(W_assign, 2)
     Nz      = length(ρ_1d)
     nlambda = length(λ)
     T_type  = eltype(κ_1d)
-    
+
     χBox  = zeros(T_type, 1, Nz, radBins)
     χRBox = zeros(T_type, 1, Nz, radBins)
     κBox  = zeros(T_type, 1, Nz, radBins)
     SBox  = zeros(T_type, 1, Nz, radBins)
-    
+
     B_norm  = zeros(T_type, 1, Nz, radBins)
     dB_norm = zeros(T_type, 1, Nz, radBins)
 
@@ -181,11 +181,11 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
     @inbounds for k in 1:nlambda
         w_k = T_type(weights[k])
         λ_k = λ[k]
-        
+
         @inbounds @fastmath @simd for j in 1:Nz
             bnC_col[j]  = T_type(Bλ_fast(λ_k, Temp_1d[j]))
             dbnC_col[j] = T_type(dBdTλ_fast(λ_k, Temp_1d[j]))
-            
+
             c_χ = get_corr_val(corr_χ_1d, T_type, j, k)
             c_S = get_corr_val(corr_S_1d, T_type, j, k)
 
@@ -193,28 +193,28 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
             κ_col[j] = κ_val
             inv_κ_col[j] = ifelse(κ_val > 1e-30, 1.0 / κ_val, T_type(0.0))
             src_col[j] = T_type(src_1d[j, k]) * c_S
-            
+
             k_abs = T_type(get_abs_k(κ_1d, κ_scat_1d, j, k))
             κ_abs_col[j] = k_abs * c_χ
         end
-        
+
         for b in 1:radBins
             frac = T_type(W_assign[k, b])
-            #(frac <= 1e-8) && continue 
-            
+            #(frac <= 1e-8) && continue
+
             w_eff = w_k * frac
-            
+
             @turbo for j in 1:Nz
                 w_bnC   = w_eff * bnC_col[j]
                 w_dbnC  = w_eff * dbnC_col[j]
-                
+
                 χBox[1, j, b]    += κ_col[j] * w_bnC
                 χRBox[1, j, b]   += inv_κ_col[j] * w_dbnC
                 SBox[1, j, b]    += w_eff * src_col[j]
-                
+
                 B_norm[1, j, b]  += w_bnC
                 dB_norm[1, j, b] += w_dbnC
-                
+
                 κBox[1, j, b]    += κ_abs_col[j] * w_bnC
             end
         end
@@ -228,7 +228,7 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
 
             χBox[1, j, b] = ifelse(bn > 1e-30, (χBox[1, j, b] / bn) * ρ_j, T_type(0.0))
             κBox[1, j, b] = ifelse(bn > 1e-30, (κBox[1, j, b] / bn) * ρ_j, T_type(0.0))
-            
+
             χR_tmp = ifelse(dbn > 1e-30, χRBox[1, j, b] / dbn, T_type(0.0))
             χRBox[1, j, b] = ifelse(χR_tmp > 1e-30, χR_tmp / ρ_j, T_type(0.0))
         end
@@ -238,25 +238,25 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
         @inbounds @simd for i in eachindex(κBox)
             χR_val = χRBox[i]
             κ_ross = ifelse(χR_val > 1e-30, 1.0 / χR_val, T_type(0.0))
-            
+
             wthin  = exp(T_type(-1.5e7) * κ_ross)
             κBox[i] = wthin * κBox[i] + (T_type(1.0) - wthin) * κ_ross
         end
     else
         g = T_type(exp10(logg))
-        
+
         @inbounds for b in 1:radBins
             @simd for z in 1:Nz
                 χR_val = χRBox[1, z, b]
                 κ_ross = ifelse(χR_val > 1e-30, 1.0 / χR_val, T_type(0.0))
-                
+
                 Pg_val = T_type(Pg_1d[z])
                 ρ_val  = T_type(ρ_1d[z])
                 τ_val  = (κ_ross * Pg_val) / (ρ_val * g)
-                
+
                 wthin  = exp(T_type(-2.0) * τ_val)
                 wthick = T_type(1.0) - wthin
-                
+
                 κBox[1, z, b] = wthin * κBox[1, z, b] + wthick * κ_ross
             end
         end
@@ -272,26 +272,6 @@ end
 # Pre-planned 1D binning
 # ============================================================================
 
-"""
-    Binning1DPlan{T}
-
-The part of [`advanced_binning_1d_quick`](@ref) that does not depend on the bin
-assignment: the Planck functions, `1/κ` and `κ - κ_scat`. Only `W_assign`
-changes during a binning optimization, so these are evaluated once and each call
-is left with a weighted sum over wavelength.
-
-Each field is an `Nz × nlambda` matrix with the wavelength weight `w_k` folded
-into the quantity that gets accumulated:
-
-  - `Aχ`  : `w_k · B_λ · κ`          → `χBox`
-  - `AχR` : `w_k · dB/dT · 1/κ`      → `χRBox`
-  - `AS`  : `w_k · src`              → `SBox`
-  - `AB`  : `w_k · B_λ`              → Planck normalization
-  - `AdB` : `w_k · dB/dT`            → Rosseland normalization
-  - `Aκ`  : `w_k · B_λ · (κ - κ_scat)` → `κBox`
-
-Build with [`binning_1d_plan`](@ref).
-"""
 struct Binning1DPlan{T<:AbstractFloat}
     Aχ::Matrix{T}
     AχR::Matrix{T}
@@ -305,12 +285,6 @@ end
 
 Base.size(p::Binning1DPlan) = size(p.Aχ)          # (Nz, nlambda)
 
-"""
-    binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d; kwargs...)
-
-Build a [`Binning1DPlan`](@ref). Arguments are those of
-[`advanced_binning_1d_quick`](@ref) without `W_assign`.
-"""
 function binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
                          κ_scat_1d=nothing, corr_χ_1d=nothing, corr_S_1d=nothing)
     T_type  = eltype(κ_1d)
@@ -355,12 +329,6 @@ function binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
                   Vector{T_type}(T_type.(ρ_1d)), Vector{T_type}(T_type.(Pg_1d)))
 end
 
-"""
-    advanced_binning_1d_quick(plan::Binning1DPlan, W_assign; logg=nothing)
-
-Same result as the full [`advanced_binning_1d_quick`](@ref), from a
-[`Binning1DPlan`](@ref) built beforehand for this atmosphere and opacity table.
-"""
 function advanced_binning_1d_quick(plan::Binning1DPlan{T_type}, W_assign::AbstractMatrix;
                                    logg=nothing) where {T_type}
     Nz, nlambda = size(plan)
@@ -462,7 +430,7 @@ function _advanced_binning_X!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
             end
         end
         results = fetch.(tasks)
-        
+
         χBoxChunk  = getindex.(results, 1)
         χRBoxChunk = getindex.(results, 2)
         χthinChunk = getindex.(results, 3)
@@ -475,7 +443,7 @@ function _advanced_binning_X!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     # Sum over all chunks into the top-level arrays
     χBox   .= sum(χBoxChunk)
     χRBox  .= sum(χRBoxChunk)
-    χ_thin .= sum(χthinChunk) 
+    χ_thin .= sum(χthinChunk)
     SBox   .= sum(SBoxChunk)
     B      .= sum(BChunk)
     δB     .= sum(δBChunk)
@@ -495,9 +463,9 @@ function _advanced_binning_X!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
 end
 
 function _run_bin_core!(chunk, rhoBins, AxBins, radBins, W_assign::AbstractMatrix, weights, κ, κ_scat, src, Temp, λ; corr_χ=nothing, corr_S=nothing)
-    dbnC = Ref(eltype(κ)(0.0)) 
+    dbnC = Ref(eltype(κ)(0.0))
     bnC  = Ref(eltype(κ)(0.0))
-    
+
     χBoxChunk  = zeros(eltype(κ), AxBins, rhoBins, radBins)
     χRBoxChunk = deepcopy(χBoxChunk)
     χthinChunk = deepcopy(χBoxChunk)
@@ -507,8 +475,8 @@ function _run_bin_core!(chunk, rhoBins, AxBins, radBins, W_assign::AbstractMatri
     κBoxChunk  = deepcopy(χBoxChunk)
 
     _bin_core!(
-        W_assign, chunk, rhoBins, AxBins, weights, κ, κ_scat, src, Temp, λ, 
-        bnC, dbnC, 
+        W_assign, chunk, rhoBins, AxBins, weights, κ, κ_scat, src, Temp, λ,
+        bnC, dbnC,
         χBoxChunk, χRBoxChunk, χthinChunk, SBoxChunk, BChunk, δBChunk, κBoxChunk,
         corr_χ, corr_S
     )
@@ -525,7 +493,7 @@ function _run_bin_core!(chunk, rhoBins, AxBins, radBins, W_assign::AbstractMatri
 end
 
 # ============================================================================
-# Core binning 
+# Core binning
 # ============================================================================
 
 @inline get_corr_val(x::Nothing, T_type, I::Vararg{Int}) = T_type(1.0)
@@ -533,21 +501,21 @@ end
 @inline get_abs_k(κ, κ_scat::Nothing, I::Vararg{Int}) = κ[I...]
 @inline get_abs_k(κ, κ_scat::AbstractArray, I::Vararg{Int}) = max(κ[I...] - κ_scat[I...], zero(eltype(κ)))
 
-function _bin_core!(W_assign::AbstractMatrix, chunk, 
-                    rhoBins, AxBins, weights, κ, κ_scat, src, Temp, λ, bnC, dbnC, 
+function _bin_core!(W_assign::AbstractMatrix, chunk,
+                    rhoBins, AxBins, weights, κ, κ_scat, src, Temp, λ, bnC, dbnC,
                     χBoxChunk, χRBoxChunk, χthinChunk, SBoxChunk, BChunk, δBChunk, κBoxChunk,
                     corr_χ, corr_S)
-                    
+
     radBins = size(W_assign, 2)
     T_type = eltype(κ)
-    
+
     bnC_buf  = Matrix{T_type}(undef, AxBins, rhoBins)
     dbnC_buf = Matrix{T_type}(undef, AxBins, rhoBins)
 
     @inbounds for k in chunk
         w_k = T_type(weights[k])
         λ_k = λ[k]
-        
+
         for j in 1:rhoBins
             @simd for i in 1:AxBins
                 bnC_buf[i, j]  = T_type(Bλ_fast(λ_k, Temp[i, j]))
@@ -557,39 +525,39 @@ function _bin_core!(W_assign::AbstractMatrix, chunk,
 
         for b in 1:radBins
             frac = T_type(W_assign[k, b])
-            #(frac <= 1e-8) && continue 
-            
+            #(frac <= 1e-8) && continue
+
             w_eff = w_k * frac
-            
+
             for j in 1:rhoBins
                 @simd for i in 1:AxBins
                     b_val  = bnC_buf[i, j]
                     db_val = dbnC_buf[i, j]
-                    
+
                     c_χ = get_corr_val(corr_χ, T_type, i, j, k)
                     c_S = get_corr_val(corr_S, T_type, i, j, k)
-                    
+
                     κ_val = T_type(κ[i, j, k]) * c_χ
                     s_val = T_type(src[i, j, k]) * c_S
-                    
+
                     w_b  = w_eff * b_val
                     w_db = w_eff * db_val
 
                     inv_κ = ifelse(κ_val > 1e-30, 1.0 / κ_val, T_type(0.0))
-                    
+
                     χBoxChunk[i, j, b]  += κ_val * w_b
                     χRBoxChunk[i, j, b] += inv_κ * w_db
                     SBoxChunk[i, j, b]  += w_eff * s_val
                     BChunk[i, j, b]     += w_b
                     δBChunk[i, j, b]    += w_db
-                    
+
                     k_abs = T_type(get_abs_k(κ, κ_scat, i, j, k)) * c_χ
                     κBoxChunk[i, j, b]  += k_abs * w_b
                 end
             end
         end
     end
-    
+
     χthinChunk .= χBoxChunk
 end
 
@@ -610,13 +578,13 @@ end
 
 function opacity_transition_1d(κ_ross_1d, ρ_1d, Pg_1d, logg)
     T_type = eltype(κ_ross_1d)
-    
+
     # κ_ross_1d is typically a view or 3D array sliced.
     _, Nz, radBins = size(κ_ross_1d)
-    
+
     τ = zeros(T_type, 1, Nz, radBins)
     g = exp10(logg)
-    
+
     @inbounds for b in 1:radBins
         for z in 1:Nz
             # τ = κ * P_g / (ρ * g)

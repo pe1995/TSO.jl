@@ -1,4 +1,4 @@
-function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
+function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0)
     sT = length(lnT)
     names_cols = String[]
 
@@ -9,7 +9,7 @@ function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example
     for column in eachindex(lnRho)
         for i in 1:nbins
             name = joinpath(folder, "TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
-            write_as_stagger(name; teff=teff, logg=logg, FeH=FeH, 
+            write_as_stagger(name; teff=teff, logg=logg, FeH=FeH,
                                     T=exp.(lnT[ibins[i]]), rho=zeros(sT)[ibins[i]] .+ exp(lnRho[column]), id="TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
 
             append!(names_cols, ["TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat"])
@@ -23,7 +23,7 @@ function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example
     end
 end
 
-function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0) 
+function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example/models"), teff=5777.0, logg=4.43, FeH=0.0)
     sT = length(lnT)
     names_cols = String[]
 
@@ -34,7 +34,7 @@ function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example
     for column in axes(lnRho, 2)
         for i in 1:nbins
             name = joinpath(folder, "TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
-            write_as_stagger(name; teff=teff, logg=logg, FeH=FeH, 
+            write_as_stagger(name; teff=teff, logg=logg, FeH=FeH,
                                     T=exp.(lnT[ibins[i], column]), rho=exp.(lnRho[ibins[i], column]), id="TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
 
             append!(names_cols, ["TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat"])
@@ -48,9 +48,6 @@ function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example
     end
 end
 
-"""
-Read EoS columns from TS. Order: lnT, lnPe, lnRho, lnPg, lnEi, lnOp
-"""
 function read_eos_column(path, get_header=false)
     # Read the EoS column
     f = FortranFile(path, convert="big-endian")
@@ -73,9 +70,6 @@ function read_eos_column(path, get_header=false)
     end
 end
 
-"""
-Read Opacity columns from TS.
-"""
 function read_opacity_column(path)
     f = FortranFile(path, convert="big-endian")
 
@@ -86,7 +80,7 @@ function read_opacity_column(path)
         catch
             " "
         end
-        
+
         (s[end] !== '*') && break
         lheader += 1
     end
@@ -126,9 +120,9 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
     nrows_per_table, ntables, T = get_dimensions(list_of_eos_tables)
 
     opacity_path = joinpath(opacity_folder, matching_opacity(list_of_eos_tables[1]))
-  
+
     eaxis = false
-    
+
     _,_,λ,abund = read_opacity_column(opacity_path)
 
     # Read the data
@@ -167,8 +161,8 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
         end
 
         κ[e_r, column, :]  .= opacity[:, :, 1] .+ opacity[:, :, 2] .+ opacity[:, :, 3]
-        κc[e_r, column, :] .= opacity[:, :, 1] 
-        κl[e_r, column, :] .=                     opacity[:, :, 2] 
+        κc[e_r, column, :] .= opacity[:, :, 1]
+        κl[e_r, column, :] .=                     opacity[:, :, 2]
         κs[e_r, column, :] .=                                         opacity[:, :, 3]
         ross[e_r, column]  .= κ_ross
         Sν[e_r, column, :] .= Base.convert.(T, Bν(λ, exp.(lnT2[e_r, column]))) # Planck function (i.e. source function)
@@ -189,7 +183,7 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
     lnEi   .= lnEi[:, mask]
     lnNe   .= lnNe[:, mask]
     ross   .= ross[:, mask]
-    κ      .= κ[:, mask, :] 
+    κ      .= κ[:, mask, :]
     lnκ500 .= lnκ500[:, mask]=#
 
     opacity_tables = if get_individual
@@ -210,14 +204,14 @@ function _read_tables_eos(list_of_eos_tables; kwargs...)
     nrows_per_table, ntables, T = get_dimensions(list_of_eos_tables)
 
     eaxis = false
-    
+
     # Read the data
     lnρ    = zeros(T, ntables)
     lnT2   = zeros(T, nrows_per_table, ntables)
     lnPg   = zeros(T, nrows_per_table, ntables)
     lnEi2  = zeros(T, nrows_per_table, ntables)
     lnNe   = zeros(T, nrows_per_table, ntables)
-    lnκ500 = zeros(T, nrows_per_table, ntables) 
+    lnκ500 = zeros(T, nrows_per_table, ntables)
 
     for (i,table) in enumerate(list_of_eos_tables)
         column, e_r = get_TSO_index(table)
@@ -245,7 +239,7 @@ function _read_tables_eos(list_of_eos_tables; kwargs...)
     lnEi   .= lnEi[:, mask]
     lnNe   .= lnNe[:, mask]
     ross   .= ross[:, mask]
-    κ      .= κ[:, mask, :] 
+    κ      .= κ[:, mask, :]
     lnκ500 .= lnκ500[:, mask]=#
 
     if eaxis
@@ -268,7 +262,6 @@ function get_dimensions(list_of_eos_tables)
     end
 
     eos = read_eos_column(list_of_eos_tables[1])
-    #@show maximum(e), length(unique(d)), eltype(eos)
     return maximum(e), length(unique(d)), eltype(eos)
 end
 

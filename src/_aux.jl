@@ -1,14 +1,12 @@
-## General Utility functions
-"""
-Split array arr in nsplits roughly equal junks.
-If mask=true the indices will be returned.
-"""
+# ============================================================================
+# General Utility functions
+# ============================================================================
 function split_similar(arr, nsplits; mask=false)
     nsplits = length(arr) < nsplits ? length(arr) : nsplits
     splits  = div(length(arr), nsplits)
     nrest   = length(arr) % nsplits
     split_sizes = Int[splits for _ in 1:nsplits]
-    
+
     for i in 1:nrest
         split_sizes[i] = split_sizes[i] + 1
     end
@@ -37,9 +35,6 @@ function meshgrid(ax...)
     grids
 end
 
-"""
-create random number between a and b
-"""
 randrange(a, b, args...) = begin
     xmin,xmax = min(a,b),max(a,b)
     rand(args...) .* (xmax-xmin) .+ xmin
@@ -80,10 +75,6 @@ end
 zeros_as(x)    = zeros(eltype(x), size(x)...)
 zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
-
-
-
-
 # stuff for timing
 
 """
@@ -111,7 +102,7 @@ end
 
 Reset the timer.
 """
-start_timing!(t=generalTimer) = reset_timer!(t) 
+start_timing!(t=generalTimer) = reset_timer!(t)
 
 """
     end_timing!(t=generalTimer)
@@ -122,7 +113,7 @@ end_timing!(t=generalTimer) = begin
     println("")
     show(t)
     println("")
-    reset_timer!(t) 
+    reset_timer!(t)
 end
 
 macro optionalTiming(name, exp)
@@ -140,12 +131,9 @@ macro optionalTiming(name, exp)
     end
 end
 
-
-
-
-
-
-## Importing of python modules
+# ============================================================================
+# Importing of python modules
+# ============================================================================
 
 function _get_help_py(mod ,dir=dirname(@__FILE__))
 	sys   = pyimport("sys")
@@ -194,9 +182,6 @@ function ingredients(path::String)
 	m
 end
 
-
-
-
 join_full(arr...; with_what="_", add_start=true, kwargs...) = begin
     a = [arr...]
     a = a[a .!= ""]
@@ -209,14 +194,9 @@ join_full(arr...; with_what="_", add_start=true, kwargs...) = begin
     end
 end
 
-
-
-
-
-
-
-
-## Saving as HDF5
+# ============================================================================
+# Saving as HDF5
+# ============================================================================
 
 """
     save(table, path)
@@ -243,7 +223,7 @@ end
     reload(Type{<:AbstractTale}, path; mmap=false)
 
 Reload the given type of table (SqEoS or SqOpacity) from the given path.
-If mmap=true, the memory intensive fields will be loaded as mmaps 
+If mmap=true, the memory intensive fields will be loaded as mmaps
 through the HDF5 capabilities.
 """
 function reload(s::Type{S}, path::String; mmap=false, additional_data=false) where {S}
@@ -281,18 +261,7 @@ add_to_hdf5!(fid, fname, val::Bool) = fid["$(fname)"] = Int(val)
 
 get_from_hdf5(::Type{<:Any}, fid, fname; mmap=false) = mmap ? HDF5.readmmap(fid["$(fname)"]) : HDF5.read(fid["$(fname)"])
 get_from_hdf5(::Type{Bool},  fid, fname; mmap=false) = Bool(HDF5.read(fid["$(fname)"]))
-    
 
-
-
-
-
-
-"""
-    bin_assignment(path)
-
-Load bin assignment used for opacity binning.
-"""
 bin_assignment(path) = begin
     fid = HDF5.h5open(path, "r")
     bins = HDF5.read(fid["bins"])
@@ -302,15 +271,15 @@ bin_assignment(path) = begin
     bins, λ
 end
 
-
-
-## Saving for Multi3D computation of heating
+# ============================================================================
+# Saving for Multi3D computation of heating
+# ============================================================================
 
 """
     save(SqEoS, SqOpacity, name)
 
 Save the given Tables (SqEoS and SqOpacity) for M3D (Binary file with both).
-They will be saved at the given name with .txt and .bin extensions for 
+They will be saved at the given name with .txt and .bin extensions for
 meta and binary data.
 """
 save(eos::T1, opa::T2, name) where {T1<:AbstractTable, T2<:AbstractTable} = begin
@@ -319,7 +288,7 @@ save(eos::T1, opa::T2, name) where {T1<:AbstractTable, T2<:AbstractTable} = begi
         write(f, "$(length(eos.lnRho))\n")
         write(f, "$(length(opa.λ))")
     end
-    
+
     open("$(name).bin", "w") do f
         write(f, eos.lnT)
         write(f, eos.lnRho)
@@ -330,14 +299,12 @@ save(eos::T1, opa::T2, name) where {T1<:AbstractTable, T2<:AbstractTable} = begi
     name
 end
 
-
-
 ΔΛ(lo,hi,R)  = (hi+lo)/2 /R
 N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
 
-
-
-## Constants (In agreement with Tabgen)
+# ============================================================================
+# Constants (In agreement with Tabgen)
+# ============================================================================
 const EiExtra    = 5.0                         # extra eV per H atom to add
 const KBoltzmann = 1.380658E-16                # Boltzman's cst. [erg/K]
 const CLight     = 2.99792458E+10              # Speed of light [cm/s]
@@ -362,9 +329,9 @@ const atomic_number = Symbol.(
         "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",         # | 73 - 81
         "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",         # | 82 - 90
         "Pa","U "]
-) 
+)
 
-const atomic_mass = Dict(   
+const atomic_mass = Dict(
                             "H"  => ("Hydrogen"	    ,1.00797),
                             "He" =>	("Helium"	    ,4.00260),
                             "Li" =>	("Lithium"	    ,6.941),
@@ -476,8 +443,9 @@ const atomic_mass = Dict(
                             "Sg" =>	("Seaborgium"	,263)
 )
 
-
-## abundances 
+# ============================================================================
+# abundances
+# ============================================================================
 
 const magg2022 = [
         12.000
@@ -724,27 +692,19 @@ const asplund2007_abund = Dict(
     "U" =>  -0.520
 )
 
-
-
-
-## Alpha elements
+# ============================================================================
+# Alpha elements
+# ============================================================================
 
 α_elements = ["O", "Ne", "Mg", "Si", "S", "Ar", "Ca"]
 primordial_elements = ["H", "He", "Li"]
 
-
-
-
-## Scale yields
+# ============================================================================
+# Scale yields
+# ============================================================================
 
 scale_yields(value, by) = isnothing(by) ? value : (value[1], value[2]+by)
 
-"""
-    scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
-
-Scaling yields according to the given elements. Values in kwargs and 
-α are given over Fe. Pass kwargs to scale specific elements
-"""
 function scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
     additional_elements = String.(keys(kwargs) |> collect)
 
@@ -773,12 +733,9 @@ function scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
     end
 end
 
-
-
-
-
-
-## Convenience functions for mass 
+# ============================================================================
+# Convenience functions for mass
+# ============================================================================
 
 atom_id(name)   = findfirst(atomic_number.==name)
 id_atom(number) = atomic_number[number]
@@ -786,14 +743,16 @@ id_atom(number) = atomic_number[number]
 u_in_g(x)       = x * 1.66054e-24
 mass_u(name::Symbol) = last(atomic_mass[String(name)])
 mass_g(name::Symbol) = name |> mass_u |> u_in_g
-mass_u(number::Int)  = mass_u(number |> id_atom) 
+mass_u(number::Int)  = mass_u(number |> id_atom)
 mass_g(number::Int)  = mass_g(number |> id_atom)
 
 full_name(name) = first(atomic_mass[name])
 
 to_cm(aa) = aa * aa_to_cm
 
-## Conversion of abundances to fractions
+# ============================================================================
+# Conversion of abundances to fractions
+# ============================================================================
 function composition_fractions(abundances=magg2022)
     zx = 0.0
     for i in eachindex(abundances)
@@ -801,7 +760,7 @@ function composition_fractions(abundances=magg2022)
             zx += exp10(abundances[i] .-12) * mass_u(i)
         end
     end
-    
+
     yx = exp10(abundances[2] .-12) * mass_u(:He) / mass_u(:H)
 
     zx = zx / mass_u(:H)
@@ -812,12 +771,9 @@ function composition_fractions(abundances=magg2022)
     x, y, z
 end
 
-
-
-
-
-
-## Plot default setup that kind-of works
+# ============================================================================
+# Plot default setup that kind-of works
+# ============================================================================
 #=
 import PyCall.rc
 rc("mathtext", fontset="cm", default="regular")

@@ -7,7 +7,7 @@
 end
 
 @kwdef struct ExtendedOpacity
-	opa 
+	opa
 	extensions::Dict = Dict()
 	binned::Bool = all(diff(opa.λ) .== 1) ? true : false
 	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
@@ -52,82 +52,26 @@ get_data(eos::ExtendedEoS, opa::ExtendedOpacity, var::Symbol) = begin
 end
 
 # ============================================================================
-# Extend general lookup interface
-# ============================================================================
-
-function extended_lookup(eos_ext::ExtendedEoS, what, pressure_var, energy_var; maxiter=200, tol=1e-8)
-    eos = eos_ext.eos
-    if what == :lnRho
-        rho_min = minimum(eos.eos.lnRho)
-        rho_max = maximum(eos.eos.lnRho)
-        rho_mid = Ref(1.0)
-        for i in 1:maxiter
-            rho_mid[] = (rho_min + rho_max)/2
-            P_calc = lookup(eos.eos, :lnPg, rho_mid[], energy_var)
-			if abs(rho_max - rho_min) <= tol
-	            break
-	        end
-            if P_calc < pressure_var
-                rho_min = rho_mid[]
-            else
-                rho_max = rho_mid[]
-            end
-        end
-        rho_mid[]
-	elseif what in [:lnEi, :lnPg, :lnRoss, :lnEi]
-        lookup(eos.eos, what, pressure_var, energy_var)
-	elseif what in keys(eos_ext.extensions)
-		x = eos.eos.lnT
-		y = eos.eos.lnRho
-		z = eos_ext.extensions[what]
-		xy = TSO.linear_interpolation((x, y), z, extrapolation_bc=Line())
-		lookup(TSO.UniformLookup(xy), pressure_var, energy_var)
-	else
-		error("Given $(what) is not included in the extenden EoS.")
-    end
-end
-
-function extended_lookup(eos, opa::ExtendedOpacity, what, density_var, energy_var, args...)
-    if what in fieldnames(RegularOpacityTable)
-        lookup(eos, opacity(opa), what, density_var, energy_var)
-	elseif what in keys(opa.extensions)
-		second_axis = EnergyAxis(eos).unirange
-        rho_axis    = DensityAxis(eos).unirange
-        ip = linear_interpolation((second_axis, rho_axis), view(opa.extensions[what], :, :, args...), extrapolation_bc=Line())
-		u = UniformLookup((x1, x2) -> ip(x1, x2))
-		lookup(u, density_var, energy_var)
-	else
-		error("Given $(what) is not included in the extenden Opacity.")
-    end
-end
-
-lookup(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = lookup(eos.eos, opa, args...; kwargs...)
-lookup(eos::ExtendedEoS, args...; kwargs...) = extended_lookup(eos, args...; kwargs...)
-lookup(eos, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos, opa, args...; kwargs...)
-lookup(eos::ExtendedEoS, opa::ExtendedOpacity, args...; kwargs...) = extended_lookup(eos.eos, opa, args...; kwargs...)
-
-# ============================================================================
 # Bilinear interpolation coefficients
 # ============================================================================
 
 global LOG_INTERPOLATED_VARS = [:κ, :κ_ross, :src]
 struct InterpCoefs{T<:AbstractFloat}
-    idx::Int        
-    w_low::T  
-    w_high::T 
+    idx::Int
+    w_low::T
+    w_high::T
 end
 
 _is_log_interpolated(var::Symbol) = var in LOG_INTERPOLATED_VARS
 add_log_interpolated!(var::Symbol, to=LOG_INTERPOLATED_VARS) = push!(to, var)
 
-weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray) = begin
-    #grid_T = energy_variable(eos.eos) == :lnT ? eos.eos.eos.lnT : eos.eos.eos.lnEi # Assume lnT input represents the energy variable of the table
+weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) = begin
     grid_T = EnergyAxis(eos.eos).values
     grid_Rho = DensityAxis(eos.eos).values
-    
-    coefs_T = weights_axis(lnT, grid_T)
-    coefs_Rho = weights_axis(lnrho, grid_Rho)
-    
+
+    coefs_T = weights_axis(lnT, grid_T, extrapolate)
+    coefs_Rho = weights_axis(lnrho, grid_Rho, extrapolate)
+
     return coefs_Rho, coefs_T
 end
 
@@ -140,25 +84,20 @@ weights(eos::AxedEoS, args...; kwargs...) = weights(extended(eos), args...; kwar
 Keyword version, accepting the same named (and possibly linear) coordinates as [`sample`](@ref),
 e.g. `weights(eos, rho=rho, T=T)`.
 """
-weights(eos::ExtendedEoS; kwargs...) = begin
+weights(eos::ExtendedEoS; extrapolate=false, kwargs...) = begin
     given, _ = _coord_kwargs(kwargs)
-    weights(eos, _grid_coords(eos, given)...)
+    weights(eos, _grid_coords(eos, given; extrapolate=extrapolate)...; extrapolate=extrapolate)
 end
 
-weights_axis(x, grid) = begin
+weights_axis(x, grid, extrapolate=false) = begin
     T = eltype(x)
     coefs = Array{InterpCoefs{T}}(undef, size(x))
-    weights_axis!(coefs, x, grid)
+    weights_axis!(coefs, x, grid, extrapolate)
 end
 
-"""
-    weights_axis!(coefs, x, grid)
-
-In-place [`weights_axis`](@ref), writing into a caller-owned array.
-"""
-weights_axis!(coefs, x, grid) = begin
+weights_axis!(coefs, x, grid, extrapolate=false) = begin
     @inbounds for j in eachindex(x)
-        coefs[j] = linear_interpolation_weights(grid, x[j])
+        coefs[j] = linear_interpolation_weights(grid, x[j], extrapolate)
     end
     return coefs
 end
@@ -175,47 +114,44 @@ say -- where the two coefficient arrays would otherwise be allocated and
 discarded on every call.
 """
 weights!(coefs_Rho::AbstractArray{InterpCoefs{T}}, coefs_T::AbstractArray{InterpCoefs{T}},
-         eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray) where {T<:AbstractFloat} = begin
-    weights_axis!(coefs_T, lnT, EnergyAxis(eos.eos).values)
-    weights_axis!(coefs_Rho, lnrho, DensityAxis(eos.eos).values)
+         eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) where {T<:AbstractFloat} = begin
+    weights_axis!(coefs_T, lnT, EnergyAxis(eos.eos).values, extrapolate)
+    weights_axis!(coefs_Rho, lnrho, DensityAxis(eos.eos).values, extrapolate)
     return coefs_Rho, coefs_T
 end
 
-weights!(coefs_Rho, coefs_T, eos::RegularEoSTable, args...) =
-    weights!(coefs_Rho, coefs_T, extended(eos), args...)
-weights!(coefs_Rho, coefs_T, eos::AxedEoS, args...) =
-    weights!(coefs_Rho, coefs_T, extended(eos), args...)
+weights!(coefs_Rho, coefs_T, eos::RegularEoSTable, args...; kwargs...) =
+    weights!(coefs_Rho, coefs_T, extended(eos), args...; kwargs...)
+weights!(coefs_Rho, coefs_T, eos::AxedEoS, args...; kwargs...) =
+    weights!(coefs_Rho, coefs_T, extended(eos), args...; kwargs...)
 
-function linear_interpolation_weights(grid_nodes, val)
-    #T = eltype(grid_nodes)
+function linear_interpolation_weights(grid_nodes, val, extrapolate=false)
     T = eltype(val)
     val_T = Base.convert(T, val)
 
     if isnan(val_T)
         return InterpCoefs{T}(1, T(NaN), T(NaN))
     end
-    
-    if val_T <= first(grid_nodes)
-        return InterpCoefs{T}(1, one(T), zero(T))
+
+    n = length(grid_nodes)
+    i = if val_T <= first(grid_nodes)
+        extrapolate || return InterpCoefs{T}(1, one(T), zero(T))
+        1
     elseif val_T >= last(grid_nodes)
-        return InterpCoefs{T}(length(grid_nodes)-1, zero(T), one(T))
+        extrapolate || return InterpCoefs{T}(n-1, zero(T), one(T))
+        n-1
+    else
+        clamp(searchsortedlast(grid_nodes, val_T), 1, n-1)
     end
-    
-    i = searchsortedlast(grid_nodes, val_T)
-    if i == length(grid_nodes)
-        return InterpCoefs{T}(length(grid_nodes)-1, zero(T), one(T))
-    elseif i == 0
-        return InterpCoefs{T}(1, one(T), zero(T))
-    end
-    
+
     x0 = grid_nodes[i]
     x1 = grid_nodes[i+1]
     w_high = (val_T - x0) / (x1 - x0)
     w_low  = one(T) - w_high
-    
+
     return InterpCoefs{T}(i, w_low, w_high)
 end
-    
+
 # ============================================================================
 # Fast lookup function for multiple quantities
 # ============================================================================
@@ -224,38 +160,34 @@ sample(eos::RegularEoSTable, args...; kwargs...) =  sample(extended(eos), args..
 sample(eos::AxedEoS, args...; kwargs...) = sample(extended(eos), args...; kwargs...)
 sample(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample(eos, extended(opa), args...; kwargs...)
 
-sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...) = begin
-    res = sample(eos, variables, [coord1], [coord2], args...)
+sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...; kwargs...) = begin
+    res = sample(eos, variables, [coord1], [coord2], args...; kwargs...)
     return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
 end
-sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...) = begin
-    res = sample(eos, opa, variables, [coord1], [coord2], args...)
+sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...; kwargs...) = begin
+    res = sample(eos, opa, variables, [coord1], [coord2], args...; kwargs...)
     return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
 end
 
-function sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...) where {T<:AbstractFloat}
+function sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat}
     lnrho = coord1
     lnT   = coord2
 
     results = _allocate_results(eos, variables, lnrho)
 
-    sample!(results, eos, variables, lnrho, lnT, args...)
+    sample!(results, eos, variables, lnrho, lnT, args...; extrapolate=extrapolate)
     results
 end
 
-function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...) where {T<:AbstractFloat}
+function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat}
     lnrho = coord1
     lnT   = coord2
 
     results = _allocate_results(eos, opa, variables, lnrho, args...)
-    sample!(results, eos, opa, variables, lnrho, lnT, args...)
+    sample!(results, eos, opa, variables, lnrho, lnT, args...; extrapolate=extrapolate)
     results
 end
 
-"""
-Allocate the output containers matching `variables`, the shape of the coordinates and,
-for 3D opacity arrays, the requested wavelength slice.
-"""
 _allocate_results(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, lnrho) = map(var -> similar(lnrho, eltype(lnrho)), variables)
 
 function _allocate_results(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, lnrho, args...)
@@ -286,16 +218,16 @@ sample!(results::Union{Tuple, AbstractArray}, eos::RegularEoSTable, args...; kwa
 sample!(results::Union{Tuple, AbstractArray}, eos::AxedEoS, args...; kwargs...) = sample!(results, extended(eos), args...; kwargs...)
 sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample!(results, eos, extended(opa), args...; kwargs...)
 
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...) where {T<:AbstractFloat} = begin
-    lnrho, lnT = _invert_axis(eos, variables, coord1, coord2)
-    coefs_Rho, coefs_T = weights(eos, lnrho, lnT)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat} = begin
+    lnrho, lnT = _invert_axis(eos, variables, coord1, coord2; extrapolate=extrapolate)
+    coefs_Rho, coefs_T = weights(eos, lnrho, lnT; extrapolate=extrapolate)
     sample!(results, eos, variables, coefs_Rho, coefs_T, args...)
-    
+
     results
 end
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...) where {T<:AbstractFloat} = begin
-    lnrho, lnT = _invert_axis(eos, variables, coord1, coord2)
-    coefs_Rho, coefs_T = weights(eos, lnrho, lnT)
+sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat} = begin
+    lnrho, lnT = _invert_axis(eos, variables, coord1, coord2; extrapolate=extrapolate)
+    coefs_Rho, coefs_T = weights(eos, lnrho, lnT; extrapolate=extrapolate)
     sample!(results, eos, opa, variables, coefs_Rho, coefs_T, args...)
     results
 end
@@ -331,7 +263,7 @@ function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::Ex
             _interpolate_var!(results[i], data, coefs_Rho, coefs_T, is_log)
         end
     end
-    
+
     return results
 end
 
@@ -349,7 +281,7 @@ function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::Ex
             _interpolate_var!(results[i], data, coefs_Rho, coefs_T, k, is_log)
         end
     end
-    
+
     return results
 end
 
@@ -357,10 +289,6 @@ end
 # Keyword interface -- name the coordinates instead of ordering them
 # ============================================================================
 
-"""
-Mapping of accepted coordinate keywords to the log-quantity they represent.
-Keywords that do not start with `ln` are converted to their logarithm automatically.
-"""
 const COORDINATE_KWARGS = Dict(
     :lnRho => :lnRho, :rho => :lnRho, :Rho => :lnRho, :ρ => :lnRho,
     :lnT   => :lnT,   :T   => :lnT,
@@ -388,16 +316,9 @@ sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpa
 sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, nothing, variables; kwargs...)
 sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, opa, variables; kwargs...)
 
-"""
-    _sample_kwargs(eos, opa_or_nothing, variables; coordinates..., [k])
-
-Backend of the keyword interface. The named coordinates are converted to the grid
-coordinates (`lnRho`, energy axis) of the table -- inverting the table where necessary --
-after which the regular weight based machinery is used.
-"""
-function _sample_kwargs(eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, kwargs...)
+function _sample_kwargs(eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
     _check_wavelength_index(opa, k)
-    cRho, cT, scalar = _resolve_coefs(eos, coefs_Rho, coefs_T; kwargs...)
+    cRho, cT, scalar = _resolve_coefs(eos, coefs_Rho, coefs_T; extrapolate=extrapolate, kwargs...)
     kargs = isnothing(k) ? () : (k,)
 
     template = similar(cRho, _coef_eltype(cRho))
@@ -411,16 +332,9 @@ function _sample_kwargs(eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=n
     scalar ? map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), results) : results
 end
 
-"""
-    _sample_kwargs!(results, eos, opa_or_nothing, variables; coordinates..., [k])
-
-Backend of the mutating keyword interface. See [`_sample_kwargs`](@ref). Instead of
-coordinates, the precomputed weights may be passed as `coefs_Rho` + `coefs_T`, which is
-the allocation free way of repeatedly evaluating the tables on a fixed set of points.
-"""
-function _sample_kwargs!(results, eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, kwargs...)
+function _sample_kwargs!(results, eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
     _check_wavelength_index(opa, k)
-    cRho, cT, _ = _resolve_coefs(eos, coefs_Rho, coefs_T; kwargs...)
+    cRho, cT, _ = _resolve_coefs(eos, coefs_Rho, coefs_T; extrapolate=extrapolate, kwargs...)
 
     if isnothing(opa)
         sample!(results, eos, variables, cRho, cT)
@@ -434,11 +348,7 @@ end
 _check_wavelength_index(opa, k) = (isnothing(opa) && !isnothing(k)) && error("The wavelength index `k` needs an opacity table, the EoS alone has no wavelength axis.")
 _coef_eltype(coefs::AbstractArray{InterpCoefs{T}}) where {T<:AbstractFloat} = T
 
-"""
-Either take the interpolation weights as they are given, or build them from the named coordinates.
-Also returns whether all coordinates were scalars.
-"""
-function _resolve_coefs(eos::ExtendedEoS, coefs_Rho, coefs_T; kwargs...)
+function _resolve_coefs(eos::ExtendedEoS, coefs_Rho, coefs_T; extrapolate=false, kwargs...)
     if !isnothing(coefs_Rho) || !isnothing(coefs_T)
         (isnothing(coefs_Rho) || isnothing(coefs_T)) && error("Precomputed weights need both `coefs_Rho` and `coefs_T`.")
         isempty(kwargs) || error("Got coordinates $(Tuple(keys(kwargs))) together with precomputed weights, give either one or the other.")
@@ -446,16 +356,12 @@ function _resolve_coefs(eos::ExtendedEoS, coefs_Rho, coefs_T; kwargs...)
     end
 
     given, scalar = _coord_kwargs(kwargs)
-    lnrho, lnT = _grid_coords(eos, given)
-    cRho, cT = weights(eos, lnrho, lnT)
+    lnrho, lnT = _grid_coords(eos, given; extrapolate=extrapolate)
+    cRho, cT = weights(eos, lnrho, lnT; extrapolate=extrapolate)
 
     cRho, cT, scalar
 end
 
-"""
-Collect the coordinate keywords, convert them to logarithms where needed and bring them
-to a common shape + element type. Returns the coordinates and whether all of them were scalars.
-"""
 function _coord_kwargs(kwargs)
     given = Dict{Symbol, Any}()
     for (name, value) in kwargs
@@ -482,10 +388,7 @@ function _coord_kwargs(kwargs)
     given, scalar
 end
 
-"""
-Convert whatever coordinates were given into the (density, energy) grid axes of the table.
-"""
-function _grid_coords(eos::ExtendedEoS, given)
+function _grid_coords(eos::ExtendedEoS, given; extrapolate=false)
     grid_energy_var = energy_variable(eos.eos)
     dependent_energy_var = dependent_energy_variable(eos.eos)
 
@@ -494,10 +397,10 @@ function _grid_coords(eos::ExtendedEoS, given)
 
     # Whatever is missing has to be inverted from the table
     if isnothing(lnrho) && !isnothing(lnT) && haskey(given, :lnPg)
-        lnrho = _invert(eos, :lnRho, :lnPg, given[:lnPg], lnT)
+        lnrho = _invert(eos, :lnRho, :lnPg, given[:lnPg], lnT; extrapolate=extrapolate)
     end
     if isnothing(lnT) && !isnothing(lnrho) && haskey(given, dependent_energy_var)
-        lnT = _invert(eos, grid_energy_var, dependent_energy_var, given[dependent_energy_var], lnrho)
+        lnT = _invert(eos, grid_energy_var, dependent_energy_var, given[dependent_energy_var], lnrho; extrapolate=extrapolate)
     end
 
     if isnothing(lnrho) || isnothing(lnT)
@@ -512,46 +415,47 @@ end
 # Inverse lookup for EoS coordinates
 # ============================================================================
 
-_invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::AbstractArray{T}) where {T<:AbstractFloat} = begin
+_invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::AbstractArray{T}; extrapolate=false) where {T<:AbstractFloat} = begin
     has_target_rho = :lnRho in variables
     grid_energy_var = energy_variable(eos.eos)
     dependent_energy_var = dependent_energy_variable(eos.eos)
     has_target_energy = grid_energy_var in variables
-    
+
     lnrho, lnT = if has_target_rho
         # coord1 is lnPg, coord2 is grid_energy
-        _invert(eos, :lnRho, :lnPg, coord1, coord2), coord2
+        _invert(eos, :lnRho, :lnPg, coord1, coord2; extrapolate=extrapolate), coord2
     elseif has_target_energy
         # coord1 is lnRho, coord2 is known_energy (the non-grid one)
-        coord1, _invert(eos, grid_energy_var, dependent_energy_var, coord2, coord1)
+        coord1, _invert(eos, grid_energy_var, dependent_energy_var, coord2, coord1; extrapolate=extrapolate)
     else
         coord1, coord2
     end
     return lnrho, lnT
 end
 
-function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=200, tol=1e-6) where {T}
+function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=200, tol=1e-6, extrapolate=false) where {T}
     result_array = similar(target_array)
     grid = getfield(eos.eos.eos, target_var)
-    val_min_global = minimum(grid)
-    val_max_global = maximum(grid)
-    
+    pad = extrapolate ? 0.2 * (maximum(grid) - minimum(grid)) : zero(eltype(grid))
+    val_min_global = minimum(grid) - pad
+    val_max_global = maximum(grid) + pad
+
     calc_arr = zeros(T, 1)
     results = (calc_arr,)
     mid_arr = zeros(T, 1)
     known_val_arr = zeros(T, 1)
-    
+
     is_finding_rho = target_var == :lnRho
-    
+
     @inline function eval_coord(coord_guess, coefs_Rho, coefs_T)
         mid_arr[1] = coord_guess
-        
+
         if is_finding_rho
-            coefs_Rho .= weights_axis(mid_arr, grid)
+            coefs_Rho .= weights_axis(mid_arr, grid, extrapolate)
         else
-            coefs_T .= weights_axis(mid_arr, grid)
+            coefs_T .= weights_axis(mid_arr, grid, extrapolate)
         end
-        
+
         sample!(results, eos, (known_var,), coefs_Rho, coefs_T)
         return calc_arr[1]
     end
@@ -567,38 +471,38 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                 a_rad = 7.5657e-15 # erg cm^-3 K^-4
                 lnT_val = 0.25 * (lnP_val + log(3.0) - log(a_rad))
             end
-            
+
             mu_guess = 0.607
             return lnP_val + log(mu_guess * m_u) - log(KBoltzmann) - lnT_val
         else
             return abs(f_min) < abs(f_max) ? v_min : v_max
         end
     end
-    
+
     @inbounds for j in eachindex(target_array)
         target_val = target_array[j]
         known_val_arr[1] = known_array[j]
         v_mid = (val_min_global + val_max_global) / 2
         mid_arr[1] = v_mid
-        
+
         coefs_Rho, coefs_T = if is_finding_rho
-            weights(eos, mid_arr, known_val_arr)
+            weights(eos, mid_arr, known_val_arr; extrapolate=extrapolate)
         else
-            weights(eos, known_val_arr, mid_arr)
+            weights(eos, known_val_arr, mid_arr; extrapolate=extrapolate)
         end
-        
+
         v_ideal = calc_fallback(val_min_global, val_max_global, 0.0, 0.0, target_val)
-        
+
         v_min = val_min_global
         v_max = val_max_global
-        
+
         if is_finding_rho
             v_min_tight = max(val_min_global, v_ideal - 2.0)
             v_max_tight = min(val_max_global, v_ideal + 2.0)
-            
+
             f_min_tight = eval_coord(v_min_tight, coefs_Rho, coefs_T) - target_val
             f_max_tight = eval_coord(v_max_tight, coefs_Rho, coefs_T) - target_val
-            
+
             if sign(f_min_tight) != sign(f_max_tight) && f_max_tight > f_min_tight
                 v_min = v_min_tight
                 v_max = v_max_tight
@@ -616,12 +520,12 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
         for i in 1:maxiter
             v_mid = (v_min + v_max)/2
             f_mid = eval_coord(v_mid, coefs_Rho, coefs_T) - target_val
-            
+
             if abs(v_max - v_min) <= tol || f_mid == 0
                 result_array[j] = v_mid
                 break
             end
-            
+
             if is_invalid(f_min, f_max)
                 if v_ideal > v_mid
                     v_min = v_min + abs(v_min - v_mid) / 2.0
@@ -630,7 +534,7 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                     v_max = v_max - abs(v_max - v_mid) / 2.0
                     v_min = max(val_min_global, v_min - abs(v_max - v_mid) / 2.0)
                 end
-                
+
                 f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
                 f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
             else
@@ -643,7 +547,7 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                     f_max = f_mid
                 end
             end
-            
+
             if i == maxiter
                 result_array[j] = v_mid
             end
@@ -672,13 +576,13 @@ _interpolate_var!(result::AbstractArray{T3}, data::AbstractArray{T}, coefs_Rho::
         @inbounds for j in 1:length(coefs_T)
             cr = coefs_Rho[j]
             ct = coefs_T[j]
-            
+
             it, ir = ct.idx, cr.idx
             w00 = ct.w_low  * cr.w_low
             w10 = ct.w_high * cr.w_low
             w01 = ct.w_low  * cr.w_high
             w11 = ct.w_high * cr.w_high
-            
+
             for k in 1:n3
                 result[k + (j-1)*n3] = _interpolate_point_3d_fused(data, it, ir, w00, w10, w01, w11, k, is_log)
             end
@@ -701,7 +605,7 @@ _interpolate_var!(result::AbstractArray{T3}, data::AbstractArray{T}, coefs_Rho::
                 w10 = ct.w_high * cr.w_low
                 w01 = ct.w_low  * cr.w_high
                 w11 = ct.w_high * cr.w_high
-                
+
                 result[j] = _interpolate_point_3d_fused(data, it, ir, w00, w10, w01, w11, k, is_log)
             end
         else
@@ -714,7 +618,7 @@ _interpolate_var!(result::AbstractArray{T3}, data::AbstractArray{T}, coefs_Rho::
                 w10 = ct.w_high * cr.w_low
                 w01 = ct.w_low  * cr.w_high
                 w11 = ct.w_high * cr.w_high
-                
+
                 for (ik, kidx) in enumerate(k)
                     result[ik + (j-1)*nk] = _interpolate_point_3d_fused(data, it, ir, w00, w10, w01, w11, kidx, is_log)
                 end
@@ -727,7 +631,7 @@ end
     it = coefs.idx
     w00 = coefs.w_low
     w10 = coefs.w_high
-    
+
     if is_log
         val = w00 * log(data[it]) +
               w10 * log(data[it+1])
@@ -744,7 +648,7 @@ end
     w10 = ct.w_high * cr.w_low
     w01 = ct.w_low  * cr.w_high
     w11 = ct.w_high * cr.w_high
-    
+
     if is_log
         val = w00 * log(data[it,   ir  ]) +
               w10 * log(data[it+1, ir  ]) +
@@ -861,14 +765,14 @@ sample
 # Ideal gas entropy
 # ============================================================================
 
-function ideal_entropy(T, rho, mu)    
+function ideal_entropy(T, rho, mu)
     m_particle = mu * m_u
     R_spec = KBoltzmann / m_particle
-    
+
     factor = (2.0 * pi * m_particle * KBoltzmann * T) / (HPlanck^2)
     n_quantum = factor^1.5
     n = rho / m_particle
-    
+
     # Sackur-Tetrode Equation
     R_spec * (log(n_quantum / n) + 2.5)
 end
@@ -889,13 +793,13 @@ function gradients!(eos, opa_extended::ExtendedOpacity)
 		@inbounds for j in eachindex(eos.lnRho)
 			@inbounds for i in eachindex(eos.lnT)
 				dS, dT = if (i>1) &&(i<nT)
-					log(opa.src[i+1, j, k]) - log(opa.src[i-1, j, k]), 
+					log(opa.src[i+1, j, k]) - log(opa.src[i-1, j, k]),
 					eos.lnT[i+1] - eos.lnT[i-1]
 				elseif i==1
-					log(opa.src[i+1, j, k]) - log(opa.src[i, j, k]), 
+					log(opa.src[i+1, j, k]) - log(opa.src[i, j, k]),
 					eos.lnT[i+1] - eos.lnT[i]
 				elseif i==nT
-					log(opa.src[i, j, k]) - log(opa.src[i-1, j, k]), 
+					log(opa.src[i, j, k]) - log(opa.src[i-1, j, k]),
 					eos.lnT[i] - eos.lnT[i-1]
 				end
 				dS_dT[i, j, k] = exp(log(opa.src[i, j, k]) - eos.lnT[i]) * dS / dT
@@ -908,11 +812,6 @@ function gradients!(eos, opa_extended::ExtendedOpacity)
 	dS_dT
 end
 
-"""
-	add_gradients!(eos)
-
-Compute χₜ, χᵨ, and cᵥ for the given EoS. 
-"""
 function gradients!(eos_extended::ExtendedEoS)
 	eos = eos_extended.eos.eos
 	aos = eos_extended.eos
@@ -928,17 +827,17 @@ function gradients!(eos_extended::ExtendedEoS)
 	@inbounds for j in eachindex(eos.lnRho)
 		@inbounds for i in eachindex(eos.lnT)
 			dE, dT, dP, dRoss = if (i>1) &&(i<nT)
-				eos.lnEi[i+1, j] - eos.lnEi[i-1, j], 
+				eos.lnEi[i+1, j] - eos.lnEi[i-1, j],
 				eos.lnT[i+1    ] - eos.lnT[i-1],
 				eos.lnPg[i+1, j] - eos.lnPg[i-1, j],
 				eos.lnRoss[i+1, j] - eos.lnRoss[i-1, j]
 			elseif i==1
-				eos.lnEi[i+1, j] - eos.lnEi[i, j], 
+				eos.lnEi[i+1, j] - eos.lnEi[i, j],
 				eos.lnT[i+1]     - eos.lnT[i],
 				eos.lnPg[i+1, j] - eos.lnPg[i, j],
 				eos.lnRoss[i+1, j] - eos.lnRoss[i, j]
 			elseif i==nT
-				eos.lnEi[i, j] - eos.lnEi[i-1, j], 
+				eos.lnEi[i, j] - eos.lnEi[i-1, j],
 				eos.lnT[i]     - eos.lnT[i-1],
 				eos.lnPg[i, j] - eos.lnPg[i-1, j],
 				eos.lnRoss[i, j] - eos.lnRoss[i-1, j]
@@ -946,7 +845,7 @@ function gradients!(eos_extended::ExtendedEoS)
 			cᵥ[i, j] = max(dE/dT * exp(eos.lnEi[i, j] - eos.lnT[i]), 1e-12)
 			χₜ[i, j] = max(dP/dT, 1e-12)
 			dlnRoss_dlnT[i, j] = dRoss / dT
-	
+
 			dR, dP, dRoss = if (j>1) &&(j<nRho)
 				eos.lnRho[j+1] - eos.lnRho[j-1],
 				eos.lnPg[i, j+1] - eos.lnPg[i, j-1],
@@ -978,11 +877,6 @@ end
 # Thermodynamic quantities for pre-computation
 # ============================================================================
 
-"""
-    add_thermodynamics!(eos_extended)
-
-Add gradients and thermodynamic quantities to the EoS and allow for interpolation.
-"""
 function add_thermodynamics!(eos_extended::ExtendedEoS)
 	eos = eos_extended.eos.eos
 	χₜ, χᵨ, cᵥ = gradients!(eos_extended)
@@ -1017,8 +911,8 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 		dE = eos.lnEi[i, 1] - eos.lnEi[i-1, 1]
 		T = (exp(eos.lnT[i]) +  exp(eos.lnT[i-1])) / 2
 		E = (exp(eos.lnEi[i, 1]) +  exp(eos.lnEi[i-1, 1])) / 2
-		
-		dS = E / T * dE	
+
+		dS = E / T * dE
 		S[i, 1] = S[i-1, 1] + dS
 	end
 
@@ -1027,14 +921,14 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 	for j in 2:size(S, 2)
 		dE = eos.lnEi[:, j] - eos.lnEi[:, j-1]
 		dRho = eos.lnRho[j] - eos.lnRho[j-1]
-								   
+
 		rho = (exp(eos.lnRho[j]) + exp(eos.lnRho[j-1])) / 2
 		P = (exp.(eos.lnPg[:, j]) + exp.(eos.lnPg[:, j-1])) / 2
 		E = (exp.(eos.lnEi[:, j]) + exp.(eos.lnEi[:, j-1])) / 2
 
 		t1 = E ./ T .* dE
 		t2 = P ./ (rho .* T) .* dRho
-		
+
 		dS = t1 - t2
 		S[:, j] = S[:, j-1] .+ dS
 	end

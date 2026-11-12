@@ -1,12 +1,8 @@
 
-"""
-Interpolate the EoS + Opacity tables based on missing values in lnEi.
-"""
 function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoSTable, O<:OpacityTable}
     # smooth the eos first
     m = smooth!(eos, return_missing=true, along=along)
 
-    # return if they are all present, nothing to smooth here
     isnothing(m) && return
     all(.!m)     && return
 
@@ -16,7 +12,7 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
     for opacities in opacities_list
         # interpolate all quantities of the opacities
         # Note that, if the energy is the axis we still have to interpolate in T!
-        if (along ==:T) 
+        if (along ==:T)
             Taxis = eaxis ? zeros(size(eos.lnT, 1)) : zeros(length(eos.lnT))
             mask  = trues(length(Taxis))
             nmask = similar(mask)
@@ -44,14 +40,13 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
 
             end
 
-        elseif (along==:Rho) | (along==:rho) | (along==:ρ) 
+        elseif (along==:Rho) | (along==:rho) | (along==:ρ)
             eaxis && error("You can only integrate along Rho if T is the other axis (because we have to integrate along T anyways, which then may be unstructured). Choose :T.")
-            
+
             Raxis = eos.lnRho
             mask  = trues(length(Raxis))
             nmask = similar(mask)
             val   = similar(Raxis)
-
 
             for i in eachindex(eos.lnT)
                 # interpolate along T
@@ -79,14 +74,10 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
     nothing
 end
 
-"""
-Interpolate the EoS tables based on missing values in lnEi.
-"""
 function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
     # missing spots in the eos
     m = missing_spots(eos)
 
-    # return if they are all present, nothing to smooth here
     all(.!m) && return
 
     # check if we have an energy axis
@@ -94,7 +85,7 @@ function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
 
     # interpolate all quantities of the eos
     # Note that, if the energy is the axis we still have to interpolate in T!
-    if (along ==:T) 
+    if (along ==:T)
         Taxis = eaxis ? zeros(size(eos.lnT, 1)) : zeros(length(eos.lnT))
         mask  = trues(length(Taxis))
         nmask = similar(mask)
@@ -109,13 +100,13 @@ function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
             nodes = (Taxis[nmask][sortmask],)
 
             eos.lnEi[  mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnEi[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask))
-            eos.lnPg[  mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnPg[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask)) 
-            eos.lnNe[  mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnNe[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask)) 
-            eos.lnRoss[mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnRoss[nmask, i][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask))  
+            eos.lnPg[  mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnPg[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask))
+            eos.lnNe[  mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnNe[nmask, i][sortmask],   Gridded(Linear())), Line()).(view(Taxis, mask))
+            eos.lnRoss[mask, i] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, eos.lnRoss[nmask, i][sortmask], Gridded(Linear())), Line()).(view(Taxis, mask))
         end
-    elseif (along==:Rho) | (along==:rho) | (along==:ρ) 
+    elseif (along==:Rho) | (along==:rho) | (along==:ρ)
         eaxis && error("You can only integrate along Rho if T is the other axis (because we have to integrate along T anyways, which then may be unstructured). Choose :T.")
-        
+
         Raxis = eos.lnRho
         mask  = trues(length(Raxis))
         nmask = similar(mask)
@@ -127,9 +118,9 @@ function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
 
             nodes = (view(Raxis, nmask),)
             eos.lnEi[  i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnEi,   i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask))
-            eos.lnPg[  i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnPg,   i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask)) 
-            eos.lnNe[  i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnNe,   i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask)) 
-            eos.lnRoss[i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnRoss, i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask))  
+            eos.lnPg[  i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnPg,   i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask))
+            eos.lnNe[  i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnNe,   i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask))
+            eos.lnRoss[i, mask] .= Interpolations.extrapolate(Interpolations.interpolate(nodes, view(eos.lnRoss, i, nmask), Gridded(Linear())), Line()).(view(Raxis, mask))
         end
     else
         error("Given axis not implemented. Choose T or Rho")
@@ -144,9 +135,6 @@ end
 
 smooth!(eos::E, opacities::O, args...; kwargs...) where {E<:EoSTable, O<:OpacityTable} = smooth!(eos, (opacities,), args...; kwargs...)
 
-"""
-Get the missing spots in the EoS.
-"""
 function missing_spots(eos::E) where {E<:EoSTable}
     m = falses(size(eos.lnEi)...)
 
@@ -162,7 +150,7 @@ end
 smooth(eos::E, args...; kwargs...) where {E<:EoSTable} = begin
     eos_copy = deepcopy(eos)
     smooth!(eos_copy, args...; kwargs...)
-    
+
     eos_copy
 end
 
@@ -170,6 +158,6 @@ smooth(eos::E, opacities::O, args...; kwargs...) where {E<:EoSTable, O<:OpacityT
     eos_copy = deepcopy(eos)
     opa_copy = deepcopy(opacities)
     smooth!(eos_copy, opa_copy, args...; kwargs...)
-    
+
     eos_copy,opa_copy
 end

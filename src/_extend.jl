@@ -2,13 +2,6 @@
 Extend EoS and opacity tables to values beyond the limits.
 =#
 
-"""
-    extend(aos::AxedEoS, opacities...; downD=0.1, upD=0.0, downE=0.1, upE=0.0)
-
-Extend the EoS upwards or downwards by `up` or `down` fractions of the current size.
-The number of points will increase by the same fraction, however everything will
-be interpolated to a new, uniform axis.
-"""
 function extend(aos::AxedEoS, opacities...; downD=0.1, upD=0.0, downE=0.1, upE=0.0)
     ename = EnergyAxis(aos).name
     evals = EnergyAxis(aos).values

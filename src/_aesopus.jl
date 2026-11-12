@@ -1,13 +1,15 @@
-#=================================================#
-#======= AESOPUS 2.0 Opacity + EoS ===============#
-#=================================================#
+# ============================================================================
+# AESOPUS 2.0 Opacity + EoS
+# ============================================================================
 
-#= Constructors for the EoS =#
+# ============================================================================
+# Constructors for the EoS
+# ============================================================================
 
 """
     AesopusEoS(path)
 
-Read an Aesopus EoS from a HDF5 file. 
+Read an Aesopus EoS from a HDF5 file.
 Reads it directly into the squaregas format.
 
 # Examples
@@ -21,7 +23,7 @@ AesopusEoS(path) = AesopusEoS_hdf5(path)
 """
     AesopusEoS(; [type=Float32], paths...)
 
-Read an Aesopus EoS from ascii files. 
+Read an Aesopus EoS from ascii files.
 Reads it directly into the squaregas format.
 
 # Examples
@@ -32,9 +34,6 @@ julia> AesopusEoS(energy=path1, kross=path2, ne=path3, pg=path4)
 """
 AesopusEoS(; type=Float32, paths...) = AesopusEoS_ascii(; type, paths...)
 
-"""
-Read table in HDF5 format.
-"""
 function AesopusEoS_hdf5(path)
     f = HDF5.h5open(path, "r")
 
@@ -52,14 +51,11 @@ function AesopusEoS_hdf5(path)
     RegularEoSTable(lnRho, lnT, lnEi, lnPg, lnRoss, lnNe)
 end
 
-"""
-Read tables in ascii format.
-"""
 function AesopusEoS_ascii(; energy, kross, ne, pg, type=Float32)
     content = get_content(energy, type)
 
-    ## The number of lines is equal to the number of T points +1 
-    nT = length(content) - 1 
+    ## The number of lines is equal to the number of T points +1
+    nT = length(content) - 1
     nR = length(first(content))
 
     lnT    = zeros(type, nT)
@@ -90,10 +86,9 @@ function AesopusEoS_ascii(; energy, kross, ne, pg, type=Float32)
     RegularEoSTable(lnRho, reverse(lnT), reverse(lnEi, dims=1), reverse(lnPg, dims=1), reverse(lnRoss, dims=1), reverse(lnNe, dims=1))
 end
 
-
-
-
-#= Constructors for the Opacity table =#
+# ============================================================================
+# Constructors for the Opacity table
+# ============================================================================
 
 """
     AesopusOpacity(eos; sigma=path_to_file, λ_nodes=5776)
@@ -104,9 +99,6 @@ Format: log10(T) log10(rho) log10(lambda/Angstrom) log10(sigma)
 """
 AesopusOpacity(eos; paths...) = AesopusOpacity_binary(eos; paths...)
 
-"""
-Read table in binary format. Ensure consistency with the EoS.
-"""
 function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
     lt = length(eos.lnT)
     lr = length(eos.lnRho)
@@ -152,7 +144,7 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
         rnew = zeros(tp, size(r)...)
         lnew = zeros(tp, size(l)...)
         κnew = zeros(tp, size(κ)...)
-        
+
         @inbounds for k in eachindex(l)
             @inbounds for j in 1:lr
                 @inbounds for i in 1:lt
@@ -169,7 +161,6 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
         lnew = l
         κnew = κ
     end
-        
 
     ## The grids have to match (for now, could be interpolated if needed)
     @assert all(Tnew .≈ eos.lnT)
@@ -189,14 +180,10 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
     RegularOpacityTable(exp.(κnew), exp.(eos.lnRoss), src, exp.(lnew), false)
 end
 
+# ============================================================================
+# Utility functions
+# ============================================================================
 
-
-
-#= Utility functions =#
-
-"""
-Read and parse content of ascii files
-"""
 get_content(path, type) = open(path, "r") do f
     content = readlines(f)
     [parse.(type, strip.(split(strip(c)))) for c in content if length(split(strip(c))) > 1]

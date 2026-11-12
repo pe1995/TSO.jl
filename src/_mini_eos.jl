@@ -2,13 +2,6 @@
 # MiniOpacityTable -- Opacity table without source function
 # ============================================================================
 
-"""
-    MiniOpacityTable(opacity::RegularOpacityTable)
-
-Create a reduced opacity table. This effectively does not store the source function, 
-which saves disk space. However, this means that any lookup involving the source function
-will be replaced by a simple call to the Planck function.
-"""
 struct MiniOpacityTable <: AbstractRegularTable
     opacity::RegularOpacityTable
     binned::Bool
@@ -25,7 +18,7 @@ end
 """
     reload(s::Type{MiniOpacityTable}, path::String)
 
-Skip loading of the source function. 
+Skip loading of the source function.
 """
 reload(s_loc::Type{MiniOpacityTable}, path::String; binned=false) = begin
     fid   = HDF5.h5open(path, "r")
@@ -50,55 +43,6 @@ opacity(opa::MiniOpacityTable) = opa.opacity
 wavelength(opa::MiniOpacityTable) = wavelength(opa.opacity)
 
 # ============================================================================
-# Modified lookup function
-# ============================================================================
-
-function lookup(eos::E, s::MiniOpacityTable, v::Symbol, lnρ::AbstractFloat, lnT::AbstractFloat, i::Int) where {E1<:EoSTable, E2<:AxedEoS, E<:Union{E1, E2}}
-    if v == :src
-        return Bλ_fast(s.opacity.λ[i], exp(lnT))
-    elseif v == :dS_dT
-        return dBdTλ_fast(s.opacity.λ[i], exp(lnT))
-    elseif v == :κ
-        return lookup(eos, s.opacity, :κ, lnρ, lnT, i)
-    else
-        return lookup(eos,s.opacity, v, lnρ, lnT, i)
-    end
-end
-
-"""
-    lookup_variable(s::MiniOpacityTable, v::Symbol)
-
-Return a lookup function for the given variable. The function will take the following arguments:
-v==:src 
-    - T: Temperature
-    - i: Index of the wavelength bin
-v==:dS_dT
-    - T: Temperature
-    - i: Index of the wavelength bin
-v==:κ
-    - eos: EoS table
-    - lnρ: Logarithm of density
-    - lnT: Logarithm of temperature
-    - i: Index of the wavelength bin
-v==:other
-    - eos: EoS table
-    - lnρ: Logarithm of density
-    - lnT: Logarithm of temperature
-    - i: Index of the wavelength bin
-"""
-lookup_variable(s::MiniOpacityTable, v::Symbol) = begin
-    if v == :src
-        return (T, i) -> Bλ_fast(s.opacity.λ[i], T)
-    elseif v == :dS_dT
-        return (T, i) -> dBdTλ_fast(s.opacity.λ[i], T) 
-    elseif v == :κ
-        return (eos, lnρ, lnT, i) -> lookup(eos, s.opacity, :κ, lnρ, lnT, i) 
-    else
-        return (eos, lnρ, lnT, i) -> lookup(eos,s.opacity, v, lnρ, lnT, i)
-    end
-end
-
-# ============================================================================
 # Fast Planck function and its derivative
 # ============================================================================
 
@@ -107,15 +51,15 @@ end
 
     @fastmath begin
         Λ = λ * aa_to_cm
-        
+
         invT = 1.0 / T
-        
+
         c2 = hc_k / Λ
-        x = c2 * invT     
-        
+        x = c2 * invT
+
         E = exp(x)
         E_minus_1 = E - 1.0
-        
+
         c1 = twohc2 / Λ^5
         return (c1 * x * invT * E) / (E_minus_1 * E_minus_1)
     end
@@ -126,14 +70,14 @@ end
 
     @fastmath begin
         Λ = λ * aa_to_cm
-        
+
         invT = 1.0 / T
         c2 = hc_k / Λ
-        
+
         E = exp(c2 * invT)
-        
+
         c1 = twohc2 / Λ^5
-        
+
         return c1 / (E - 1.0)
     end
 end

@@ -6,9 +6,6 @@ const WrapperPy   = PythonCall.pynew()
 const computeOpac = PythonCall.pynew()
 const SlurmEnv    = Ref(false)
 
-"""
-Load the path of the TS codes.
-"""
 load(ts_help::Ref{String}, path::String) = begin
     ts_help[] = isdir(abspath(path)) ? abspath(path) : ""
     ts_help[]
@@ -16,7 +13,6 @@ end
 
 load_wrapper(path=joinpath(dirname(@__FILE__), "../../TurboSpectrum-Wrapper/") ) = load(TSwrapper, path)
 load_TS(     path=joinpath(dirname(@__FILE__), "../../Turbospectrum_NLTE/") )    = load(TS, path)
-
 
 ### General Convenience #######################################################
 
@@ -50,7 +46,6 @@ function import_wrapper(mod="source")
     WrapperPy, computeOpac
 end
 
-
 ### Importing Python scripts ##################################################
 
 macro fromWrapper(mod, dir=dirname(TSO.@inWrapper("source")))
@@ -67,12 +62,8 @@ macro fromTS(mod, dir=dirname(@inTS("source")))
     :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
 end
 
-
 ### Writing colunms in Stagger format #########################################
 
-"""
-Write a column to file using the Stagger format as specified in TS
-"""
 function write_as_stagger(name::String; teff, logg, FeH, T, rho, z=zeros(length(T)), id="TSO.jl-column")
     teff = @sprintf "%.1f" teff
     logg = @sprintf "%.5f" logg
@@ -95,12 +86,9 @@ end
 
 write_as_stagger(name::String, T::Vector, rho::Vector) = write_as_stagger(name, T=T, rho=rho, z=zeros(length(T)), teff=0.0, logg=0.0, FeH=0.0)
 
-
-
 ### Communication with the TS wrapper #########################################
 
 function prepare_TS!(setup, atmFile)
-    #@info "preparing $(atmFile)"
     atmos = computeOpac.model_atmosphere()
     atmos.read(atmFile, setup.atmos_format)
 
@@ -126,12 +114,12 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00", wait=false)
     # Run all job steps
     for (i, atmFile) in enumerate(setup.atmos_list)
         atmos, modelOpacFile = prepare_TS!(setup, atmFile)
-        
+
         id  = "$(atmos.id)_$(setup.jobID)"
-        job = run_babsma(setup.ts_input, elementalAbundances, atmos, modelOpacFile, id, 
+        job = run_babsma(setup.ts_input, elementalAbundances, atmos, modelOpacFile, id,
                             quite=setup.debug, wait=wait,
                             memMB=mem, timeout=timeout)
-        
+
         @info "running job $(id)"
 
         @assert !(id in keys(jobs))
@@ -141,7 +129,7 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00", wait=false)
     # Wait for completion
     for id in keys(jobs)
         s = success(jobs[id])
-        
+
         @info "   --> Babsma Job $id finished. Success: $s"
         @assert s
     end
@@ -161,13 +149,13 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
 
         id  = "$(atmos.id)_$(setup.jobID)"
         job = run_bsyn(setup.ts_input, elementalAbundances, atmos, modelOpacFile,
-                        specResultFile, id, 
+                        specResultFile, id,
                         quite=setup.debug, memMB=mem, timeout=timeout)
-        
+
         @info "...running job $(id)"
 
         @assert !(id in keys(jobs))
-        
+
         jobs[id]      = job
         job_input[id] = deepcopy([setup.ts_input, elementalAbundances, atmos, modelOpacFile, specResultFile, id])
     end
@@ -175,39 +163,14 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
     # Wait for completion
     for id in keys(jobs)
         s = success(jobs[id])
-        
+
         @info "   --> Bsyn Job $id finished. Success: $s"
         @assert s
-        #if !s
-        #    @warn "One of the jobs failed. Try re-submitting..."
-        #    job = srun_bsyn(job_input[job]..., quite=setup.debug, memMB=mem, timeout=timeout)
-        #    s   = success(job)
         #
-        #    @info "   --> RE: Bsyn Job $id finished. Success: $s"
-        #end
         #!s && error("Job $id failed. Please check the log file in the TS folder. Exiting.")
     end
 end
 
-"""
-    Creates input for the babsma.f routine and executes it
-    babsma.f routine computes opacities for the give model atmosphere
-    which are then used by the bsyn.f routine
-
-    Parameters
-    ----------
-    ts_input : dict
-        contains TS input flags
-        must include the following flags:
-            'MARCS-FILE'('.true.' or '.false.'),
-            'ts_root' (path to TS executables bsyn.f and babsma.f)
-    atmos : model_atmosphere
-        for which model atmosphere to compute the opacities
-    modelOpacFile : str
-        where to store computed opacities
-    quite : boolean
-        controls details printout of the progress info
-"""
 function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; quite=true, wait=false,
                         memMB=70000/40, timeout="5:00:00")
     lmin  = @sprintf "%.3f" pyconvert(Any, ts_input["LAMBDA_MIN"])
@@ -235,7 +198,7 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
 
     for i in eachindex(elementalAbundances)
         z, abund = elementalAbundances[i]
-        
+
         zs     = @sprintf "%.0f" z
         abunds = @sprintf "%5.3f" abund
 
@@ -244,7 +207,7 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
 
     ddir    = @inTS("")
     cdir    = pwd()
-    command = if SlurmEnv[] 
+    command = if SlurmEnv[]
         !isnothing(timeout) ?
             Cmd(`srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/babsma_lu`) :
             Cmd(`srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --exclusive -D $(ddir) ./exec/babsma_lu`)
@@ -254,8 +217,8 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
     end
 
     p = Pipe()
-    r = run(pipeline(command, stdout=joinpath(ddir, "babsma_$(id).log"), 
-                              stderr=joinpath(ddir, "babsma_$(id).err"), 
+    r = run(pipeline(command, stdout=joinpath(ddir, "babsma_$(id).log"),
+                              stderr=joinpath(ddir, "babsma_$(id).err"),
                               stdin =p), wait=false)
     write(p, babsma_conf)
     close(p)
@@ -265,40 +228,6 @@ function run_babsma(ts_input, elementalAbundances, atmos, modelOpacFile, id; qui
     return r
 end
 
-"""
-    Creates input for the bsyn.f routine and executes it
-    bsyn.f runs spectral synthesis based on the opacities
-    computed previsously by babsma.f
-
-    Parameters
-    ----------
-    ts_input : dict
-        contains TS input flags
-        must include the following flags:
-            'NLTE' ('.true.' or '.false.'),
-            'LAMBDA_MIN', 'LAMBDA_MAX', 'LAMBDA_STEP',
-            'MARCS-FILE'('.true.' or '.false.'),
-            'NFILES' (how many linelists provided, integer),
-            'LINELIST' (separated with new line),
-            'ts_root' (path to TS executables bsyn.f and babsma.f)
-    elementalAbundances : list
-        contains atomic numbers and abundances of the elements requested for spectral synthesis,
-        e.g.
-        [ [26, 7.5], [8, 8.76] ]
-    atmos : model_atmosphere
-        for which model atmosphere to compute the opacities
-    modelOpacFile : str
-        path to the file storing opacities computed by babsma
-        returned by compute_babsma
-    specResultFile : str
-        where to save computed spectrum
-    nlteInfoFile : str
-        path to the configuration file that controls inclusion of NLTE to TS
-        returned by create_NlteInfoFile
-        if None, spectrum will be computed in LTE
-    quite : boolean
-        controls details printout of the progress info
-"""
 function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResultFile, id; quite = true,
                                                 memMB=70000/40, timeout="5:00:00")
     lmin  = @sprintf "%.3f" ts_input["LAMBDA_MIN"]
@@ -320,7 +249,7 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
     'NFILES   :' '$(ts_input["NFILES"])'
     $(ts_input["LINELIST"])
     """
-    
+
     bsyn_config = bsyn_config * " 'SPHERICAL:'  '.false.' \n"
     bsyn_config = bsyn_config * """
     30
@@ -334,7 +263,7 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
 
     for i in eachindex(elementalAbundances)
         z, abund = elementalAbundances[i]
-        
+
         zs     = @sprintf "%.0f" z
         abunds = @sprintf "%5.3f" abund
 
@@ -343,7 +272,7 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
 
     ddir    = @inTS("")
     cdir    = pwd()
-    command = if SlurmEnv[] 
+    command = if SlurmEnv[]
         !isnothing(timeout) ?
             `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --time=$(timeout) --exclusive -D $(ddir) ./exec/bsyn_lu` :
             `srun -N 1 -n 1 -c 1 --mem-per-cpu=$(memMB)M --exclusive -D $(ddir) ./exec/bsyn_lu`
@@ -351,10 +280,10 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
         cd(ddir)
         `./exec/bsyn_lu`
     end
-    
+
     p = Pipe()
-    r = run(pipeline(command, stdout=joinpath(ddir, "bsyn_$(id).log"), 
-                              stderr=joinpath(ddir, "bsyn_$(id).err"), 
+    r = run(pipeline(command, stdout=joinpath(ddir, "bsyn_$(id).log"),
+                              stderr=joinpath(ddir, "bsyn_$(id).err"),
                               stdin =p), wait=false)
     write(p, bsyn_config)
     close(p)
@@ -363,8 +292,6 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
 
     return r
 end
-
-
 
 ### Output handling ###########################################################
 
@@ -426,8 +353,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
     end
 end
 
-
-
 ### Read slurm setup ##########################################################
 
 slurm_setup() = begin
@@ -453,5 +378,3 @@ slurm_setup() = begin
 
     mem
 end
-
-###############################################################################

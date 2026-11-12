@@ -1,4 +1,6 @@
-#================================ Solvers ====================================#
+# ============================================================================
+# Solvers
+# ============================================================================
 
 struct AngleHeatingSolver{T<:AbstractFloat} <:RadiativeTransferSolver
     μ  ::T
@@ -7,7 +9,7 @@ struct AngleHeatingSolver{T<:AbstractFloat} <:RadiativeTransferSolver
     χ  ::Vector{T}
     S  ::Vector{T}
     Q  ::Array{T}
-    
+
     # Process quantities
     dtau1 ::Array{T}
     dtau2 ::Array{T}
@@ -45,22 +47,17 @@ struct InterpolatedHeating{R<:RadiationField, I} <:AbstractRadiationField
     interpolation_function::Vector{I}
 end
 
-
-
-
-
-
 Heating(
-    model::AbstractModel; 
-    eos::AxedEoS, 
-    opacities::AbstractBinnedOpacities, 
-    angles=sort(labatto_4angles), 
+    model::AbstractModel;
+    eos::AxedEoS,
+    opacities::AbstractBinnedOpacities,
+    angles=sort(labatto_4angles),
     weights=J_weights(labatto_4angles)
 ) = begin
     opacities = opacities.opacities
     bins = size(opacities.κ, 3)
 
-    T2 = Float64 
+    T2 = Float64
 
     # Make sure the model has the correct orientation
     m = convert_model(model, T2)
@@ -73,7 +70,7 @@ Heating(
     # Create an angular solver for every angle in angles, with the correct weight
     angle_solver = [
         AngleHeatingSolver(
-            angles[i], weights[i], 
+            angles[i], weights[i],
             zeros(T2, length(model.z)),
             zeros(T2, length(model.z)),
             zeros(T2, length(model.z)),
@@ -99,19 +96,10 @@ Heating(
     HeatingSolver(eos, opacities, angles, weights, bins, m, χ, S, Q, F, angle_solver)
 end
 
+# ============================================================================
+# Solving
+# ============================================================================
 
-
-
-
-
-#================================ Solving ====================================#
-
-"""
-    solve(h::HeatingSolver)
-
-Solve the radiative heating equation with the given `solver`.
-Frequency integration weights can be given via `weights`.
-"""
 function solve(h::HeatingSolver; weights=ones(h.bins))
     h.Q .= 0.0
     h.F .= 0.0
@@ -123,11 +111,11 @@ function solve(h::HeatingSolver; weights=ones(h.bins))
         # compute the radiation for all angles
         for (j, μ) in enumerate(h.angles)
             solve!(h.μ_solver[j], h.model.z, h.χ, h.S)
-            h.Q .+= h.μ_solver[j].Q .* 
+            h.Q .+= h.μ_solver[j].Q .*
                     h.μ_solver[j].ω .*
                     h.χ .*
                     weights[bin]
-            h.F .+= (h.μ_solver[j].Q .+ h.S).* 
+            h.F .+= (h.μ_solver[j].Q .+ h.S).*
                     h.μ_solver[j].ω .*
                     weights[bin]
         end
@@ -136,59 +124,49 @@ function solve(h::HeatingSolver; weights=ones(h.bins))
     HeatingField(h.model, h.Q, h.F)
 end
 
-"""
-    solve(h::AngleHeatingSolver, z, χ, S)
-
-Solve the radiative heating equation in a given direction with given optics.
-"""
 function solve!(h::AngleHeatingSolver, z, χ, S)
     boundary!(h, z, χ, S)
     _solve!(
         h.μ,
         h.Q,
-        h.dtau1, 
-        h.dtau2, 
-        h.ex0, 
-        h.ex1, 
-        h.ex2, 
-        h.dsdtau1, 
-        h.dsdtau2, 
-        h.d1sdtau1, 
+        h.dtau1,
+        h.dtau2,
+        h.ex0,
+        h.ex1,
+        h.ex2,
+        h.dsdtau1,
+        h.dsdtau2,
+        h.d1sdtau1,
         h.d2sdtau2,
-        h.χ, 
+        h.χ,
         h.S,
         h.z
     )
     boundary!(h)
 end
 
-"""
-    _solve!(args...)
-
-Qr solution from Dispatch (solver2, rt_mod.f90, Oct. 12, 2023)
-"""
 _solve!(
     μ,
     Q,
-    dtau1, 
-    dtau2, 
-    ex0, 
-    ex1, 
-    ex2, 
-    dsdtau1, 
-    dsdtau2, 
-    d1sdtau1, 
+    dtau1,
+    dtau2,
+    ex0,
+    ex1,
+    ex2,
+    dsdtau1,
+    dsdtau2,
+    d1sdtau1,
     d2sdtau2,
-    χ, 
+    χ,
     S,
     z
 ) = begin
-    aμ = abs(μ) 
+    aμ = abs(μ)
     nz = length(z)
     @inbounds for i in 2:nz-1
-        dtau1[i] = z[i] / aμ * 0.5 * (χ[i] + χ[i-1]) 
+        dtau1[i] = z[i] / aμ * 0.5 * (χ[i] + χ[i-1])
         dtau2[i] = z[i] / aμ * 0.5 * (χ[i] + χ[i+1])
-        
+
         ex0[i] = exp(-dtau1[i])
         ex1[i] = 1 - ex0[i]
         ex2[i] = ex1[i] - dtau1[i] * ex0[i]
@@ -196,22 +174,16 @@ _solve!(
         dsdtau2[i] = (S[i+1] - S[i]) / dtau2[i]
         d1sdtau1[i] = (dsdtau2[i]*dtau1[i] + dsdtau1[i]*dtau2[i])/(dtau1[i]+dtau2[i])
         d2sdtau2[i] = (dsdtau2[i] - dsdtau1[i])*2.0/(dtau1[i]+dtau2[i])
-        
+
         Q[i] = Q[i-1]*ex0[i] - d1sdtau1[i] *ex1[i] + d2sdtau2[i] *ex2[i]
     end
 
     Q
 end
 
-
-"""
-    binoptics!(solver, bin)
-
-Compute source funtion and opacity for the given model in the given bin.
-"""
 function binoptics!(solver, bin)
-    solver.S .= lookup(solver.eos, solver.opacities, :src, solver.model.lnρ, energyvariable(solver), bin)
-    solver.χ .= lookup(solver.eos, solver.opacities, :κ,   solver.model.lnρ, energyvariable(solver), bin);
+    solver.S .= sample(solver.eos, solver.opacities, (:src,), solver.model.lnρ, energyvariable(solver), bin; extrapolate=true)[1]
+    solver.χ .= sample(solver.eos, solver.opacities, (:κ,),   solver.model.lnρ, energyvariable(solver), bin; extrapolate=true)[1]
 end
 
 boundary!(h, z, χ, S) = begin
@@ -222,7 +194,7 @@ boundary!(h, z, χ, S) = begin
 
         h.z[2:end] = abs.(diff(h.z)) / abs(h.μ)
         h.z[1] = h.z[2]
-        
+
         dr = h.z[1]
         h.Q[1] = - h.S[1] * exp(-dr*h.χ[1])
         h.Q[end] = 0.0
@@ -250,14 +222,9 @@ boundary!(h) = begin
     h
 end
 
-
-
-
-
-
-
-
-#================================= Utilities =================================#
+# ============================================================================
+# Utilities
+# ============================================================================
 
 energyvariable(solver) = is_internal_energy(solver.eos) ? solver.model.lnEi : solver.model.lnT
 

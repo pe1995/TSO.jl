@@ -1,6 +1,8 @@
 module TSO
 
-#= Imports =#
+# ============================================================================
+# Imports
+# ============================================================================
 import BSplineKit
 using Interpolations
 using Printf
@@ -22,79 +24,98 @@ import Base.size
 import Base.broadcastable
 import Base.length
 
-
-#= Abstract Interface =#
+# ============================================================================
+# Abstract Interface
+# ============================================================================
 abstract type AbstractTable end
 abstract type AbstractRegularTable <:AbstractTable end
 abstract type AbstractIrregularTable <:AbstractTable end
 abstract type AbstractBinnedOpacities end
-abstract type OpacityBins end
 abstract type AbstractModel end
-abstract type LookupFunction end
 abstract type RadiativeTransferSolver end
 abstract type AbstractRadiationField end
 
-
-
-#= User Interface (TBD) =#
-## Tables
+# ============================================================================
+# User Interface (TBD)
+# Tables
+# ============================================================================
 export OpacityTable, EoSTable, SqOpacity, SqEoS
 export for_dispatch
 export for_dispatch_T
 export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
 
-## fast lookup and extended tables interfac
+# ============================================================================
+# fast lookup and extended tables interfac
+# ============================================================================
 export opacity, wavelength, extended, sample, sample!, weights, weights!, table
 export dispatch_eos_reader, dispatch_lookup_generator
 
-## Aux
+# ============================================================================
+# Aux
+# ============================================================================
 export save, reload, meshgrid
 
-## Table Info
+# ============================================================================
+# Table Info
+# ============================================================================
 export TableInfo, has_table_info, find_table_info, matches
 export composition_to_string
 
-## Binning 
-export TabgenBins, TabgenBinning, StaggerBinning, Co5boldBinning, MURaMBinning, DensityBinning, ClusterBinning
-export binning
+# ============================================================================
+# Binning
+# ============================================================================
 export ω_midpoint
-export lookup, lookup_function, bisect
-export tabulate
-export reset_bins
 export @binned, @binned!
 
-## EoS
+# ============================================================================
+# EoS
+# ============================================================================
 export rosseland_opacity!, rosseland_opacity, transfer_rosseland!, upsample
 export formation_height, optical_depth
 
-## MARCS
+# ============================================================================
+# MARCS
+# ============================================================================
 export MARCSOS, MARCSOpacity
 
-## Intpolations
+# ============================================================================
+# Intpolations
+# ============================================================================
 export gridded, uniform, complement, switch_energy, set_limits!
 
-## Turbospectrum
+# ============================================================================
+# Turbospectrum
+# ============================================================================
 export load_wrapper, load_TS, move_output, import_wrapper, inTS, inWrapper
 export babsma!, bsyn!
 
-## Aesopus
+# ============================================================================
+# Aesopus
+# ============================================================================
 export AesopusEoS, AesopusOpacity
 
-## Models
+# ============================================================================
+# Models
+# ============================================================================
 export Model1D, Average3D, @optical
 
-## Transfer
+# ============================================================================
+# Transfer
+# ============================================================================
 export Solver, Jν, Qr
 
-
-#= Python libs =#
+# ============================================================================
+# Python libs
+# ============================================================================
 const scipy_interpolate = PythonCall.pynew()
 const scipy_loaded = Ref(false)
 const numpy = PythonCall.pynew()
 const numpy_loaded = Ref(false)
 const generalTimer = TimerOutput()
 
-#= Source files =#
+# ============================================================================
+# Source files
+# ============================================================================
 include("_aux.jl")
 include("_eos_info.jl")
 include("_communication.jl")
@@ -111,21 +132,22 @@ include("_aesopus.jl")
 include("_marcs.jl")
 include("_adiabat.jl")
 include("_from_m3d.jl")
-include("_binning_execution.jl")
+include("_temp2eint.jl")
 include("_extend.jl")
 include("_extended_eos.jl")
 include("_dispatch_hooks.jl")
 
-
-#= List of timers =#
+# ============================================================================
+# List of timers
+# ============================================================================
 const timers = [
-    rosseland_time, 
-    optical_depth_time, 
-    formation_height_time,
-    binning_time
+    rosseland_time,
+    optical_depth_time,
+    formation_height_time
 ]
 
-#= Deprecations =#
-#@deprecate replaceEoS complement do_binning! box_integrated_v3 box_integrated_v2 box_integrated
+# ============================================================================
+# Deprecations
+# ============================================================================
 
 end

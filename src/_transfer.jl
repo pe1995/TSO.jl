@@ -1,4 +1,6 @@
-#========================= Concrete types ====================================#
+# ============================================================================
+# Concrete types
+# ============================================================================
 
 struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:RadiativeTransferSolver
     eos       ::A
@@ -10,10 +12,10 @@ struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:Rad
     χ         ::Vector{T}
     S         ::Vector{T}
     I         ::Array{T, 2}
-    
+
     ## Process variables
     μ      ::Ref{T}
-    z      ::Vector{T}     
+    z      ::Vector{T}
     dt     ::Vector{T}
     ex     ::Vector{T}
     U0     ::Vector{T}
@@ -39,12 +41,9 @@ struct InterpolatedRadiationField{R<:RadiationField, I} <:AbstractRadiationField
     interpolation_function::Vector{I}
 end
 
-
-
-
-
-
-#========================== Constructors =====================================#
+# ============================================================================
+# Constructors
+# ============================================================================
 
 """
 Construct a binned radiative transfer solver based on a 1D model witht the kind:
@@ -79,13 +78,13 @@ Solver(model::Array{T,2}; eos::AxedEoS, opacities::AbstractBinnedOpacities, angl
     angles  = Base.convert.(T2, angles[mask])
     weights = Base.convert.(T2, weights[mask])
 
-    BinnedTransferSolver(eos, opacities, angles, weights, bins, model, 
-                        zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1), length(angles)), 
+    BinnedTransferSolver(eos, opacities, angles, weights, bins, model,
+                        zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1), length(angles)),
                         Ref{T2}(T2(0.0)),
-                        zeros(T2, size(model, 1)), 
+                        zeros(T2, size(model, 1)),
                         zeros(T2, size(model, 1)-1), zeros(T2, size(model, 1)-1), zeros(T2, size(model, 1)-1), zeros(T2, size(model, 1)-1),
-                        falses(size(model, 1)-1),    
-                        zeros(T2, size(model, 1)-1), zeros(T2, size(model, 1)-1), 
+                        falses(size(model, 1)-1),
+                        zeros(T2, size(model, 1)-1), zeros(T2, size(model, 1)-1),
                         zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1)), zeros(T2, size(model, 1), bins))
 end
 
@@ -98,11 +97,13 @@ Solver(model::AbstractModel, eos::AxedEoS; kwargs...) = begin
     reverse!(model_array, dims=1)
 
     Solver(model_array; eos=eos, kwargs...)
-end 
+end
 
 Solver(model::AbstractModel, eos::EoSTable; kwargs...) = Solver(model; eos=@axed(eos), kwargs...)
 
-## For the inteprolation of the results
+# ============================================================================
+# For the inteprolation of the results
+# ============================================================================
 InterpolatedRadiationField(r::AbstractRadiationField, field::Symbol) = begin
     v = getfield(r.model, field)
     ip = [linear_interpolation(v |> reverse, r.values[:, i] .|> log |> reverse, extrapolation_bc=Line()) for i in axes(r.values, 2)]
@@ -110,7 +111,9 @@ InterpolatedRadiationField(r::AbstractRadiationField, field::Symbol) = begin
     InterpolatedRadiationField(r, ip)
 end
 
-## Convenience
+# ============================================================================
+# Convenience
+# ============================================================================
 macro interpolated(r, field)
     r_l = esc(r)
     f_l = esc(field)
@@ -118,11 +121,9 @@ macro interpolated(r, field)
     :(InterpolatedRadiationField($(r_l), $(f_l)))
 end
 
-
-
-
-
-#=========================== Solving routines ================================#
+# ============================================================================
+# Solving routines
+# ============================================================================
 
 function chat_transfer1d!(intensity, S, k, z, angles)
     n_points = length(z)
@@ -132,8 +133,7 @@ function chat_transfer1d!(intensity, S, k, z, angles)
     depth   = similar(z)
 
     # Initialize the intensity array for each angle
-    #intensity = zeros(n_points, length(angles))
-    
+
     # Loop through each angle
     for (i, angle) in enumerate(angles)
         if angle < 0.0
@@ -154,7 +154,7 @@ function chat_transfer1d!(intensity, S, k, z, angles)
         # Loop through all the points, updating the intensity at each step
         for j in 2:n_points
             mean_opacity = 0.5 * (opacity[j-1] + opacity[j])
-            intensity[j, i] = intensity[j-1, i] * exp(- mean_opacity * (depth[j] - depth[j-1]) / angle) + 
+            intensity[j, i] = intensity[j-1, i] * exp(- mean_opacity * (depth[j] - depth[j-1]) / angle) +
                                source_function[j-1] * (1.0 - exp(- mean_opacity * (depth[j] - depth[j-1]) / angle))
         end
 
@@ -169,10 +169,7 @@ end
 
 chat_transfer1d!(solver::BinnedTransferSolver) = chat_transfer1d!(solver.I, solver.S, solver.χ, solver.model[:, 1], solver.angles)
 
-"""
-Solve the 1D radiative transfer in a given direction μ=cos(θ).
-"""
-function transfer1d!(solver) 
+function transfer1d!(solver)
     # Check in which direction we are going
     down = solver.μ[] .< 0.0
 
@@ -186,20 +183,20 @@ function transfer1d!(solver)
             solver.S_temp[i] = solver.S[i]
             solver.χ_temp[i] = solver.χ[i]
         end
-    
+
         if i >= 2
-            solver.dt[i-1] = 0.5 / solver.μ[] * (solver.z[i] - solver.z[i-1]) * ( solver.χ_temp[i] + solver.χ_temp[i-1] ) 
+            solver.dt[i-1] = 0.5 / solver.μ[] * (solver.z[i] - solver.z[i-1]) * ( solver.χ_temp[i] + solver.χ_temp[i-1] )
         end
     end
 
     S = solver.S_temp
 
     @inbounds for i in eachindex(solver.dt)
-        solver.ex[i] = exp(-solver.dt[i]) 
+        solver.ex[i] = exp(-solver.dt[i])
 
         # Mask the small dt regions
         if solver.dt[i] > 1e-3
-            solver.U0[i] = 1.0           - solver.ex[i]    
+            solver.U0[i] = 1.0           - solver.ex[i]
             solver.U1[i] = solver.dt[i]  - solver.U0[i]
         else
             solver.U1[i] = 0.5 * solver.dt[i]^2 - 1/6 * solver.dt[i]^2 * solver.dt[i]
@@ -223,18 +220,11 @@ function transfer1d!(solver)
     # now solve
     for i in 2:lI
         solver.I_temp[i] = solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + solver.psi0[i-1]*S[i]
-        #solver.Q_temp[i] = χ[i-1] *( solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + (solver.psi0[i-1]-1)*S[i])
-        #@show i solver.I_temp[i] solver.psi0[i-1] solver.psiup[i-1] S[i]
     end
 
     down ? reverse(solver.I_temp) : solver.I_temp
 end
 
-
-
-"""
-Integrate the angles of I.
-"""
 flux_from_I(solver) = begin
     f = similar(solver.I, size(solver.I, 1))
     for i in axes(solver.I, 1)
@@ -253,25 +243,13 @@ J_from_I(solver) = begin
     f #./ sum(solver.weights)
 end
 
-
-
-"""
-Compute source funtion and opacity for the given model in the given bin.
-"""
 function optics!(solver, bin)
-    solver.S .= lookup(solver.eos, solver.opacities, :src, view(solver.model, :, 3), view(solver.model, :, 2), bin)
-    solver.χ .= lookup(solver.eos, solver.opacities, :κ,   view(solver.model, :, 3), view(solver.model, :, 2), bin);
+    solver.S .= sample(solver.eos, solver.opacities, (:src,), view(solver.model, :, 3), view(solver.model, :, 2), bin; extrapolate=true)[1]
+    solver.χ .= sample(solver.eos, solver.opacities, (:κ,),   view(solver.model, :, 3), view(solver.model, :, 2), bin; extrapolate=true)[1]
 end
 
-
-
-"""
-Compute the radiation field from the given solver from Binned radiative transfer.
-"""
 function binned_radiation(solver::B; mean_intensity=false) where {B<:BinnedTransferSolver}
     F = zeros(eltype(solver.I), size(solver.I, 1), solver.bins)
-
-    #debug[] = true
 
     @inbounds for i in 1:solver.bins
 
@@ -285,7 +263,7 @@ function binned_radiation(solver::B; mean_intensity=false) where {B<:BinnedTrans
         end
 
         solver.Q[:, i] .= solver.Q_temp
-        F[:, i] = mean_intensity ? J_from_I(solver) : flux_from_I(solver) 
+        F[:, i] = mean_intensity ? J_from_I(solver) : flux_from_I(solver)
     end
 
     F
@@ -294,8 +272,6 @@ end
 function chat_binned_radiation(solver::B; mean_intensity=false) where {B<:BinnedTransferSolver}
     F = zeros(eltype(solver.I), size(solver.I, 1), solver.bins)
 
-    #debug[] = true
-
     @inbounds for i in 1:solver.bins
 
         # set the source function and opacities
@@ -303,25 +279,15 @@ function chat_binned_radiation(solver::B; mean_intensity=false) where {B<:Binned
 
         # solve the radiative transfer in this bin along all angles
         #for (j, angle) in enumerate(solver.angles)
-        #    solver.μ[] = angle
-        #    solver.I[:, j] .= transfer1d!(solver)
-        #end
 
         chat_transfer1d!(solver)
 
-        #if (!debug[])
-        #    if debug_index[] == 0
-        #        debug_index[] = i
-        #    end
-        #end
         solver.Q[:, i] .= solver.Q_temp
-        F[:, i] = mean_intensity ? J_from_I(solver) : flux_from_I(solver) 
+        F[:, i] = mean_intensity ? J_from_I(solver) : flux_from_I(solver)
     end
 
     F
 end
-
-
 
 """
 Compute the Flux using the given Solver.
@@ -340,11 +306,9 @@ flux(solver::BinnedTransferSolver, weights) = begin
     f_int
 end
 
-
-
-
-
-#=======================  Commputation of mean intensity =====================#
+# ============================================================================
+# Commputation of mean intensity
+# ============================================================================
 
 """
 Compute the mean intensity using the given Solver.
@@ -370,17 +334,9 @@ mean_intensity(I; weights=ones(size(I, 1))) = begin
         f_int[i] = sum(weights .* I[i, :])
     end
 
-    #solver.Q_temp .= I[1, :]
     f_int
 end
 
-
-"""
-    mean_intensity(aos, opacity, model)
-
-Compute the frequency dependent, angle integrated mean intensity from the given model.
-Return a RadiationField object, that can be used for interpolation/extrapolation.
-"""
 mean_intensity(aos::AxedEoS, opacity::AbstractBinnedOpacities, model) = begin
     solver = Solver(model, aos, opacities=opacity)
 
@@ -405,12 +361,9 @@ mean_intensity(aos::AxedEoS, opacity::AbstractBinnedOpacities, model) = begin
     RadiationField(m, binned_radiation(solver, mean_intensity=true))
 end
 
-
-
-
-
-
-#==================== Commputation of heating rate ===========================#
+# ============================================================================
+# Commputation of heating rate
+# ============================================================================
 
 Qr(solver::BinnedTransferSolver) = begin
     I = binned_radiation(solver, mean_intensity=true)
@@ -434,36 +387,23 @@ end
 
 heating(solver, I; weights=ones(solver.bins)) = begin
     Q = zeros(eltype(I), size(I, 1))
-    #S = similar(solver.S)
     for i in 1:solver.bins
 
         # set the source function and opacities
         optics!(solver, i)
 
-        #S .= 0.0
-        #for j in eachindex(solver.weights)
         #    S .+= solver.S .* solver.weights[j]
-        #end
-       
-        #if i==1
-        #    for j in axes(I, 1)
-        #        @show i j I[j, i] solver.S[j] solver.χ[j]
-        #    end
-        #end
 
         #Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- solver.S)
         Q .+= solver.χ .* weights[i] .* (I[:, i] .- solver.S)
     end
 
-    Q .* 4 .*π 
+    Q .* 4 .*π
 end
 
-
-
-
-
-
-#================ Source function integration for testing ====================#
+# ============================================================================
+# Source function integration for testing
+# ============================================================================
 
 S(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -488,11 +428,9 @@ source_function(solver::BinnedTransferSolver, S_b; weights=ones(solver.bins)) = 
     S_b
 end
 
-
-
-
-
-#================== Opacity integration for testing ==========================#
+# ============================================================================
+# Opacity integration for testing
+# ============================================================================
 
 κ(solver::BinnedTransferSolver) = begin
     S_b = zeros(eltype(solver.S), length(solver.S))
@@ -510,34 +448,28 @@ opacity(solver::BinnedTransferSolver, S_b) = begin
     S_b / solver.bins
 end
 
-
-
-
-#========================== Interpolation API ================================#
+# ============================================================================
+# Interpolation API
+# ============================================================================
 
 evaluate_radiation(r::InterpolatedRadiationField, bin_index, values...) = r.interpolation_function[bin_index](values...)
 broadcastable(r::InterpolatedRadiationField) = Ref(r)
 
-
-
-
-
-
-#======================== General methods ====================================#
+# ============================================================================
+# General methods
+# ============================================================================
 
 effective_temperature(F) = (F/σ_S)^(1/4)
 @inline angle_index(solver) = findfirst(solver.angles .≈ solver.μ[])
 J_weights(angles) = ω_midpoint(sort(angles), -1, 1) ./ 2
 
-
-
-
-
-#====================== General global variables =============================#
+# ============================================================================
+# General global variables
+# ============================================================================
 const debug = Ref(true)
 const debug_index = Ref(0)
 
 const labatto_4angles  = [0.9739065285, 0.8650633666, 0.6794095682, 0.4333953941, -0.9739065285, -0.8650633666, -0.6794095682, -0.4333953941]
 const labatto_4weights = [0.0666713443, 0.1494513491, 0.2190863625, 0.2692667193,  0.0666713443,  0.1494513491,  0.2190863625,  0.2692667193]
-const labatto_7angles  = [-0.9951872199, -0.9604912684, -0.8884592328, -0.7818314825, -0.6423493394, -0.4646021794, -0.2492867453, 
+const labatto_7angles  = [-0.9951872199, -0.9604912684, -0.8884592328, -0.7818314825, -0.6423493394, -0.4646021794, -0.2492867453,
                            0.2492867453,  0.4646021794,  0.6423493394,  0.7818314825,  0.8884592328,  0.9604912684,  0.9951872199]
