@@ -1,17 +1,13 @@
 
 function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoSTable, O<:OpacityTable}
-    # smooth the eos first
     m = smooth!(eos, return_missing=true, along=along)
 
     isnothing(m) && return
     all(.!m)     && return
 
-    # check if we have an energy axis
     eaxis = ndims(eos.lnT) > 1
 
     for opacities in opacities_list
-        # interpolate all quantities of the opacities
-        # Note that, if the energy is the axis we still have to interpolate in T!
         if (along ==:T)
             Taxis = eaxis ? zeros(size(eos.lnT, 1)) : zeros(length(eos.lnT))
             mask  = trues(length(Taxis))
@@ -19,7 +15,6 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
             val   = similar(Taxis)
 
             for i in eachindex(eos.lnRho)
-                # interpolate along T
                 mask  .= m[:, i]
                 nmask .= .!m[:, i]
                 Taxis .= eaxis ? eos.lnT[:, i] : eos.lnT
@@ -49,7 +44,6 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
             val   = similar(Raxis)
 
             for i in eachindex(eos.lnT)
-                # interpolate along T
                 mask  .= m[i, :]
                 nmask .= .!m[i, :]
 
@@ -75,23 +69,18 @@ function smooth!(eos::E, opacities_list::NTuple{N,O}; along=:T) where {N, E<:EoS
 end
 
 function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
-    # missing spots in the eos
     m = missing_spots(eos)
 
     all(.!m) && return
 
-    # check if we have an energy axis
     eaxis = ndims(eos.lnT) > 1
 
-    # interpolate all quantities of the eos
-    # Note that, if the energy is the axis we still have to interpolate in T!
     if (along ==:T)
         Taxis = eaxis ? zeros(size(eos.lnT, 1)) : zeros(length(eos.lnT))
         mask  = trues(length(Taxis))
         nmask = similar(mask)
 
         for i in eachindex(eos.lnRho)
-            # interpolate along T
             mask  .= m[:, i]
             nmask .= .!m[:, i]
             Taxis .= eaxis ? eos.lnT[:, i] : eos.lnT
@@ -112,7 +101,6 @@ function smooth!(eos::E; along=:T, return_missing=false) where {E<:EoSTable}
         nmask = similar(mask)
 
         for i in eachindex(eos.lnT)
-            # interpolate along T
             mask  .= m[i, :]
             nmask .= .!m[i, :]
 

@@ -17,12 +17,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
     @warn "This method is no longer in use and should not be called."
 
     T = eltype(t.lnEi)
-    # new axis range
     lnEi2min = minimum(view(t.lnEi, :, :, 1))
     lnEi2max = maximum(view(t.lnEi, :, :, 1))
     lnEi2r   = lnEi2max - lnEi2min
 
-    # new regular axis
     nEiBin  = size(t.lnEi, 1)
     nRhoBin = length(t.lnRho)
 
@@ -58,35 +56,29 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
         etmin = 1.0001*minimum(view(t.lnEi, :, i, 1))
         etmax = 0.9999*maximum(view(t.lnEi, :, i, 1))
 
-        # index range of the new axis to consider
         esi = findfirst(x->x>etmin, lnEi2)
         eei = findfirst(x->x>etmax, lnEi2)
 
         (isnothing(esi) | isnothing(eei)) && error("empty ei bin at given rho")
 
-        # first do the ln Tg -> ln(ei) swap ###################################
         mask .= sortperm(t.lnEi[:, i, 1])
-        lneo .= t.lnEi[mask, i, 1]         # ln ei on lnT grid
-        f    .= lnT[mask]                  # lnT grid values
-        d    .= 1.0 ./ t.lnEi[mask, i, 3]  # d lnT / d ln(ei) | rho on lnT grid
-        g    .= t.lnEi[mask, i, 2]         # d ln ei / d ln(rho)| Tg on lnT grid
+        lneo .= t.lnEi[mask, i, 1]
+        f    .= lnT[mask]
+        d    .= 1.0 ./ t.lnEi[mask, i, 3]
+        g    .= t.lnEi[mask, i, 2]
 
-        # get h = d/d ln ei ( d ln ei / d ln rho) on lnT grid
         s   = spline(interpolate(lneo, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lneo)
 
-        # Interpolate to the new grid
-
-        # Tabgen interpolates the above using the spline derivative, dont know why though
         interpolate_f_df!(ff, dd, lnEi2, lneo, f, d)
         interpolate_f_df!(gg, hh, lnEi2, lneo, g, h)
 
-        lnT2        .= ff    # lnT on ln(ei) grid
-        dThdEi2     .= dd    # d lnT /d ln (ei) on ln(ei) grid
-        dlnEdlnRho2 .= gg    # d ln ei / d ln(rho) | Tg   on ln(ei) grid
+        lnT2        .= ff
+        dThdEi2     .= dd
+        dlnEdlnRho2 .= gg
 
-        ff .= exp.(lnT2)     # Tg on ln(ei) grid
-        dd .= -ff            # d Tg d lnT on ln(ei) grid
+        ff .= exp.(lnT2)
+        dd .= -ff
         gg .= 0.0
         Tg2[:, i] .= ff
 
@@ -101,12 +93,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
             add_outside!(view(Tg2, :, i), esi, eei)
         end
 
-        # Now the pressure ####################################################
-        f .= t.lnPg[:, i, 1] # f on lnT grid
-        d .= t.lnPg[:, i, 3] # d f / d ln tg on lnT grid
-        g .= t.lnPg[:, i, 2] # d f / d ln rho on lnT grid
+        f .= t.lnPg[:, i, 1]
+        d .= t.lnPg[:, i, 3]
+        g .= t.lnPg[:, i, 2]
 
-        # get h= d/d ln ei ( d f / d ln rho) on lnT grid
         s   = spline(interpolate(lnT, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lnT)
 
@@ -126,12 +116,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
             add_outside!(view(lnPg2, :, i), esi, eei)
         end
 
-        # the electron density ################################################
-        f .= t.lnNe[:, i, 1] # f on lnT grid
-        d .= t.lnNe[:, i, 3] # d f / d ln tg on lnT grid
-        g .= t.lnNe[:, i, 2] # d f / d ln rho on lnT grid
+        f .= t.lnNe[:, i, 1]
+        d .= t.lnNe[:, i, 3]
+        g .= t.lnNe[:, i, 2]
 
-        # get h= d/d ln ei ( d f / d ln rho) on lnT grid
         s   = spline(interpolate(lnT, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lnT)
 
@@ -155,12 +143,10 @@ function lnT_to_lnEi(t::RegularEoSTable, interpolate_with_derivative=true)
             @show i  "after" view(lnNe2, :, i)
         end
 
-        # the rosseland opacity ###############################################
-        f .= t.lnRoss[:, i, 1] # f on lnT grid
-        d .= t.lnRoss[:, i, 3] # d f / d ln tg on lnT grid
-        g .= t.lnRoss[:, i, 2] # d f / d ln rho on lnT grid
+        f .= t.lnRoss[:, i, 1]
+        d .= t.lnRoss[:, i, 3]
+        g .= t.lnRoss[:, i, 2]
 
-        # get h= d/d ln ei ( d f / d ln rho) on lnT grid
         s   = spline(interpolate(lnT, g, BSplineOrder(4)))
         h   = (Derivative(1) * s).(lnT)
 
@@ -192,26 +178,20 @@ function energy_grid(t::RegularEoSTable)
 
     T = eltype(t.lnEi)
 
-    # new axis range
     lnEi2min = minimum(nanmin, t.lnEi)
     lnEi2max = maximum(nanmax, t.lnEi)
 
-    # The upper limit should not correspond to a temperature larger than 500,000K (total upper limit)
-
-    # new regular axis
     nEiBin  = size(t.lnEi, 1)
     nRhoBin = length(t.lnRho)
 
     lnEi2  = Base.convert.(T, range(lnEi2min, lnEi2max, length=nEiBin))
     dlnEi2 = lnEi2[2] - lnEi2[1]
 
-    # New arrays
     lnTg2   = zeros(T, nEiBin, nRhoBin)
     lnNe2   = zeros(T, nEiBin, nRhoBin)
     lnRoss2 = zeros(T, nEiBin, nRhoBin)
     lnPg2   = zeros(T, nEiBin, nRhoBin)
 
-    # old T axis as range for cubic interpolation
     old_t = range(minimum(t.lnT), maximum(t.lnT), length=length(t.lnT))
 
     x = zeros(nEiBin)
@@ -220,9 +200,7 @@ function energy_grid(t::RegularEoSTable)
     mask = zeros(Int, nEiBin)
 
     for i in eachindex(t.lnRho)
-        # This is a column of the table, interpolate it and evaluate at the right position
 
-        # It is listed as a function of temperature -> get the new T axis for the new E axis
         mask .= sortperm(t.lnEi[:, i])
         x    .= t.lnEi[mask, i]
         y    .= t.lnT[mask]
@@ -230,17 +208,14 @@ function energy_grid(t::RegularEoSTable)
         t_axis      .= ip.(lnEi2)
         lnTg2[:, i] .= t_axis
 
-        # Pg
         y    .= t.lnPg[:, i]
         ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
         lnPg2[:, i] .= ip.(t_axis)
 
-        # Ne
         y    .= t.lnNe[:, i]
         ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
         lnNe2[:, i] .= ip.(t_axis)
 
-        # Ross
         y    .= t.lnRoss[:, i]
         ip    = cubic_spline_interpolation(old_t, y, extrapolation_bc=Line())
         lnRoss2[:, i] .= ip.(t_axis)
@@ -375,7 +350,6 @@ function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoS
 
     T = eltype(eos.lnRho)
 
-    # New arrays
     lnTg2    = zeros(T, nEiBin, nRhoBin)
     lnNe2    = zeros(T, nEiBin, nRhoBin)
     lnRoss2  = zeros(T, nEiBin, nRhoBin)
@@ -389,42 +363,34 @@ function unify(eos::E, opacities::O, lnEi_new::AbstractVector{T2}) where {E<:EoS
     mask = zeros(Int, size(eos.lnEi, 1))
 
     @inbounds for i in 1:nRhoBin
-        # This is a column of the table, interpolate it and evaluate at the right position
 
-        # It is listed as a function of temperature -> get the new T axis for the new E axis
         mask .= sortperm(eos.lnEi[:, i])
         x    .= Interpolations.deduplicate_knots!(eos.lnEi[mask, i], move_knots=true)
         y    .= eos.lnT[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnTg2[:, i] .= ip.(lnEi_new)
 
-        # Pg
         y    .= eos.lnPg[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnPg2[:, i] .= ip.(lnEi_new)
 
-        # Ne
         y    .= eos.lnNe[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnNe2[:, i] .= ip.(lnEi_new)
 
-        # Ross
         y    .= eos.lnRoss[mask, i]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnRoss2[:, i] .= ip.(lnEi_new)
 
-        # kappa ross
         y    .= log.(opacities.κ_ross[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnKross2[:, i] .= ip.(lnEi_new)
 
         @inbounds for j in eachindex(opacities.λ)
-            # kappa
             y    .= log.(opacities.κ[mask, i, j])
             ip    = linear_interpolation(x, y, extrapolation_bc=Line())
             lnkappa2[:, i, j] .= ip.(lnEi_new)
 
-            # src
             y    .= log.(opacities.src[mask, i, j])
             ip    = linear_interpolation(x, y, extrapolation_bc=Line())
             lnSrc2[:, i, j] .= ip.(lnEi_new)
@@ -483,7 +449,6 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
     eaxis = ndims(eos1.lnT)==1 ? false : true
     eaxis && @assert ndims(eos2.lnT)>1
 
-    # decide on new grids
     lnVar_new = eaxis ? common_grid(eos1.lnEi,  eos2.lnEi) : common_grid(eos1.lnT,  eos2.lnT)
     lnRho_new = common_grid(eos1.lnRho, eos2.lnRho)
 
@@ -499,28 +464,20 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
 
     @info "Interpolation of tables to new, common grid needed: $(do_regrid)"
 
-    # interpolate both tables to new grid
     eos1_new, opacities1_new = do_regrid ? regrid(eos1, opacities1, lnRho_new, lnVar_new) : (eos1, opacities1)
     eos2_new, opacities2_new = do_regrid ? regrid(eos2, opacities2, lnRho_new, lnVar_new) : (eos2, opacities2)
 
-    # Add the wavelength arrays together
     λ_new = vcat(opacities1_new.λ, opacities2_new.λ)
     umask = unique(i->λ_new[i], eachindex(λ_new))
 
     @info size(opacities1_new.λ) size(opacities2_new.λ)
 
-    κ_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.κ,   opacities2_new.κ,   dims=3)[:,:,umask]
-    s_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new)) #cat(opacities1_new.src, opacities2_new.src, dims=3)[:,:,umask]
-
-    #@inbounds for i in eachindex(opacities1_new.λ)
-    #    κ_new[:, :, i] .= opacities1_new.κ[:, :, i]
+    κ_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new))
+    s_new = zeros(eltype(opacities1_new.κ), size(opacities1_new.κ, 1), size(opacities1_new.κ, 2), length(λ_new))
 
     ll = length(opacities1_new.λ)
     κ_new[:, :, 1:ll] .= view(opacities1_new.κ,   :, :, 1:ll)
     s_new[:, :, 1:ll] .= view(opacities1_new.src, :, :, 1:ll)
-
-    #@inbounds for i in eachindex(opacities2_new.λ)
-    #    κ_new[:, :, j] .= opacities2_new.κ[:, :, i]
 
     κ_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= view(opacities2_new.κ,  :, :, 1:length(opacities2_new.λ))
     s_new[:, :, (ll+1):(ll+length(opacities2_new.λ))] .= view(opacities2_new.src,:, :, 1:length(opacities2_new.λ))
@@ -532,7 +489,6 @@ function combine_opacities(eos1::E1, opacities1::O1, eos2::E2, opacities2::O2) w
     λ_new   = λ_new[umask]
     GC.gc()
 
-    # sort
     smask    = sortperm(λ_new)
     κ_new   .= view(κ_new, :, :, smask)
     s_new   .= view(s_new, :, :, smask)
@@ -573,7 +529,7 @@ include("_TS.jl")
 
 function Bλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
-    B = @. twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
+    B = @. twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0)
     B[T .<= 1e-1] .= 0.0
 
     B
@@ -599,7 +555,7 @@ end
 
 function δBλ(λ::AbstractFloat, T::AbstractArray)
     Λ = λ * aa_to_cm
-    B = @. twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
+    B = @. twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2
     B[T .<= 1e-1] .= 0.0
 
     B
@@ -625,7 +581,7 @@ end
 
 @inline function δBλ(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
-    v = twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2 #* aa_to_cm
+    v = twohc2 * hc_k * exp(hc_k / (Λ*T)) / Λ^6 / T^2 / (exp(hc_k / (Λ*T))-1)^2
 
     if isnan(v) || v<1e-30
         A(1e-30)
@@ -636,7 +592,7 @@ end
 
 @inline function Bλ(λ::A, T::A) where {A<:AbstractFloat}
     Λ = λ * aa_to_cm
-    v = twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0) #*aa_to_cm
+    v = twohc2 /Λ^5 /(exp(hc_k / (Λ*T)) - 1.0)
 
     if isnan(v) || v<1e-30
         A(1e-30)
@@ -873,12 +829,10 @@ transfer_rosseland!(opa::OpacityTable, eos::E) where {E<:AxedEoS}  = eos.eos.lnR
 _optical_depth!(ρκ, τ, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     eosx, opax = extended(eos), extended(opacities)
     cRho, cE = weights(eosx, lnρ, lnE; extrapolate=true)
-    # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
     @inbounds for i in eachindex(λ)
         sample!((ρκ,), eosx, opax, (:κ,), cRho, cE, i)
         ρκ .= binned ? ρκ : exp.(lnρ) .* ρκ
 
-        # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
         @inbounds for j in eachindex(z)
             if j==1
                 τ[1, i] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
@@ -911,12 +865,10 @@ _optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, opacities, binned) = begin
     eosx, opax = extended(eos), extended(opacities)
     cRho, cE = weights(eosx, lnρ, lnE; extrapolate=true)
 
-    # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
     @inbounds for (i, k) in enumerate(chunk)
         sample!((ρκ,), eosx, opax, (:κ,), cRho, cE, k)
         ρκ .= binned ? ρκ : ρ .* ρκ
 
-        # Integrate: τ(z) = [ ∫ ρκ dz ]_z0 ^z
         @inbounds for j in eachindex(z)
             if j==1
                 τ[1, i] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
@@ -936,10 +888,8 @@ Compute monochromatic and rosseland optical depth scales of the model
 based on the opacity table.
 """
 function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
-    # make sure model is in right direction
     model = TSO.flip(model, depth=true)
 
-    # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(opacities.κ)
@@ -947,7 +897,6 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
     τ_λ = zeros(T, length(lnρ), length(opacities.λ))
     τ_ross = zeros(T, length(lnρ))
 
-    # For each wavelength we integrate along z, z[1]-> surface, z[end]-> bottom
     @optionalTiming optical_depth_time if Threads.nthreads() <= 1
         ρκ = zeros(T, length(lnρ))
         _optical_depth!(ρκ, τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
@@ -955,10 +904,8 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
         _optical_depthX!(τ_λ, z, opacities.λ, lnρ, lnE, eos, opacities, binned)
     end
 
-    # Rosseland optical depth
     τ_ross .= rosseland_optical_depth(eos, opacities, model, binned=binned)
 
-    # impose limits
     τ_λ[τ_λ .> 1e30] .= 1e30
     τ_λ[τ_λ .< 1e-30] .= 1e-30
 
@@ -969,7 +916,6 @@ function optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; bi
 end
 
 function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::AbstractModel; binned=false) where {E<:AxedEoS}
-    # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(opacities.κ)
@@ -978,9 +924,8 @@ function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::Abstrac
     ρκ     = zeros(T, length(lnρ))
     κ      = zeros(T, length(lnρ))
 
-    # Rosseland optical depth
     κ  .= sample(eos, opacities, (:κ_ross,), lnρ, lnE; extrapolate=true)[1]
-    ρκ .= exp.(lnρ) .* κ # binned ? κ : exp.(lnρ) .* κ
+    ρκ .= exp.(lnρ) .* κ
     for j in eachindex(z)
         if j==1
             τ_ross[1] = 0 + (z[2] - z[1]) * 0.5 * (ρκ[j])
@@ -993,7 +938,6 @@ function rosseland_optical_depth(eos::E, opacities::OpacityTable, model::Abstrac
 end
 
 function rosseland_optical_depth(eos::E, model::AbstractModel) where {E<:AxedEoS}
-    # Model z, ρ and T in cgs
     z, lnρ, lnE = model.z, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(eos.eos.lnRoss)
@@ -1002,7 +946,6 @@ function rosseland_optical_depth(eos::E, model::AbstractModel) where {E<:AxedEoS
     ρκ     = zeros(T, length(lnρ))
     κ      = zeros(T, length(lnρ))
 
-    # Rosseland optical depth
     κ  .= exp.(sample(eos, (:lnRoss,), lnρ, lnE; extrapolate=true)[1])
     ρκ .= exp.(lnρ) .* κ
     for j in eachindex(z)
@@ -1020,7 +963,6 @@ rosseland_optical_depth(eos::EoSTable, opacities::OpacityTable, model::AbstractM
 rosseland_optical_depth(eos::EoSTable, model::AbstractModel; kwargs...)  = rosseland_optical_depth(@axed(eos), model; kwargs...)
 
 function rosseland_depth(eos::E, opacities, model::AbstractModel) where {E<:AxedEoS}
-    # Model z, ρ and T in cgs
     τ, lnρ, lnE = model.τ, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(eos.eos.lnRoss)
@@ -1029,7 +971,6 @@ function rosseland_depth(eos::E, opacities, model::AbstractModel) where {E<:Axed
     ρκ     = zeros(T, length(lnρ))
     κ      = zeros(T, length(lnρ))
 
-    # Rosseland optical depth
     κ  .= sample(eos, opacities, (:κ_ross,), lnρ, lnE; extrapolate=true)[1]
     ρκ .= exp.(lnρ) .* κ
     for j in eachindex(z)
@@ -1044,7 +985,6 @@ function rosseland_depth(eos::E, opacities, model::AbstractModel) where {E<:Axed
 end
 
 function rosseland_depth(eos::E, model::AbstractModel) where {E<:AxedEoS}
-    # Model z, ρ and T in cgs
     τ, lnρ, lnE = model.τ, model.lnρ, is_internal_energy(eos) ? model.lnEi : model.lnT
 
     T = eltype(eos.eos.lnRoss)
@@ -1053,7 +993,6 @@ function rosseland_depth(eos::E, model::AbstractModel) where {E<:AxedEoS}
     ρκ     = zeros(T, length(lnρ))
     κ      = zeros(T, length(lnρ))
 
-    # Rosseland optical depth
     κ  .= exp.(sample(eos, (:lnRoss,), lnρ, lnE; extrapolate=true)[1])
     ρκ .= exp.(lnρ) .* κ
     for j in eachindex(z)
@@ -1180,19 +1119,14 @@ e_shifted(e, offset) = log(exp(e) + offset)
 # ============================================================================
 
 function replaceEoS(eos_old::EoSTable, eos_new::EoSTable, opacities::OpacityTable)
-    ## First we need to find the energy grid that corresponds to the new table energy "units"
     lnEi_newFromOld = similar(eos_new.lnT)
     emin,emax,_,_   = limits(eos_old)
     @inbounds for j in eachindex(eos_new.lnRho)
         @inbounds for i in eachindex(eos_new.lnEi)
-            ## We search the Ei that will return, when called with rho, the temperature that is wanted
             lnEi_newFromOld[i, j] = sample(eos_old, :lnEi; lnRho=eos_new.lnRho[j], lnT=eos_new.lnT[i, j])
         end
     end
 
-    ## Now we know the the energy in the old units at every point in the new table
-    ## So all that is left to do is to interpolate the old table and evaluate at
-    ## the new energy-density values
     κ      = similar(opacities.κ, size(eos_new.lnPg)..., length(opacities.λ))
     S      = similar(κ)
     κ_ross = similar(opacities.κ_ross, size(eos_new.lnPg)..., length(opacities.λ))
@@ -1211,8 +1145,6 @@ function replaceEoS(eos_old::EoSTable, eos_new::EoSTable, opacities::OpacityTabl
         end
     end
 
-    #        κ_ross[i, j] = fr(lnEi_newFromOld[i, j], os_new.lnRho[j])
-
     RegularOpacityTable(κ, κ_ross, S, deepcopy(opacities.λ), opacities.optical_depth)
 end
 
@@ -1222,10 +1154,6 @@ end
 
 # ============================================================================
 # New Interpolation interface
-# Please note that there is a new interpolation interface.
-# It does only partly rely on the lookup interface, however
-# it utilized the shape of the eos tables and should be much faster.
-# It relys on dimensionwise 1D interpolation wherever possible.
 # ============================================================================
 
 include("_interpolations.jl")

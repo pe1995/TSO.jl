@@ -149,18 +149,13 @@ is_uniform(values::A) where {N, T, A<:AbstractArray{T, N}} = begin
     d::T  = T(values[2] .- values[1])
     d2::T = T(0.0)
 
-    ## eps(d) is the numerical precision of the step
-    ## when creating the arrays, the step error is
-    ## added up to the initial error of the floating point value
-    ## So each value in the array has a higher uncertainty.
     uni  = true
     lv   = length(values)
-    told = eps(d)^2 #eps(values[1])^2 + eps(values[2])^2 + eps(d)^2  # error of the difference
+    told = eps(d)^2
 
     tol(i) = eps(values[1])^2 + i*told + eps(values[i])^2
 
     @inbounds for i in 3:lv
-        ##           ϵ(i-1)   + ϵ(i)   + ϵ(d)
         tol_i = sqrt(tol(i-1) + tol(i) +told)
         d2    = values[i] - values[i-1]
 
@@ -331,9 +326,6 @@ the "Ei" namelist slots with the log-T extrema (nEiBin=nT, EiMin/EiMax=Tmin/Tmax
 function for_dispatch_T(eos::EoSTable, χ, S, ϵ, folder::String; name="_T")
     !isdir(folder) && mkdir(folder)
 
-    # The Fortran square_gas_T reader indexes the T axis with a uniform (x-min)/stp+1
-    # formula, so the native log-T grid MUST be uniform. Fail loudly at generation time
-    # rather than silently emit a table the Fortran side will misread.
     eax = EnergyAxis(eos)
     if !eax.is_uniform
         error("for_dispatch_T: temperature axis ($(eax.name)) is not uniform in log; " *
@@ -377,11 +369,9 @@ for_dispatch(aos::AxedEoS, args...; kwargs...) = begin
 end
 
 function save_tables(aos, opa, eos_table_name, table_folder=nothing)
-    # Save everything in the dispatch format
     for_dispatch(aos, opa)
     save(opa.opacities, "binned_opacities.hdf5")
 
-    # Move files to the final folder for dispatch
     !isdir(eos_table_name) && mkdir(eos_table_name)
     mv("tabparam.in",           joinpath(eos_table_name, "tabparam.in"),           force=true)
     mv("eostable.dat",          joinpath(eos_table_name, "eostable.dat"),          force=true)
@@ -389,7 +379,6 @@ function save_tables(aos, opa, eos_table_name, table_folder=nothing)
     mv("rhoei_radtab.dat",      joinpath(eos_table_name, "rhoei_radtab.dat"),      force=true)
     mv("binned_opacities.hdf5", joinpath(eos_table_name, "binned_opacities.hdf5"), force=true)
 
-    # Copy the eos for convenience. Usually not a big deal because rather small
     if !isnothing(table_folder)
         cp(joinpath(table_folder, "combined_eos.hdf5"), joinpath(eos_table_name, "eos.hdf5"), force=true);
     end;

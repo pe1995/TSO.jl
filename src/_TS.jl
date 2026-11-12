@@ -2,10 +2,9 @@ function write_as_stagger(lnT::Vector, lnRho::Vector; folder=@inWrapper("example
     sT = length(lnT)
     names_cols = String[]
 
-    nbins = 1#ceil(Int, length(lnT) / 100)
+    nbins = 1
     ibins = TSO.split_similar(lnT, nbins, mask=true)
 
-    # write columns to file
     for column in eachindex(lnRho)
         for i in 1:nbins
             name = joinpath(folder, "TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
@@ -27,10 +26,9 @@ function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example
     sT = length(lnT)
     names_cols = String[]
 
-    nbins = 1#ceil(Int, size(lnT, 1) / 100)
+    nbins = 1
     ibins = TSO.split_similar(lnT[:, 1], nbins, mask=true)
 
-    # write columns to file
     for column in axes(lnRho, 2)
         for i in 1:nbins
             name = joinpath(folder, "TSOeos_$(column)-$(first(ibins[i])):$(last(ibins[i])).dat")
@@ -49,11 +47,8 @@ function write_as_stagger(lnT::Matrix, lnRho::Matrix; folder=@inWrapper("example
 end
 
 function read_eos_column(path, get_header=false)
-    # Read the EoS column
     f = FortranFile(path, convert="big-endian")
 
-    # Fist line with the size of the arrays
-    # Order: lnT, lnPe, lnRho, lnPg, lnEi, lnOp
     ntau, xls = read(f, Int32, Float32)
     data = zeros(Float32, ntau, 6)
 
@@ -85,7 +80,6 @@ function read_opacity_column(path)
         lheader += 1
     end
 
-    # Skip the header
     FortranFiles.rewind(f)
     for i in 1:lheader
         read(f, FString{2})
@@ -116,7 +110,6 @@ matching_opacity(path) = begin
 end
 
 function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_individual=false, kwargs...)
-    # Get the dimensions
     nrows_per_table, ntables, T = get_dimensions(list_of_eos_tables)
 
     opacity_path = joinpath(opacity_folder, matching_opacity(list_of_eos_tables[1]))
@@ -125,7 +118,6 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
 
     _,_,λ,abund = read_opacity_column(opacity_path)
 
-    # Read the data
     lnρ    = zeros(T, ntables)
     lnT2   = zeros(T, nrows_per_table, ntables)
     lnPg   = zeros(T, nrows_per_table, ntables)
@@ -141,13 +133,13 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
 
     for (i,table) in enumerate(list_of_eos_tables)
         column, e_r = get_TSO_index(table)
-        eos = read_eos_column(table)                                                   # The columns are ln(T), ln(pe), ln(ρ), ln(Pg), ln(E), ln(κ500)
+        eos = read_eos_column(table)
         lnρ[column]        = eos[1, 3]
         lnT2[e_r, column]   .= eos[:, 1]
         lnPg[e_r, column]   .= eos[:, 4]
         lnEi2[e_r, column]  .= eos[:, 5]
-        lnNe[e_r, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1])))  # p = nkT
-        lnκ500[e_r, column] .= eos[:, 6]                                                 # This is not the rosseland opacity! This is the 500nm for now
+        lnNe[e_r, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1])))
+        lnκ500[e_r, column] .= eos[:, 6]
 
         opacity, κ_ross, _, _ = read_opacity_column(joinpath(opacity_folder, matching_opacity(table)))
         for j in axes(opacity, 1)
@@ -165,10 +157,9 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
         κl[e_r, column, :] .=                     opacity[:, :, 2]
         κs[e_r, column, :] .=                                         opacity[:, :, 3]
         ross[e_r, column]  .= κ_ross
-        Sν[e_r, column, :] .= Base.convert.(T, Bν(λ, exp.(lnT2[e_r, column]))) # Planck function (i.e. source function)
+        Sν[e_r, column, :] .= Base.convert.(T, Bν(λ, exp.(lnT2[e_r, column])))
     end
 
-    # check which of T/E is the axis and which is lnDependent
     for i in axes(lnT2, 2)
         if lnT2[:, i] != lnT2[:, 1]
             @info "Non-equal T columns detected. Assuming energy axis."
@@ -176,15 +167,6 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
             break
         end
     end
-
-    #=mask    = sortperm(lnρ)
-    lnρ    .= lnρ[mask]
-    lnPg   .= lnPg[:, mask]
-    lnEi   .= lnEi[:, mask]
-    lnNe   .= lnNe[:, mask]
-    ross   .= ross[:, mask]
-    κ      .= κ[:, mask, :]
-    lnκ500 .= lnκ500[:, mask]=#
 
     opacity_tables = if get_individual
         (RegularOpacityTable(κ, ross, Sν, λ, false), RegularOpacityTable(κc, ross, Sν, λ, false), RegularOpacityTable(κl, ross, Sν, λ, false), RegularOpacityTable(κs, ross, Sν, λ, false))
@@ -200,12 +182,10 @@ function _read_tables_eos_op(list_of_eos_tables, opacity_folder=@inTS(""); get_i
 end
 
 function _read_tables_eos(list_of_eos_tables; kwargs...)
-    # Get the dimensions
     nrows_per_table, ntables, T = get_dimensions(list_of_eos_tables)
 
     eaxis = false
 
-    # Read the data
     lnρ    = zeros(T, ntables)
     lnT2   = zeros(T, nrows_per_table, ntables)
     lnPg   = zeros(T, nrows_per_table, ntables)
@@ -215,16 +195,15 @@ function _read_tables_eos(list_of_eos_tables; kwargs...)
 
     for (i,table) in enumerate(list_of_eos_tables)
         column, e_r = get_TSO_index(table)
-        eos = read_eos_column(table)                                                   # The columns are ln(T), ln(pe), ln(ρ), ln(Pg), ln(E), ln(κ500)
+        eos = read_eos_column(table)
         lnρ[column]          = eos[1, 3]
         lnT2[e_r, column]   .= eos[:, 1]
         lnPg[e_r, column]   .= eos[:, 4]
         lnEi2[e_r, column]  .= eos[:, 5]
-        lnNe[e_r, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1]))) # p = nkT
-        lnκ500[e_r, column] .= eos[:, 6]                                                # This is not the rosseland opacity! This is the 500nm for now
+        lnNe[e_r, column]   .= log.(exp.(eos[:, 2]) ./ (KBoltzmann .* exp.(eos[:, 1])))
+        lnκ500[e_r, column] .= eos[:, 6]
     end
 
-    # check which of T/E is the axis and which is lnDependent
     for i in axes(lnT2, 2)
         if lnT2[:, i] != lnT2[:, 1]
             @info "Non-equal T columns detected. Assuming energy axis."
@@ -232,15 +211,6 @@ function _read_tables_eos(list_of_eos_tables; kwargs...)
             break
         end
     end
-
-    #=mask    = sortperm(lnρ)
-    lnρ    .= lnρ[mask]
-    lnPg   .= lnPg[:, mask]
-    lnEi   .= lnEi[:, mask]
-    lnNe   .= lnNe[:, mask]
-    ross   .= ross[:, mask]
-    κ      .= κ[:, mask, :]
-    lnκ500 .= lnκ500[:, mask]=#
 
     if eaxis
         RegularEoSTable(lnρ, lnT2, lnEi2, lnPg, lnκ500, lnNe)
@@ -280,7 +250,6 @@ read_tables(::Type{<:EoSTable}, list_of_eos_tables::AbstractVector; kwargs...) =
 read_tables(t::Type{<:EoSTable}, folder::String=".", args...; kwargs...) = read_tables(t, glob("_TSOeos_*_TSO.eos", folder), args...; kwargs...)
 read_tables(t::Type{<:EoSTable}, t2::Type{<:OpacityTable}, folder::String=".", args...; kwargs...) = read_tables(t, t2, glob("_TSOeos_*_TSO.eos", folder), args...; kwargs...)
 
-# User interface function
 load(e::Type{<:EoSTable}, o::Type{<:OpacityTable}, args...; kwargs...) = read_tables(e, o, args...; kwargs...)
 load(e::Type{<:EoSTable}, args...; kwargs...) = read_tables(e,    args...; kwargs...)
 load(o::Type{<:OpacityTable}, e::Type{<:EoSTable}, args...; kwargs...) = begin

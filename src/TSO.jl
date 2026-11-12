@@ -37,7 +37,6 @@ abstract type AbstractRadiationField end
 
 # ============================================================================
 # User Interface (TBD)
-# Tables
 # ============================================================================
 export OpacityTable, EoSTable, SqOpacity, SqEoS
 export for_dispatch

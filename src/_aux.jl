@@ -75,8 +75,6 @@ end
 zeros_as(x)    = zeros(eltype(x), size(x)...)
 zeros_as(x, r) = zeros(eltype(x), size(x)[r]...)
 
-# stuff for timing
-
 """
     activate_timing!(t)
 
@@ -168,8 +166,6 @@ end
 include_helper(name) = joinpath(dirname(@__FILE__), name)
 
 function ingredients(path::String)
-	# this is from the Julia source code (evalfile in base/loading.jl)
-	# but with the modification that it returns the module instead of the last object
 	path = include_helper(path)
 	name = Symbol(basename(path))
 	m = Module(name)
@@ -305,12 +301,12 @@ N_Λ(lo,hi,R) = (hi-lo) / ΔΛ(lo,hi,R)
 # ============================================================================
 # Constants (In agreement with Tabgen)
 # ============================================================================
-const EiExtra    = 5.0                         # extra eV per H atom to add
-const KBoltzmann = 1.380658E-16                # Boltzman's cst. [erg/K]
-const CLight     = 2.99792458E+10              # Speed of light [cm/s]
-const HPlanck    = 6.6260755E-27               # Planck's constant [erg s]
-const ev_to_erg  = 1.60218e-12                 # conversion
-const HIonPot    = 13.595                      # hydrogen ioniz. potential [eV]
+const EiExtra    = 5.0
+const KBoltzmann = 1.380658E-16
+const CLight     = 2.99792458E+10
+const HPlanck    = 6.6260755E-27
+const ev_to_erg  = 1.60218e-12
+const HIonPot    = 13.595
 const twohc2     = 2.0e0 *HPlanck*CLight^2
 const hc_k       = HPlanck*CLight/KBoltzmann
 const aa_to_cm   = 1.0e-8
@@ -318,16 +314,16 @@ const σ_S        = 5.6704e-5
 const m_u = 1.660539e-24
 const atomic_number = Symbol.(
     strip(i, ' ') for i in [
-        "H ","He","Li","Be","B ","C ","N ","O ","F ",         # |  1 -  9
-        "Ne","Na","Mg","Al","Si","P ","S ","Cl","Ar",         # | 10 - 18
-        "K ","Ca","Sc","Ti","V ","Cr","Mn","Fe","Co",         # | 19 - 27
-        "Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",         # | 28 - 36
-        "Rb","Sr","Y ","Zr","Nb","Mo","Tc","Ru","Rh",         # | 37 - 45
-        "Pd","Ag","Cd","In","Sn","Sb","Te","I ","Xe",         # | 46 - 54
-        "Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu",         # | 55 - 63
-        "Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf",         # | 64 - 72
-        "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",         # | 73 - 81
-        "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",         # | 82 - 90
+        "H ","He","Li","Be","B ","C ","N ","O ","F ",
+        "Ne","Na","Mg","Al","Si","P ","S ","Cl","Ar",
+        "K ","Ca","Sc","Ti","V ","Cr","Mn","Fe","Co",
+        "Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",
+        "Rb","Sr","Y ","Zr","Nb","Mo","Tc","Ru","Rh",
+        "Pd","Ag","Cd","In","Sn","Sb","Te","I ","Xe",
+        "Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu",
+        "Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf",
+        "Ta","W ","Re","Os","Ir","Pt","Au","Hg","Tl",
+        "Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",
         "Pa","U "]
 )
 
@@ -713,17 +709,14 @@ function scale_yields!(yields; α=nothing, FeH=nothing, kwargs...)
         ele = String(id_atom(id))
 
         @show ele val
-        # scale to alpha
         if ele in α_elements
             yields[i] = scale_yields(eleid, α)
         end
 
-        # scale to FeH (only non-primordial)
         if !(ele in primordial_elements)
             yields[i] = scale_yields(yields[i], FeH)
         end
 
-        # scale everything else
         if ele in additional_elements
             to_value = kwargs[Symbol(ele)]
             yields[i] = scale_yields(yields[i], to_value)
@@ -774,13 +767,3 @@ end
 # ============================================================================
 # Plot default setup that kind-of works
 # ============================================================================
-#=
-import PyCall.rc
-rc("mathtext", fontset="cm", default="regular")
-rc("font", family="monospace", size=12)
-rc("text", usetex=false)
-rc("xtick", direction="in", top=true)
-rc("ytick", direction="in", right=true)
-rc("xtick.minor", visible=true)
-rc("ytick.minor", visible=true)
-=#

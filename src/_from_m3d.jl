@@ -4,7 +4,6 @@
 
 function eosTableInput(path; minT=1000., maxT=5.5e5, minρ=1e-30, maxρ=1e-3)
 	if isdir(path)
-		# clear the folder
 		rm(path, recursive=true)
 	end
 	mkdir(path)
@@ -103,13 +102,11 @@ function _get_opacity_lazy(run, from)
 
 	tmpfile = tempname(pwd(), suffix=".bin")
 
-	# The original array has shape (N_lam, N_T, N_rho)
-	# The output needs to be permuted to (N_T, N_rho, N_lam)
 	permuted_shape = (shape[2], shape[3], shape[1])
 	chi_mmap = Mmap.mmap(open(tmpfile, "w+"), Array{T, length(permuted_shape)}, permuted_shape)
 
 	if pytruth(pybuiltins.hasattr(chi_lazy, "mlist"))
-		caxis = pyconvert(Int, chi_lazy.caxis) + 1 # Julia is 1-indexed
+		caxis = pyconvert(Int, chi_lazy.caxis) + 1
 		cstarts = pyconvert(Vector{Int}, chi_lazy.cstart)
 
 		mlist = pybuiltins.list(chi_lazy.mlist)
@@ -130,12 +127,11 @@ function _get_opacity_lazy(run, from)
 			chi_mmap[indices...] .= permuted_chunk
 		end
 	else
-		# Plain array/memmap, copy in chunks along the first dimension (lam)
 		chunk_size = max(1, 100_000_000 ÷ (prod(shape[2:end])))
 		for i in 1:chunk_size:shape[1]
 			end_idx = min(i + chunk_size - 1, shape[1])
 
-			chunk = pyconvert(Array, chi_lazy[i-1:end_idx-1]) # python is 0-indexed
+			chunk = pyconvert(Array, chi_lazy[i-1:end_idx-1])
 			permuted_chunk = permutedims(chunk, (2, 3, 1))
 
 			chi_mmap[.., i:end_idx] .= permuted_chunk
@@ -180,17 +176,6 @@ function get_eos(run)
     pg   = pyconvert(Array, run.run.pg)[:, :]
     E    = pyconvert(Array, run.run.E)[:, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)
     χ500 = pyconvert(Array, run.run.chi)[:, :]
-
-	#=eos = pyconvert(
-		Array,
-		run.run.read_patch_save("eos", concat=false)[1,1]
-	)
-
-    temp = eos[1, :, 1]
-    rho  = eos[2, 1, :]
-    ne   = eos[3, :, :]
-    pg   = eos[4, :, :]
-    E    = eos[5, :, :] .+ Base.convert(eltype(rho), (13.595+5.0)/2.380491e-24*1.60218e-12)=#
 
 	E[E .< 1e-30] .= NaN
 	E[E .> 1e30] .= NaN
@@ -275,7 +260,6 @@ function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ros
 	set_limits!(aos, scat, small=1e-30, large=1e30)
 	set_limits!(aos500, small=1e-30, large=1e30)
 
-	# compute rosseland opacity
 	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
 
 	eos, eos500, chi, scat, nan_mask_ross, nan_mask_500

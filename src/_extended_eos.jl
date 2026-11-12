@@ -395,7 +395,6 @@ function _grid_coords(eos::ExtendedEoS, given; extrapolate=false)
     lnrho = get(given, :lnRho, nothing)
     lnT = get(given, grid_energy_var, nothing)
 
-    # Whatever is missing has to be inverted from the table
     if isnothing(lnrho) && !isnothing(lnT) && haskey(given, :lnPg)
         lnrho = _invert(eos, :lnRho, :lnPg, given[:lnPg], lnT; extrapolate=extrapolate)
     end
@@ -422,10 +421,8 @@ _invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::Abst
     has_target_energy = grid_energy_var in variables
 
     lnrho, lnT = if has_target_rho
-        # coord1 is lnPg, coord2 is grid_energy
         _invert(eos, :lnRho, :lnPg, coord1, coord2; extrapolate=extrapolate), coord2
     elseif has_target_energy
-        # coord1 is lnRho, coord2 is known_energy (the non-grid one)
         coord1, _invert(eos, grid_energy_var, dependent_energy_var, coord2, coord1; extrapolate=extrapolate)
     else
         coord1, coord2
@@ -468,7 +465,7 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
             if energy_variable(eos.eos) == :lnT
                 lnT_val = known_val_arr[1]
             else
-                a_rad = 7.5657e-15 # erg cm^-3 K^-4
+                a_rad = 7.5657e-15
                 lnT_val = 0.25 * (lnP_val + log(3.0) - log(a_rad))
             end
 
@@ -538,7 +535,6 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
                 f_min = eval_coord(v_min, coefs_Rho, coefs_T) - target_val
                 f_max = eval_coord(v_max, coefs_Rho, coefs_T) - target_val
             else
-                # Regular bisection
                 if sign(f_mid) == sign(f_min)
                     v_min = v_mid
                     f_min = f_mid
@@ -773,7 +769,6 @@ function ideal_entropy(T, rho, mu)
     n_quantum = factor^1.5
     n = rho / m_particle
 
-    # Sackur-Tetrode Equation
     R_spec * (log(n_quantum / n) + 2.5)
 end
 
@@ -881,10 +876,8 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 	eos = eos_extended.eos.eos
 	χₜ, χᵨ, cᵥ = gradients!(eos_extended)
 
-	# expansion coefficient dlnrho / dlnT |_P = χₜ/χᵨ
 	Q = χₜ ./ χᵨ
 
-	# specific heat cp = cv + P/(rho T) χₜ²/χᵨ
 	cₚ = similar(cᵥ)
 	∇ₐ = similar(cᵥ)
 	μ = similar(cᵥ)
@@ -904,8 +897,6 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 	eos_extended.extensions[:∇ₐ] = ∇ₐ
 	eos_extended.extensions[:μ] = μ
 
-	# compute the entropy by starting with the ideal gas value and then integrating
-	# along isotherms. First, we integrate along isobar (constant rho)
 	S[1, 1] = ideal_entropy(exp(eos.lnT[1]), exp(eos.lnRho[1]), μ[1, 1])
 	for i in 2:size(S, 1)
 		dE = eos.lnEi[i, 1] - eos.lnEi[i-1, 1]
@@ -916,7 +907,6 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 		S[i, 1] = S[i-1, 1] + dS
 	end
 
-	# and then along constant T
 	T = exp.(eos.lnT)
 	for j in 2:size(S, 2)
 		dE = eos.lnEi[:, j] - eos.lnEi[:, j-1]

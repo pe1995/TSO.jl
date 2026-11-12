@@ -54,7 +54,6 @@ end
 function AesopusEoS_ascii(; energy, kross, ne, pg, type=Float32)
     content = get_content(energy, type)
 
-    ## The number of lines is equal to the number of T points +1
     nT = length(content) - 1
     nR = length(first(content))
 
@@ -123,21 +122,17 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
 
     close(f)
 
-    ## log10 -> ln
     T .*= log(10)
     r .*= log(10)
     l .*= log(10)
     κ .*= log(10)
 
-    ## Sort T from low to high
     reverse!(T)
     reverse!(κ, dims=1)
 
-    ## Sort lambda from low to high
     reverse!(l)
     reverse!(κ, dims=3)
 
-    ## Convert to the requested type
     if eltype(T) != eltype(eos.lnT)
         tp   = eltype(eos.lnT)
         Tnew = zeros(tp, size(T)...)
@@ -162,11 +157,9 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
         κnew = κ
     end
 
-    ## The grids have to match (for now, could be interpolated if needed)
     @assert all(Tnew .≈ eos.lnT)
     @assert all(rnew .≈ eos.lnRho)
 
-    ## Compute the source function (not integrated)
     src = similar(κnew)
     @inbounds for k in eachindex(lnew)
         @inbounds for j in 1:lr
@@ -176,7 +169,6 @@ function AesopusOpacity_binary(eos::RegularEoSTable; sigma, λ_nodes=5776)
         end
     end
 
-    ## Create the opacity table
     RegularOpacityTable(exp.(κnew), exp.(eos.lnRoss), src, exp.(lnew), false)
 end
 

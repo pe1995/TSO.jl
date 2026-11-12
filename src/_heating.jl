@@ -10,7 +10,6 @@ struct AngleHeatingSolver{T<:AbstractFloat} <:RadiativeTransferSolver
     S  ::Vector{T}
     Q  ::Array{T}
 
-    # Process quantities
     dtau1 ::Array{T}
     dtau2 ::Array{T}
     ex0 ::Array{T}
@@ -59,7 +58,6 @@ Heating(
 
     T2 = Float64
 
-    # Make sure the model has the correct orientation
     m = convert_model(model, T2)
     flip!(m)
 
@@ -67,7 +65,6 @@ Heating(
     angles = Base.convert.(T2, angles[mask])
     weights = Base.convert.(T2, weights[mask])
 
-    # Create an angular solver for every angle in angles, with the correct weight
     angle_solver = [
         AngleHeatingSolver(
             angles[i], weights[i],
@@ -105,10 +102,8 @@ function solve(h::HeatingSolver; weights=ones(h.bins))
     h.F .= 0.0
 
     for bin in 1:h.bins
-        # Get the source function and opacity for this bin
         binoptics!(h, bin)
 
-        # compute the radiation for all angles
         for (j, μ) in enumerate(h.angles)
             solve!(h.μ_solver[j], h.model.z, h.χ, h.S)
             h.Q .+= h.μ_solver[j].Q .*

@@ -1,6 +1,3 @@
-#=
-Reading legacy Stagger EoS tables and convert them to the SquareGas format required by DISPATCH
-=#
 
 mutable struct LegacyTable{I<:Integer, F<:AbstractFloat}
     Nvtab   ::I
@@ -33,13 +30,10 @@ end
 function LegacyOpacities(path)
     @assert isfile(path)
 
-    ## Read the file step by step and fill in the arrays
     f = FortranFiles.FortranFile(path, convert="big-endian")
 
-    ## dimensions of the arrays
     NTtab, Nrtab, Ma, Na, Nlam, Nelem, Nxopt, Nxre = read(f, (Int32, 8))
 
-    ## Read the header
     date, time, lnrmin, lnrmax, lntmin, lntmax, rul, rur, rut, iel, abund, ar = read(f,
                                                                                     FString{8},
                                                                                     FString{8},
@@ -53,10 +47,9 @@ function LegacyOpacities(path)
                                                                                     (FString{4}, Nelem),
                                                                                     (Float32, Nelem),
                                                                                     (Float32, Ma, Na))
-    ## Read the rest of the table
     tab = zeros(Float32, NTtab, Nrtab, 3, Nlam+1)
     for j=1:Nlam+1
-        tab[:, :, :, j] .= read(f, (Float32, NTtab, Nrtab, 3)) #*log(10)
+        tab[:, :, :, j] .= read(f, (Float32, NTtab, Nrtab, 3))
     end
 
     close(f)
@@ -97,12 +90,10 @@ end
 function LegacyEoS(path)
     @assert isfile(path)
 
-    ## Read the file step by step and fill in the arrays
     f = FortranFiles.FortranFile(path, convert="big-endian")
 
     Netab, Nrtab, Ma, Na, Ntbvar, Nelem, Nxopt, Nxrev = read(f, (Int32, 8))
 
-    ## Read the header
     date, time, lnrmin, lnrmax, lnemin, lnemax, ul, ur, ut, iel, abund, ar = read(f,
                                                                                     FString{8},
                                                                                     FString{8},
@@ -116,7 +107,6 @@ function LegacyEoS(path)
                                                                                     (FString{4}, Nelem),
                                                                                     (Float32, Nelem),
                                                                                     (Float32, Ma, Na))
-    ## Read the rest of the table
     tab = read(f, (Float32, Netab, Nrtab, 3, Ntbvar))
 
     close(f)
@@ -163,10 +153,7 @@ end
 # ============================================================================
 # Conversion to the TSO API
 # ============================================================================
-##  - Note that this includes interpolation of -
-##  - the binned opacity table to the E grid!  -
 function toTSO(eos::LegacyTable, opacities::LegacyTable)
-    ## new axes
     newE, newR = grid(eos)
     oldT, oldR = grid(opacities)
 
@@ -195,7 +182,6 @@ end
 
 function toTSO(aos::AxedEoS, opacities::LegacyTable)
     eos = aos.eos
-    ## new axes
     newE, newR = EnergyAxis(aos).values, DensityAxis(aos).values
     oldT, oldR = grid(opacities)
 

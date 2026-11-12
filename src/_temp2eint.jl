@@ -7,18 +7,14 @@ function remap_T_to_E(aos::AxedEoS, opa::SqOpacity;
     downD=0.4, downE=0.1, upD=0.01, upE=0.01,
     lnEimin=nothing, lnEimax=nothing)
 
-    # possibly extrapolate EoS
     eos_new, opa_new = if extend
         TSO.extend(aos, opa, downD=downD, downE=downE, upD=upD, upE=upE)
     else
         aos.eos, opa
     end
 
-    # Again making it monotonic
     TSO.smoothAccumulate!(@axed(eos_new), spline=true)
 
-    # Limit the internal energy range to what is occupied by the initial model to make sure
-    # the model atmosphere will be well sampled
     if !isnothing(lnEimax)
         lnEimax_orig = maximum(eos_new.lnEi)
         mask = eos_new.lnEi.>=lnEimax
@@ -32,7 +28,6 @@ function remap_T_to_E(aos::AxedEoS, opa::SqOpacity;
     eosE, opaE = switch_energy(@axed(eos_new), opa_new, upsample=upsample, conservative=false)
     aosE = @axed eosE
 
-    # do not allow values larger than in the original table
     for (i, l) in enumerate(opaE.λ)
         limit_beyond!(view(opaE.κ, :, :, i), view(opa_new.κ, :, :, i))
         limit_beyond!(view(opaE.src, :, :, i), view(opa_new.src, :, :, i))
@@ -51,13 +46,10 @@ function get_e_limit(eos::SqEoS, model_lnEi::AbstractArray, lnEi_stretch=1.0)
     lnEimin = minimum(model_lnEi)
     lnEimax = maximum(model_lnEi)
 
-    # determin the temperature minimum
     tmin = minimum(eos.lnT)
 
-    # lookup the corresponding internal energy curve
     lnEi_min_curve = eos.lnEi[1, :]
 
-    # use the median to avoid overly small lower limits
     lnEimin = median(lnEi_min_curve)
 
     return (lnEimin, lnEimax + abs(lnEimax - lnEimin) * lnEi_stretch)

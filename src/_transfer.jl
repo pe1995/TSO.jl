@@ -13,7 +13,6 @@ struct BinnedTransferSolver{T<:AbstractFloat, A<:AxedEoS, O<:OpacityTable} <:Rad
     S         ::Vector{T}
     I         ::Array{T, 2}
 
-    ## Process variables
     μ      ::Ref{T}
     z      ::Vector{T}
     dt     ::Vector{T}
@@ -56,15 +55,13 @@ Construct a binned radiative transfer solver based on a 1D model witht the kind:
 Solver(model::Array{T,2}; eos::AxedEoS, opacities::AbstractBinnedOpacities, angles=sort(labatto_4angles), weights=J_weights(labatto_4angles)) where {T} = begin
     opacities = opacities.opacities
     bins    = size(opacities.κ, 3)
-    T2      = Float64 #eltype(opacities.κ)
+    T2      = Float64
     model   = Base.convert.(T2, deepcopy(model))
 
-    # For lookup it is more convenient to save the log model
     model[:, 2] .= log.(model[:, 2])
     model[:, 3] .= log.(model[:, 3])
 
     if model[2, 3] > model[1, 3]
-        # The second point has a higher density as the first one, so we are going down
         @warn "Model is increasing in density! Assuming flipped z axis..."
         model = reverse(model, dims=1)
     end
@@ -132,26 +129,20 @@ function chat_transfer1d!(intensity, S, k, z, angles)
     opacity = similar(k)
     depth   = similar(z)
 
-    # Initialize the intensity array for each angle
-
-    # Loop through each angle
     for (i, angle) in enumerate(angles)
         if angle < 0.0
             source_function .= reverse(S)
             opacity         .= reverse(k)
             depth           .= reverse(z)
-            # Set the initial conditions for the intensity array for each angle
             intensity[1, i] = source_function[1]
         else
             source_function .= S
             opacity         .= k
             depth           .= z
 
-            # Set the initial conditions for the intensity array for each angle
             intensity[1, i] = source_function[1]
         end
 
-        # Loop through all the points, updating the intensity at each step
         for j in 2:n_points
             mean_opacity = 0.5 * (opacity[j-1] + opacity[j])
             intensity[j, i] = intensity[j-1, i] * exp(- mean_opacity * (depth[j] - depth[j-1]) / angle) +
@@ -170,7 +161,6 @@ end
 chat_transfer1d!(solver::BinnedTransferSolver) = chat_transfer1d!(solver.I, solver.S, solver.χ, solver.model[:, 1], solver.angles)
 
 function transfer1d!(solver)
-    # Check in which direction we are going
     down = solver.μ[] .< 0.0
 
     @inbounds for i in axes(solver.model, 1)
@@ -194,7 +184,6 @@ function transfer1d!(solver)
     @inbounds for i in eachindex(solver.dt)
         solver.ex[i] = exp(-solver.dt[i])
 
-        # Mask the small dt regions
         if solver.dt[i] > 1e-3
             solver.U0[i] = 1.0           - solver.ex[i]
             solver.U1[i] = solver.dt[i]  - solver.U0[i]
@@ -203,11 +192,9 @@ function transfer1d!(solver)
             solver.U0[i] =  solver.dt[i] - solver.U1[i]
         end
 
-        # Psi arrays
         solver.psiup[i] = solver.U0[i] - solver.U1[i] / solver.dt[i]
         solver.psi0[i]  = solver.U1[i] / solver.dt[i]
 
-        # intensity at center point
         solver.I_temp[i] = S[i]
 
     end
@@ -217,7 +204,6 @@ function transfer1d!(solver)
 
     lI = length(solver.I_temp)
 
-    # now solve
     for i in 2:lI
         solver.I_temp[i] = solver.I_temp[i-1]*solver.ex[i-1] + solver.psiup[i-1]*S[i-1] + solver.psi0[i-1]*S[i]
     end
@@ -231,7 +217,7 @@ flux_from_I(solver) = begin
         f[i] = sum(solver.weights .* solver.angles .* solver.I[i, :])
     end
 
-    f #./ sum(solver.weights)
+    f
 end
 
 J_from_I(solver) = begin
@@ -240,7 +226,7 @@ J_from_I(solver) = begin
         f[i] = sum(solver.weights .* solver.I[i, :])
     end
 
-    f #./ sum(solver.weights)
+    f
 end
 
 function optics!(solver, bin)
@@ -253,10 +239,8 @@ function binned_radiation(solver::B; mean_intensity=false) where {B<:BinnedTrans
 
     @inbounds for i in 1:solver.bins
 
-        # set the source function and opacities
         optics!(solver, i)
 
-        # solve the radiative transfer in this bin along all angles
         for (j, angle) in enumerate(solver.angles)
             solver.μ[] = angle
             solver.I[:, j] .= transfer1d!(solver)
@@ -274,11 +258,7 @@ function chat_binned_radiation(solver::B; mean_intensity=false) where {B<:Binned
 
     @inbounds for i in 1:solver.bins
 
-        # set the source function and opacities
         optics!(solver, i)
-
-        # solve the radiative transfer in this bin along all angles
-        #for (j, angle) in enumerate(solver.angles)
 
         chat_transfer1d!(solver)
 
@@ -340,7 +320,6 @@ end
 mean_intensity(aos::AxedEoS, opacity::AbstractBinnedOpacities, model) = begin
     solver = Solver(model, aos, opacities=opacity)
 
-    # Make a new model with the flipped axes saved
     args = []
     for f in fieldnames(typeof(model))
         v = if f == :lnρ
@@ -389,12 +368,8 @@ heating(solver, I; weights=ones(solver.bins)) = begin
     Q = zeros(eltype(I), size(I, 1))
     for i in 1:solver.bins
 
-        # set the source function and opacities
         optics!(solver, i)
 
-        #    S .+= solver.S .* solver.weights[j]
-
-        #Q .+= solver.χ ./ exp.(solver.model[:, 3]) .* weights[i] .* (I[:, i] .- solver.S)
         Q .+= solver.χ .* weights[i] .* (I[:, i] .- solver.S)
     end
 
@@ -417,7 +392,6 @@ end
 
 source_function(solver::BinnedTransferSolver, S_b; weights=ones(solver.bins)) = begin
     for i in 1:solver.bins
-        # set the source function and opacities in this bin
         optics!(solver, i)
 
         for j in eachindex(solver.weights)
@@ -439,7 +413,6 @@ end
 
 opacity(solver::BinnedTransferSolver, S_b) = begin
     for i in 1:solver.bins
-        # set the source function and opacities in this bin
         optics!(solver, i)
 
         S_b .+= solver.χ

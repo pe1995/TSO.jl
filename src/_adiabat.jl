@@ -5,8 +5,6 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
     zbottom = first(star_point.z)
     ztop = first(end_point.z)
 
-    # Find the initial energy from the EoS. Assert that the EoS is in the
-    # correct units for this
     ee_min, ee_max = if is_internal_energy(eos)
         eemin,ee_max,_,_ = exp.(limits(eos))
 
@@ -29,7 +27,6 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
         ee_min, ee_max
     end
 
-    # initial point
     t0 = exp(first(star_point.lnT))
     ρ0 = exp(first(star_point.lnρ))
     g0 = exp10(star_point.logg)
@@ -42,15 +39,12 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
         exp(sample(eos, :lnEi; lnRho=log(ρ0), lnT=log(t0), extrapolate=true)), exp(sample(eos, :lnPg; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
     end
 
-    # storage arrays
     z  = zeros(2*nz)
     d  = zeros(2*nz)
     ee = zeros(2*nz)
     t  = zeros(2*nz)
     p  = zeros(2*nz)
 
-    # integrate from the starting point upwards, until z is larger than ztop
-    # or the maximum number of points is reached
     dee    = 0
     z[nz]  = z0
     d[nz]  = ρ0
@@ -61,7 +55,6 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
 
     δz_sponge = abs(first(end_point.z) - first(star_point.z)) * padding
 
-    # upwards
     for i in nz+1:2*nz
         ee[i] = max(ee[i-1]-dee,ee_min)
 
@@ -90,7 +83,6 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
         end
     end
 
-    # downwards
     i_start=1
     for i in nz:-1:1
         ee[i] = min(ee[i+1]+dee, ee_max)
@@ -129,7 +121,6 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
 end
 
 function adiabat(model_in, eos::SqEoS; kwargs...)
-    # First make sure the z scale is oriented in the correct direction
     model = flip(model_in)
 
     start_point = pick_point(model, 1)
@@ -143,7 +134,6 @@ end
 # ============================================================================
 
 function adiabatDown(start_point, eos_in::SqEoS; kwargs...)
-    # initial point
     t0  = exp(first(start_point.lnT))
     ρ0  = exp(first(start_point.lnρ))
     g0  = exp10(start_point.logg)
@@ -160,8 +150,6 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
     eos = @axed eos_in
 
-    # Find the initial energy from the EoS. Assert that the EoS is in the
-    # correct units for this
     @assert is_internal_energy(eos)
     eemin,ee_max,_,_ = exp.(limits(eos))
 
@@ -171,20 +159,16 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
         ee_min
     end
 
-    # initial point
     ee0 = exp(sample(eos, :lnEi; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
     g0  = exp10(logg)
     p0  = exp(sample(eos, :lnPg; lnRho=log(ρ0), lnEi=log(ee0), extrapolate=true))
 
-    # storage arrays
     z  = zeros(nz)
     d  = zeros(nz)
     ee = zeros(nz)
     t  = zeros(nz)
     p  = zeros(nz)
 
-    # integrate from the starting point upwards, until z is larger than ztop
-    # or the maximum number of points is reached
     dee    = 0
     z[nz]  = z0
     d[nz]  = ρ0
@@ -192,7 +176,6 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
     t[nz]  = t0
     p[nz]  = p0
 
-    # downwards
     i_start=1
     for i in nz-1:-1:1
         ee[i] = min(ee[i+1]+dee, ee_max)
@@ -212,7 +195,6 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
             ee[i] = min(ee[i+1]+dee, ee_max)
         end
 
-        # check if there is an end
         if z[i] <= z_end
             i_start = i
             break
@@ -231,8 +213,6 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
     eos = @axed eos_in
 
-    # Find the initial energy from the EoS. Assert that the EoS is in the
-    # correct units for this
     @assert !is_internal_energy(eos)
     eemin,ee_max = exp(minimum(eos.eos.lnEi)), exp(maximum(eos.eos.lnEi))
 
@@ -242,20 +222,16 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
         ee_min
     end
 
-    # initial point
     ee0 = exp(sample(eos, :lnEi; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
     g0  = exp10(logg)
     p0  = exp(sample(eos, :lnPg; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
 
-    # storage arrays
     z  = zeros(nz)
     d  = zeros(nz)
     ee = zeros(nz)
     t  = zeros(nz)
     p  = zeros(nz)
 
-    # integrate from the starting point upwards, until z is larger than ztop
-    # or the maximum number of points is reached
     dee    = 0
     z[nz]  = z0
     d[nz]  = ρ0
@@ -263,7 +239,6 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
     t[nz]  = t0
     p[nz]  = p0
 
-    # downwards
     i_start=1
     for i in nz-1:-1:1
         ee[i] = min(ee[i+1]+dee, ee_max)
@@ -283,7 +258,6 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
             ee[i] = min(ee[i+1]+dee, ee_max)
         end
 
-        # check if there is an end
         if z[i] <= z_end
             i_start = i
             break
@@ -299,7 +273,6 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
 end
 
 function adiabatUp(start_point, eos_in::SqEoS; kwargs...)
-    # initial point
     t0  = exp(first(start_point.lnT))
     ρ0  = exp(first(start_point.lnρ))
     g0  = exp10(start_point.logg)
@@ -316,8 +289,6 @@ function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=Inf)
     eos = @axed eos_in
 
-    # Find the initial energy from the EoS. Assert that the EoS is in the
-    # correct units for this
     @assert is_internal_energy(eos)
     eemin,ee_max,_,_ = exp.(limits(eos))
 
@@ -327,20 +298,16 @@ function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
         ee_min
     end
 
-    # initial point
     ee0 = exp(sample(eos, :lnEi; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
     g0  = exp10(logg)
     p0  = exp(sample(eos, :lnPg; lnRho=log(ρ0), lnEi=log(ee0), extrapolate=true))
 
-    # storage arrays
     z  = zeros(nz)
     d  = zeros(nz)
     ee = zeros(nz)
     t  = zeros(nz)
     p  = zeros(nz)
 
-    # integrate from the starting point upwards, until z is larger than ztop
-    # or the maximum number of points is reached
     dee    = 0
     z[1]  = z0
     d[1]  = ρ0
@@ -349,7 +316,6 @@ function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
     p[1]  = p0
     i_end = nz
 
-    # upwards
     for i in 2:nz
         ee[i] = max(ee[i-1]-dee,ee_min)
 
@@ -386,8 +352,6 @@ function adiabatUp_t(t0, ρ0, z0, logg, eos_in::SqEoS;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=Inf)
     eos = @axed eos_in
 
-    # Find the initial energy from the EoS. Assert that the EoS is in the
-    # correct units for this
     @assert !is_internal_energy(eos)
     eemin,ee_max = exp(minimum(eos.eos.lnEi)), exp(maximum(eos.eos.lnEi))
 
@@ -397,20 +361,16 @@ function adiabatUp_t(t0, ρ0, z0, logg, eos_in::SqEoS;
         ee_min
     end
 
-    # initial point
     ee0 = exp(sample(eos, :lnEi; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
     g0  = exp10(logg)
     p0  = exp(sample(eos, :lnPg; lnRho=log(ρ0), lnT=log(t0), extrapolate=true))
 
-    # storage arrays
     z  = zeros(nz)
     d  = zeros(nz)
     ee = zeros(nz)
     t  = zeros(nz)
     p  = zeros(nz)
 
-    # integrate from the starting point upwards, until z is larger than ztop
-    # or the maximum number of points is reached
     dee    = 0
     z[1]  = z0
     d[1]  = ρ0
@@ -419,7 +379,6 @@ function adiabatUp_t(t0, ρ0, z0, logg, eos_in::SqEoS;
     p[1]  = p0
     i_end = nz
 
-    # upwards
     for i in 2:nz
         ee[i] = max(ee[i-1]-dee,ee_min)
 
@@ -495,7 +454,6 @@ end
 function adiabatic_extrapolation(model, eos; τ_extrapolate=nothing, τ_target=8.0, iter_max=500, kwargs...)
     model_flip = @optical flip(model) eos
 
-	# crop the model until τ=τ_extrapolate
 	model_opt_cut = if !isnothing(τ_extrapolate)
         flip(
             cut(
@@ -534,7 +492,6 @@ function reverse_adiabatic_extrapolation(model, rho_bottom, T_bottom, eos; τbot
     model = deepcopy(model)
     model_flip = flip(model)
 
-	# crop the model until τ=τbottom
 	model_opt_cut = flip(cut(flip(model_flip, depth=true), τ=[minimum(model_flip.τ), exp10(τbottom)]), depth=false)
 
 	mloc = deepcopy(model_opt_cut)

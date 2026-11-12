@@ -219,7 +219,6 @@ function interpolate_to(m::AbstractModel; in_log=false, kwargs...)
                     extrapolation_bc=Line()
                 ).(new_scale)
 
-                # the upper layers are almost isothermal
                 if f==:lnT
                     mint = minimum(v[mask])
                     r[r.<mint] .= mint
@@ -255,13 +254,11 @@ function flip!(model::AbstractModel; depth=false)
         end
     end
 
-    # Now it is from bottom to top, so the first value in z should be the smalles value
     if model.z[1] > model.z[end]
         model.z .*= -1
     end
 
     if depth
-        # it is bottom to top
         for f in fieldnames(typeof(model))
             v = getfield(model, f)
             if typeof(v) <: AbstractArray

@@ -1,4 +1,3 @@
-### Loading paths for wrapper and TS itself ###################################
 
 const TSwrapper   = Ref("")
 const TS          = Ref("")
@@ -13,8 +12,6 @@ end
 
 load_wrapper(path=joinpath(dirname(@__FILE__), "../../TurboSpectrum-Wrapper/") ) = load(TSwrapper, path)
 load_TS(     path=joinpath(dirname(@__FILE__), "../../Turbospectrum_NLTE/") )    = load(TS, path)
-
-### General Convenience #######################################################
 
 """
 The given path is converted from relative to the wrapper to absolute.
@@ -46,8 +43,6 @@ function import_wrapper(mod="source")
     WrapperPy, computeOpac
 end
 
-### Importing Python scripts ##################################################
-
 macro fromWrapper(mod, dir=dirname(TSO.@inWrapper("source")))
     mod_e    = esc(mod)
     path_esc = esc(dir)
@@ -61,8 +56,6 @@ macro fromTS(mod, dir=dirname(@inTS("source")))
     mod_s = :($mod)
     :($(mod_e) = _get_help_py($(QuoteNode(mod_s)), $path_esc))
 end
-
-### Writing colunms in Stagger format #########################################
 
 function write_as_stagger(name::String; teff, logg, FeH, T, rho, z=zeros(length(T)), id="TSO.jl-column")
     teff = @sprintf "%.1f" teff
@@ -85,8 +78,6 @@ function write_as_stagger(name::String; teff, logg, FeH, T, rho, z=zeros(length(
 end
 
 write_as_stagger(name::String, T::Vector, rho::Vector) = write_as_stagger(name, T=T, rho=rho, z=zeros(length(T)), teff=0.0, logg=0.0, FeH=0.0)
-
-### Communication with the TS wrapper #########################################
 
 function prepare_TS!(setup, atmFile)
     atmos = computeOpac.model_atmosphere()
@@ -111,7 +102,6 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00", wait=false)
     jobs = Dict()
     mem  = slurm_setup()
 
-    # Run all job steps
     for (i, atmFile) in enumerate(setup.atmos_list)
         atmos, modelOpacFile = prepare_TS!(setup, atmFile)
 
@@ -126,7 +116,6 @@ function babsma!(setup, elementalAbundances; timeout="1:00:00", wait=false)
         jobs[id] = job
     end
 
-    # Wait for completion
     for id in keys(jobs)
         s = success(jobs[id])
 
@@ -140,7 +129,6 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
     mem  = slurm_setup()
     job_input = Dict()
 
-    # Run all job steps
     for (i, atmFile) in enumerate(setup.atmos_list)
         atmos, modelOpacFile = prepare_TS!(setup, atmFile)
 
@@ -160,14 +148,11 @@ function bsyn!(setup, elementalAbundances; timeout="1:00:00")
         job_input[id] = deepcopy([setup.ts_input, elementalAbundances, atmos, modelOpacFile, specResultFile, id])
     end
 
-    # Wait for completion
     for id in keys(jobs)
         s = success(jobs[id])
 
         @info "   --> Bsyn Job $id finished. Success: $s"
         @assert s
-        #
-        #!s && error("Job $id failed. Please check the log file in the TS folder. Exiting.")
     end
 end
 
@@ -293,8 +278,6 @@ function run_bsyn(ts_input, elementalAbundances, atmos, modelOpacFile, specResul
     return r
 end
 
-### Output handling ###########################################################
-
 function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd(), ts_path=TSO.@inTS(""))
     if !isdir(move_to)
         mkdir(move_to)
@@ -304,7 +287,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
     end
     @assert isdir(move_to)
 
-    # Clean the models from the wrapper
     @info "Moving files from $(wrapper_path) to $(move_to)"
 
     paths = glob("_TSOeos*", wrapper_path)
@@ -319,7 +301,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
         mv(path, goal)
     end
 
-    # Clean the models from the wrapper
     @info "Moving files from $(ts_path) to $(move_to)"
 
     paths = glob("TSOeos*.multi", ts_path)
@@ -328,7 +309,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
         mv(path, goal)
     end
 
-    # Babsma logs
     paths = glob("babsma*.log", ts_path)
     for path in paths
         goal = joinpath(move_to, basename(path))
@@ -340,7 +320,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
         mv(path, goal)
     end
 
-    # Bsyn logs
     paths = glob("bsyn*.log", ts_path)
     for path in paths
         goal = joinpath(move_to, basename(path))
@@ -352,8 +331,6 @@ function move_output(move_to=TSO.@inWrapper("example/garbage"), wrapper_path=pwd
         mv(path, goal)
     end
 end
-
-### Read slurm setup ##########################################################
 
 slurm_setup() = begin
     SlurmEnv[] = if "SLURM_NTASKS" in keys(ENV)

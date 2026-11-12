@@ -6,11 +6,6 @@ is_scattered(ax::EoSAxis) = ax.dimension > 1
 is_gridded(ax::EoSAxis)   = !is_scattered(ax)
 is_gridded(aos::AxedEoS)  = is_gridded(DensityAxis(aos)) & is_gridded(EnergyAxis(aos))
 
-#=
-    If at least one of the axes is gridded, things can go faster,
-    so the first method should always be "make this gridded, without changing the axes".
-=#
-
 """
     gridded(eos, opacities...)
 
@@ -18,12 +13,10 @@ Interpolate a random eos, opacity table to a grid. Will depending on the input
 decide what interpolation is needed to save time. If switch=true, additionally the energy axis will be switched.
 """
 function gridded(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
-    # Check the current grid, if it is gridded alredy there is nothing to do
-    if is_gridded(aos) & !switch ## Nothing to do here
+    if is_gridded(aos) & !switch
         return (aos.eos, opacities...)
     end
 
-    # check if at least parts are gridded
     density_gridded = is_gridded(DensityAxis(aos))
     energy_gridded  = is_gridded(EnergyAxis(aos))
 
@@ -36,12 +29,11 @@ function gridded(aos::A, opacities::OpacityTable...; conservative=false, upsampl
 
     ename = switch ? dependent_energy_variable(aos) : energy_variable(aos)
 
-    # Pick the best method for interpolation, worst case pick the generic one
-    eos_new, opacities_new = if density_gridded      # Only the density is gridded already
+    eos_new, opacities_new = if density_gridded
         interpolate_at_density(aos, opacities...; (ename=>newE,)...)
-    elseif energy_gridded                            # Only the energy is gridded already
+    elseif energy_gridded
         interpolate_at_energy(aos, opacities...; lnRho=newRho)
-    else                                             # Nothing is gridded
+    else
         interpolate_2D(aos, opacities...; lnRho=newRho, (ename=>newE,)...)
     end
 
@@ -54,7 +46,7 @@ end
 Make the EoS uniform in both Axes. Checks if it is gridded before.
 """
 function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
-    if is_uniform(aos) & !switch ## Nothing to do here
+    if is_uniform(aos) & !switch
         return (aos.eos, opacities...)
     end
 
@@ -78,8 +70,8 @@ function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsampl
     @show energy_uniform
     @show size(newE)
 
-    return if density_uniform                  ## This mean E is not uniform!
-        aos_puff = if energy_gridded           ## However E is still gridded, which means we have to puff it up in order
+    return if density_uniform
+        aos_puff = if energy_gridded
             puff_up(aos, :energy)
         else
             aos
@@ -87,16 +79,16 @@ function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsampl
         interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
 
     elseif energy_uniform
-        aos_puff = if density_gridded          ## However d is still gridded, which means we have to puff it up in order
+        aos_puff = if density_gridded
             puff_up(aos, :density)
         else
             aos
         end
         interpolate_at_energy(aos_puff, opacities...; lnRho=newRho)
 
-    else ## They are both not uniform, so only the order of interpolation needs to be decided
+    else
         if energy_gridded
-            aos_puff = if density_gridded          ## However d is still gridded, which means we have to puff it up in order
+            aos_puff = if density_gridded
                 puff_up(aos, :density)
             else
                 aos
@@ -106,7 +98,7 @@ function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsampl
             aos_puff = puff_up(AxedEoS(aos), :energy)
             interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
         elseif density_gridded
-            aos_puff = if energy_gridded           ## However E is still gridded, which means we have to puff it up in order
+            aos_puff = if energy_gridded
                 puff_up(aos, :energy)
             else
                 aos
@@ -135,7 +127,6 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
     density_gridded = is_gridded(DensityAxis(aos_old))
     energy_gridded  = is_gridded(EnergyAxis(aos_old))
 
-    ## we only need to make sure that if the new axis is internal energy we dont have any offsets
     aos_old_mod = if is_internal_energy(aos_new)
         ee, rr      = meshgrid(EnergyAxis(aos_old).values, DensityAxis(aos_old).values)
         told        = is_internal_energy(aos_old) ? aos_old.eos.lnT : ee
@@ -150,13 +141,13 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
         e_old_mod = RegularEoSTable(rho_mod, aos_old.eos.lnT, newEOldGrid,
                                     aos_old.eos.lnPg, aos_old.eos.lnRoss, aos_old.eos.lnNe)
 
-        eaxis = if is_internal_energy(aos_old) # we have replaced the axis
+        eaxis = if is_internal_energy(aos_old)
             EnergyAxis(e_old_mod, axis=:lnEi)
         else
             aos_old.energy_axes
         end
 
-        daxis = if is_internal_energy(aos_old) # we have replaced the axis
+        daxis = if is_internal_energy(aos_old)
             DensityAxis(e_old_mod)
         else
             aos_old.density_axes
@@ -172,7 +163,6 @@ function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {
     density_gridded = is_gridded(DensityAxis(aos_old_mod))
     energy_gridded  = is_gridded(EnergyAxis(aos_old_mod))
 
-    # Interpolate the old tables to the grid
     efinal, ofinal... = interpolate_2D(aos_old_mod, opacities...; lnRho=deepcopy(e.lnRho), (ename_new=>evals_new,)...)
     return if length(ofinal) == 1
         first(ofinal)
@@ -194,7 +184,6 @@ function switch_energy(aos::A, opacities::OpacityTable...; conservative=false, u
 
     ename = dependent_energy_variable(aos)
 
-    ## this is easy because we know it is gridded
     aos_puff = puff_up(aos, :energy)
     interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
 end
@@ -222,7 +211,6 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
 
     T = eltype(eos.lnRho)
 
-    # New arrays
     lnV2     = zeros(T, nEBin, nRhoBin)
     lnNe2    = zeros(T, nEBin, nRhoBin)
     lnRoss2  = zeros(T, nEBin, nRhoBin)
@@ -241,29 +229,24 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
     oldlnV      = getfield(aos.eos, oldVname)
 
     @inbounds for i in 1:nRhoBin
-        # This is a column of the table, interpolate it and evaluate at the right position
         mask .= sortperm(view(newAxisOldE, :, i))
         x    .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i], move_knots=true)
         y    .= @view(oldlnV[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[:, i] .= ip.(newAxis_val)
 
-        # Pg
         y    .= @view(eos.lnPg[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnPg2[:, i] .= ip.(newAxis_val)
 
-        # Ne
         y    .= @view(eos.lnNe[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnNe2[:, i] .= ip.(newAxis_val)
 
-        # Ross
         y    .= @view(eos.lnRoss[mask, i])
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnRoss2[:, i] .= ip.(newAxis_val)
 
-        # kappa ross
         for m in eachindex(opacities)
             opa   = opacities[m]
             y    .= log.(@view(opa.κ_ross[mask, i]))
@@ -271,12 +254,10 @@ function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS
             lnKross2[:, i, m] .= ip.(newAxis_val)
 
             @inbounds for j in eachindex(opa.λ)
-                # kappa
                 y    .= log.(@view(opa.κ[mask, i, j]))
                 ip    = linear_interpolation(x, y, extrapolation_bc=Line())
                 lnkappa2[:, i, j, m] .= ip.(newAxis_val)
 
-                # src
                 y    .= log.(@view(opa.src[mask, i, j]))
                 ip    = linear_interpolation(x, y, extrapolation_bc=Line())
                 lnSrc2[:, i, j, m] .= ip.(newAxis_val)
@@ -303,7 +284,6 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
 
     T = eltype(eos.lnPg)
 
-    # New arrays
     lnV2     = zeros(T, nEBin, nRhoBin)
     lnNe2    = zeros(T, nEBin, nRhoBin)
     lnRoss2  = zeros(T, nEBin, nRhoBin)
@@ -319,32 +299,27 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
     mask = zeros(Int, size(eos.lnPg, 2))
 
     r_old  = eos.lnRho
-    oldlnV = getfield(eos, dependent_energy_variable(aos)) # We need to lookup only the thing which is not the axis
+    oldlnV = getfield(eos, dependent_energy_variable(aos))
 
     @inbounds for i in 1:nEBin
-        # This is a column of the table, interpolate it and evaluate at the right position
         mask .= sortperm(view(r_old, i, :))
         x    .= Interpolations.deduplicate_knots!(r_old[i, mask])
         y    .= @view oldlnV[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnV2[i, :] .= ip.(lnRho)
 
-        # Pg
         y    .= @view eos.lnPg[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnPg2[i, :] .= ip.(lnRho)
 
-        # Ne
         y    .= @view eos.lnNe[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnNe2[i, :] .= ip.(lnRho)
 
-        # Ross
         y    .= @view eos.lnRoss[i, mask]
         ip    = linear_interpolation(x, y, extrapolation_bc=Line())
         lnRoss2[i, :] .= ip.(lnRho)
 
-        # kappa ross
         for m in eachindex(opacities)
             opa   = opacities[m]
             y    .= log.(@view(opa.κ_ross[i, mask]))
@@ -352,12 +327,10 @@ function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
             lnKross2[i, :, m] .= ip.(lnRho)
 
             @inbounds for j in eachindex(opa.λ)
-                # kappa
                 y    .= log.(@view(opa.κ[i, mask, j]))
                 ip    = linear_interpolation(x, y, extrapolation_bc=Line())
                 lnkappa2[i, :, j, m] .= ip.(lnRho)
 
-                # src
                 y    .= log.(@view(opa.src[i, mask, j]))
                 ip    = linear_interpolation(x, y, extrapolation_bc=Line())
                 lnSrc2[i, :, j, m] .= ip.(lnRho)
@@ -401,8 +374,6 @@ function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
 
     old_is_new = newAxis_name == energy_variable(aos)
 
-    # so in this case we need to lookup the actual energy variable first for the new point
-    # and use this to lookup the rest, otherwise we can lookup everythinf directly
     oldAxisNewGrid = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
 
     @inbounds for j in eachindex(newRho)
@@ -415,7 +386,6 @@ function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
         end
     end
 
-    # For this it might actually be smarter to use a meshgrid
     κ_all, s_all, κ_rall = if !skip_opacities
         ee, rr = meshgrid(newAxis, newRho)
 
@@ -444,27 +414,23 @@ function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
         nothing, nothing, nothing
     end
 
-    # old E - new T -> oldAxisNewGrid - E -> newVar - T
-    # old E - new E -> oldAxisNewGrid - E -> newVar - T
-    # old T - new T -> oldAxisNewGrid - T -> newVar - E
-    # old T - new E -> oldAxisNewGrid - T -> newVar - E
-    newT = if iseaxis & old_is_new # old E - new E
+    newT = if iseaxis & old_is_new
         newVar
-    elseif iseaxis & !old_is_new   # old E - new T
+    elseif iseaxis & !old_is_new
         newAxis
-    elseif !iseaxis & old_is_new   # old T - new T
+    elseif !iseaxis & old_is_new
         newAxis
-    else                           # old T - new E
+    else
         oldAxisNewGrid
     end
 
-    newE = if iseaxis & old_is_new # old E - new E
+    newE = if iseaxis & old_is_new
         newAxis
-    elseif iseaxis & !old_is_new   # old E - new T
+    elseif iseaxis & !old_is_new
         oldAxisNewGrid
-    elseif !iseaxis & old_is_new   # old T - new T
+    elseif !iseaxis & old_is_new
         newVar
-    else                           # old T - new E
+    else
         newAxis
     end
 
@@ -639,7 +605,7 @@ puff_up(aos::AxedEoS, which::Symbol) = begin
 end
 
 puff_up_energy(aos::AxedEoS) = begin
-    E_puff = similar(aos.eos.lnPg)     ## to use the functions
+    E_puff = similar(aos.eos.lnPg)
     puff_up!(E_puff, EnergyAxis(aos).values, 1)
 
     newEi = is_internal_energy(aos) ? E_puff      : deepcopy(aos.eos.lnEi)
@@ -649,7 +615,7 @@ puff_up_energy(aos::AxedEoS) = begin
 end
 
 puff_up_density(aos::AxedEoS) = begin
-    d_puff = similar(aos.eos.lnPg)     ## to use the functions
+    d_puff = similar(aos.eos.lnPg)
     puff_up!(d_puff, DensityAxis(aos).values, 2)
     @axed RegularEoSTable(d_puff, deepcopy(aos.eos.lnT), deepcopy(aos.eos.lnEi), deepcopy(aos.eos.lnPg), deepcopy(aos.eos.lnRoss), deepcopy(aos.eos.lnNe))
 end
@@ -664,7 +630,6 @@ end
     @inbounds x_query <= x_knots[1] && return y_knots[1]
     @inbounds x_query >= x_knots[n] && return y_knots[n]
 
-    # Binary search for the interval [lo, lo+1] containing x_query
     lo, hi = 1, n
     @inbounds while hi - lo > 1
         mid = (lo + hi) >> 1
@@ -683,7 +648,6 @@ end
 
 function _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y;
                            is_log=false, fallback=1.0f-30)
-    # Detect NaN/Inf (and non-positive values when working in log space)
     @inbounds for i in eachindex(y_slice)
         if is_log
             row_mask[i] = nan_or_inf(y_slice[i]) || y_slice[i] <= 0
@@ -696,7 +660,6 @@ function _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y;
 
     n_good = length(row_mask) - n_bad
     if n_good >= 2
-        # Pack good points into pre-allocated buffers
         k = 0
         @inbounds for i in eachindex(x_coords)
             if !row_mask[i]
@@ -713,7 +676,6 @@ function _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y;
             end
         end
     else
-        # Too few good points — use fallback
         @inbounds for i in eachindex(y_slice)
             if row_mask[i]
                 y_slice[i] = fallback
@@ -736,7 +698,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {
 
     has_opacities = length(opacities) > 0
 
-    # Pass 1: constant ρ, interpolate across T/energy axis
     col_mask = Vector{Bool}(undef, nE)
     buf_xe   = similar(x_e)
     buf_ye   = similar(x_e)
@@ -770,7 +731,6 @@ function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {
         end
     end
 
-    # Pass 2: constant T, interpolate across ρ (fallback)
     row_mask = Vector{Bool}(undef, nρ)
     buf_x    = similar(x_rho)
     buf_y    = similar(x_rho)

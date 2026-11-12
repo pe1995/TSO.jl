@@ -129,7 +129,6 @@ function _read_table_info(path::String)
     vmic    = Float64(get(data, "vmic",    1.0))
     version = String(get(data,  "version", ""))
 
-    # composition is stored as string "Mn_-0.1,Co_0.1" or as TOML sub-table
     raw_comp = get(data, "composition", "")
     composition = if raw_comp isa AbstractString
         parse_composition(raw_comp)
@@ -139,7 +138,6 @@ function _read_table_info(path::String)
         Dict{String, Float64}()
     end
 
-    # Everything else goes into extras
     extras = Dict{String, Any}()
     for (k, v) in data
         k in _TABLE_INFO_CORE_KEYS && continue
@@ -173,7 +171,6 @@ function save(info::TableInfo, directory::String)
         "version"     => info.version,
     )
 
-    # Merge extras (extras cannot overwrite core keys)
     for (k, v) in info.extras
         k in _TABLE_INFO_CORE_KEYS && continue
         isnothing(v) && continue

@@ -22,7 +22,6 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     AxBins  = aos.energy_axes.length
     T_type  = eltype(eos.lnRho)
 
-    # Allocate required arrays locally
     ϵ_table       = zeros(T_type, AxBins, rhoBins, radBins)
     opacity_table = zeros(T_type, AxBins, rhoBins, radBins)
     S_table       = zeros(T_type, AxBins, rhoBins, radBins)
@@ -46,7 +45,6 @@ function advanced_binning(W_assign::AbstractMatrix, weights, aos::E, opacities, 
     ρ = exp.(eos.lnRho)
     scat = remove_from_thin ? scattering.κ : nothing
 
-    # Run the multithreaded orchestrator
     _advanced_binning_X!(
         B, δB, SBox, κBox, χBox, χRBox, χ_thin, ρ,
         opacities.λ, W_assign, Temp, weights,
@@ -114,7 +112,6 @@ function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_
     nlambda = length(λ)
     T_type = eltype(κ_1d)
 
-    # Allocate locally
     χBox   = zeros(T_type, 1, Nz, radBins)
     χRBox  = zeros(T_type, 1, Nz, radBins)
     κ_ross = zeros(T_type, 1, Nz, radBins)
@@ -151,7 +148,6 @@ function advanced_binning_1d(W_assign::AbstractMatrix, weights, λ, ρ_1d, Temp_
     @. κBox = max(κBox, T_type(1e-30))
     @. SBox = max(SBox, T_type(1e-30))
 
-    # Returns the updated binned arrays directly
     return (κBox=κBox, SBox=SBox, χBox=χBox, χRBox=χRBox)
 end
 
@@ -200,7 +196,6 @@ function advanced_binning_1d_quick(W_assign::AbstractMatrix, weights, λ, ρ_1d,
 
         for b in 1:radBins
             frac = T_type(W_assign[k, b])
-            #(frac <= 1e-8) && continue
 
             w_eff = w_k * frac
 
@@ -283,7 +278,7 @@ struct Binning1DPlan{T<:AbstractFloat}
     Pg::Vector{T}
 end
 
-Base.size(p::Binning1DPlan) = size(p.Aχ)          # (Nz, nlambda)
+Base.size(p::Binning1DPlan) = size(p.Aχ)
 
 function binning_1d_plan(weights, λ, ρ_1d, Temp_1d, Pg_1d, κ_1d, src_1d;
                          κ_scat_1d=nothing, corr_χ_1d=nothing, corr_S_1d=nothing)
@@ -405,7 +400,7 @@ function advanced_binning_1d_quick(plan::Binning1DPlan{T_type}, W_assign::Abstra
     @. κBox = max(κBox, T_type(1e-30))
     @. SBox = max(SBox, T_type(1e-30))
 
-    to3d(A) = reshape(A, 1, Nz, radBins)   # (1, Nz, radBins) layout, no copy
+    to3d(A) = reshape(A, 1, Nz, radBins)
     return (κBox=to3d(κBox), SBox=to3d(SBox), χBox=to3d(χBox), χRBox=to3d(χRBox))
 end
 
@@ -440,7 +435,6 @@ function _advanced_binning_X!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
         κBoxChunk  = getindex.(results, 7)
     end
 
-    # Sum over all chunks into the top-level arrays
     χBox   .= sum(χBoxChunk)
     χRBox  .= sum(χRBoxChunk)
     χ_thin .= sum(χthinChunk)
@@ -449,7 +443,6 @@ function _advanced_binning_X!(B, δB, SBox, κBox, χBox, χRBox, χ_thin,
     δB     .= sum(δBChunk)
     κBox   .= sum(κBoxChunk)
 
-    # Prevent 0.0 / 0.0 = NaN for empty bins using safe division
     @. χBox   = ifelse(B > 1e-30, χBox / B, 0.0)
     @. κBox   = ifelse(B > 1e-30, κBox / B, 0.0)
     @. χRBox  = ifelse(δB > 1e-30, χRBox / δB, 0.0)
@@ -525,7 +518,6 @@ function _bin_core!(W_assign::AbstractMatrix, chunk,
 
         for b in 1:radBins
             frac = T_type(W_assign[k, b])
-            #(frac <= 1e-8) && continue
 
             w_eff = w_k * frac
 
@@ -579,7 +571,6 @@ end
 function opacity_transition_1d(κ_ross_1d, ρ_1d, Pg_1d, logg)
     T_type = eltype(κ_ross_1d)
 
-    # κ_ross_1d is typically a view or 3D array sliced.
     _, Nz, radBins = size(κ_ross_1d)
 
     τ = zeros(T_type, 1, Nz, radBins)
@@ -587,7 +578,6 @@ function opacity_transition_1d(κ_ross_1d, ρ_1d, Pg_1d, logg)
 
     @inbounds for b in 1:radBins
         for z in 1:Nz
-            # τ = κ * P_g / (ρ * g)
             τ[1, z, b] = κ_ross_1d[1, z, b] * Pg_1d[z] / (ρ_1d[z] * g)
         end
     end
