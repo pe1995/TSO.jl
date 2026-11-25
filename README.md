@@ -1,4 +1,4 @@
-<a href="url"><img src="tso_logo.png" height=100% width=100%/></a> 
+<img src="tso_logo.png" height=100% width=100%/> 
 
 `TSO.jl` is a package for handling EoS and opacity tables. It reads monochromatic opacity tables, bins them for `DISPATCH`, and provides fast lookups of thermodynamic quantities and opacities on density-temperature or density-internal energy grids. It is complementary to the `MUST.jl` package, which handles the 3D models.
 
