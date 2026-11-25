@@ -79,3 +79,7 @@ opa = TSO.reload(TSO.SqOpacity, "path/to/binned_opacities_T.hdf5") |> TSO.extend
 ```
 
 On a table on the internal energy grid (`eos.hdf5`), use `Ei` instead of `T`. `TSO.is_internal_energy(eos.eos)` tells you which grid a table is on.
+
+-------------------------
+
+*Claude Opus 5.5 has been used to improve text quality.*
