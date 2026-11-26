@@ -3,7 +3,7 @@
 # ============================================================================
 
 const EOS_FORMAT = "TSO.EquationOfState"
-const EOS_FORMAT_VERSION = 1
+const EOS_FORMAT_VERSION = 2
 const EOS_GRIDS = (:temperature, :energy)
 const EOS_PARTS = (:eos, :opacity, :scattering)
 const BINNED_EOS_FILENAME = "binned_eos.hdf5"
@@ -386,9 +386,11 @@ end
 function _read_meta(fid)
     meta = Dict{Symbol, Any}()
     for (k, v) in pairs(HDF5.attrs(fid))
-        k in ("format", "format_version") && continue
-        meta[Symbol(k)] = k == "table_info" ? _table_info_from_toml(v) : v
+        k in ("format", "format_version", "table_info") && continue
+        meta[Symbol(k)] = v
     end
+    info = _read_table_info_h5(fid)
+    isnothing(info) || (meta[:table_info] = info)
     meta
 end
 
@@ -448,11 +450,15 @@ end
 
 function _write_meta!(fid, meta)
     attrs = HDF5.attrs(fid)
-    for (k, v) in [("format", EOS_FORMAT), ("format_version", EOS_FORMAT_VERSION), ((String(k), v) for (k, v) in meta if k != :path && !isnothing(v))...]
+    for (k, v) in [("format", EOS_FORMAT), ("format_version", EOS_FORMAT_VERSION), ((String(k), v) for (k, v) in meta if !(k in (:path, :table_info)) && !isnothing(v))...]
         haskey(attrs, k) && HDF5.delete_attribute(fid, k)
         attrs[k] = _attribute_value(v)
     end
+    isnothing(get(meta, :table_info, nothing)) || _write_table_info_h5!(fid, meta[:table_info])
 end
+
+_upgrade_meta!(file) = HDF5.h5open(fid -> _write_meta!(fid, _read_meta(fid)), file, "r+")
+_format_version(file) = HDF5.h5open(fid -> Int(get(HDF5.attrs(fid), "format_version", 1)), file, "r")
 
 _write_dataset!(group, name, v, u) = begin
     group[String(name)] = v
@@ -461,7 +467,6 @@ end
 
 _write_unit!(dataset, name, u) = haskey(u, Symbol(name)) && (HDF5.attrs(dataset)["unit"] = u[Symbol(name)])
 
-_attribute_value(v::TableInfo) = _table_info_to_toml(v)
 _attribute_value(v::Bool) = Int(v)
 _attribute_value(v::Symbol) = String(v)
 _attribute_value(v) = v
@@ -583,7 +588,8 @@ eos_filename(folder) = _legacy_kind(folder) == "binned" ? BINNED_EOS_FILENAME : 
 
 Combine the old files of the table in `folder` into one file. With `delete=true`
 the old files are removed after the new file has been compared to them; this
-also works later on, for a folder that was migrated before.
+also works later on, for a folder that was migrated before. The meta information
+of a table file in an older format version is brought up to date.
 The DISPATCH tables and `table_info.toml` are not touched.
 """
 function migrateTable(folder; delete=false)
@@ -593,8 +599,9 @@ function migrateTable(folder; delete=false)
     if isnothing(target)
         isempty(files) && error("No table found in $(folder).")
         target = _write_migrated(folder, files)
-    elseif delete && !isempty(files)
-        _verify_migration(folder, target, files) || error("$(target) differs from the old files in $(folder).")
+    else
+        _format_version(target) < EOS_FORMAT_VERSION && _upgrade_meta!(target)
+        delete && !isempty(files) && !_verify_migration(folder, target, files) && error("$(target) differs from the old files in $(folder).")
     end
     delete && foreach(rm, unique(filter(!isnothing, [p for f in values(files) for p in values(f)])))
     target

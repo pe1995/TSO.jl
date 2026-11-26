@@ -25,10 +25,10 @@ Create a `TableInfo` from keyword arguments. `composition` can be a `Dict`,
 or a string in the `"Mn_-0.1,Co_0.1"` format (which is auto-parsed).
 Extra keyword arguments are stored in `extras`.
 
-    TableInfo(directory::String)
+    TableInfo(path::String)
 
-Load a `TableInfo` from the `table_info.toml` file in the given directory.
-If the file does not exist, returns `nothing`.
+Load the `TableInfo` of a table file or table folder (from the meta information of the
+table file, or from `table_info.toml` for tables in the old layout), `nothing` if there is none.
 
 # Examples
 
@@ -70,6 +70,8 @@ function parse_composition(comp_str::AbstractString)
         for a in elements_abundances
     )
 end
+parse_composition(comp::AbstractDict) = Dict{String, Float64}(string(k) => Float64(v) for (k, v) in comp)
+parse_composition(::Nothing) = Dict{String, Float64}()
 
 function composition_to_string(comp::Dict{String, Float64})
     isempty(comp) && return ""
@@ -106,20 +108,19 @@ function TableInfo(; feh::Real=0.0,
 end
 
 """
-    TableInfo(directory::String)
+    TableInfo(path::String)
 
-Load the `TableInfo` of the table in `directory`, from the meta information of the
-table file or, for tables in the old layout, from `table_info.toml`.
+Load the `TableInfo` of a table file, or of the table in the folder `path`, from the
+meta information of the table file or, for tables in the old layout, from `table_info.toml`.
 Returns `nothing` if neither exists.
 """
 function TableInfo(directory::String)
-    file = eos_file(directory)
+    file = isdir(directory) ? eos_file(directory) : (is_eos_file(directory) ? directory : nothing)
     if !isnothing(file)
-        toml = HDF5.h5open(file, "r") do fid
-            haskey(HDF5.attrs(fid), "table_info") ? HDF5.attrs(fid)["table_info"] : nothing
-        end
-        isnothing(toml) || return _table_info_from_toml(toml)
+        info = HDF5.h5open(_read_table_info_h5, file, "r")
+        isnothing(info) || return info
     end
+    isdir(directory) || return nothing
     path = joinpath(directory, TABLE_INFO_FILENAME)
     isfile(path) || return nothing
     _read_table_info(path)
@@ -132,6 +133,38 @@ end
 _read_table_info(path::String) = _table_info(TOML.parsefile(path))
 _table_info_from_toml(toml::AbstractString) = _table_info(TOML.parse(toml))
 _table_info_to_toml(info::TableInfo) = sprint(TOML.print, _table_info_dict(info))
+
+function _read_table_info_h5(fid)
+    haskey(fid, "table_info") && return _table_info(_read_attribute_tree(fid["table_info"]))
+    attrs = HDF5.attrs(fid)
+    haskey(attrs, "table_info") ? _table_info_from_toml(attrs["table_info"]) : nothing
+end
+
+_read_attribute_tree(group) = merge(
+    Dict{String, Any}(k => v for (k, v) in pairs(HDF5.attrs(group))),
+    Dict{String, Any}(k => _read_attribute_tree(group[k]) for k in keys(group))
+)
+
+function _write_table_info_h5!(fid, info::TableInfo)
+    haskey(fid, "table_info") && HDF5.delete_object(fid, "table_info")
+    haskey(HDF5.attrs(fid), "table_info") && HDF5.delete_attribute(fid, "table_info")
+    data = _table_info_dict(info)
+    data["composition"] = info.composition
+    _write_attribute_tree!(HDF5.create_group(fid, "table_info"), data)
+end
+
+function _write_attribute_tree!(group, data)
+    for (k, v) in data
+        if v isa AbstractDict
+            _write_attribute_tree!(HDF5.create_group(group, String(k)), v)
+        else
+            HDF5.attrs(group)[String(k)] = _attribute_tree_value(v)
+        end
+    end
+end
+
+_attribute_tree_value(v::AbstractVector) = isempty(v) ? Float64[] : collect(promote(v...))
+_attribute_tree_value(v) = v
 
 function _table_info(data::AbstractDict)
 
@@ -245,7 +278,7 @@ function find_table_info(tables_dir::String;
 
     matches_found = String[]
     for entry in readdir(tables_dir, join=true)
-        isdir(entry) || continue
+        (isdir(entry) || is_eos_file(entry)) || continue
         info = TableInfo(entry)
         isnothing(info) && continue
         if matches(info; feh=feh, alpha=alpha, composition=composition, vmic=vmic, version=version)
@@ -267,7 +300,7 @@ end
 # Utility
 # ============================================================================
 
-has_table_info(directory::String) = isfile(joinpath(directory, TABLE_INFO_FILENAME)) || !isnothing(TableInfo(directory))
+has_table_info(path::String) = (isdir(path) && isfile(joinpath(path, TABLE_INFO_FILENAME))) || !isnothing(TableInfo(path))
 
 function Base.show(io::IO, info::TableInfo)
     comp_str = composition_to_string(info.composition)
@@ -316,3 +349,16 @@ function show_composition(feh, alpha, comp_dict)
 end
 
 show_composition(info::TableInfo) = show_composition(info.feh, info.alpha, info.composition)
+
+"""
+    composition_dict(info)
+
+The composition of a table as `Dict` of `Symbol("[Fe/H]")`, `Symbol("[alpha/Fe]")` and
+`Symbol("[X/Fe]")` to their value, e.g. for the parameters of a `MUST.Box`.
+"""
+composition_dict(feh, alpha, composition=Dict()) = Dict{Symbol, Float64}(
+    Symbol("[Fe/H]") => feh, Symbol("[alpha/Fe]") => alpha,
+    (Symbol("[$(k)/Fe]") => v for (k, v) in parse_composition(composition))...
+)
+composition_dict(info::TableInfo) = composition_dict(info.feh, info.alpha, info.composition)
+composition_dict(::Nothing) = Dict{Symbol, Float64}()

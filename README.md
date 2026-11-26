@@ -8,26 +8,26 @@ _______
 
 # Shortcuts
 
-1. [Table Folders](#table-folders)
+1. [Table Files](#table-files)
 2. [Loading Tables](#loading-tables)
 3. [Looking up Values](#looking-up-values)
 4. [Binning](#binning)
 
 -----------
-# Table Folders
+# Table Files
 
-Every table is a folder with one `HDF5` file that holds the whole table, together with everything else that belongs to it:
+Every table is one `HDF5` file that holds the whole table. A monochromatic table is just this file, named after its composition. A binned table is a folder, because it comes with everything else that belongs to it:
 
 ```
-z_0.0_alpha_0.0_vmic_2.0_v4.6/
-├── z_0.0_alpha_0.0_vmic_2.0_v4.6.hdf5   monochromatic table (named after the folder)
-└── table_info.toml                      composition and settings (also stored in the table file)
+z_0.0_alpha_0.0_vmic_2.0_v5.1.hdf5       monochromatic table
 
 V51MB11S_M3DIS_t05780_g+4.60_.../
 ├── binned_eos.hdf5                      binned table
 ├── *.dat, tabparam*.in                  the same table in the format read by DISPATCH
 └── table_info.toml, <config>.toml, ...  settings of the binning, 1D models, figures
 ```
+
+Wherever a table is expected, the file itself or a folder with the table file in it can be given. Older monochromatic tables are folders with the table file and a `table_info.toml`.
 
 The table file holds the table on one or two grids, the density-temperature grid (`temperature`) and the density-internal energy grid used by `DISPATCH` (`energy`). Each grid has its axes and up to three parts, every part holding any number of quantities:
 
@@ -43,7 +43,7 @@ table.hdf5
 
 The Rosseland opacity is only stored in the EoS (`lnRoss`), next to the opacity at 500 nm (`lnK500`).
 
-The composition, version and all settings of the table are stored as metadata of the file. The file is recognised by its metadata, not by its name. Every quantity has its unit as attribute (`unit`), in Julia `units(tab)`:
+The composition, version and all settings of the table are stored in the group `table_info` of the file, one attribute per entry (the composition in `table_info/composition`), in Julia `TableInfo(path)`. The file is recognised by its metadata, not by its name. Every quantity has its unit as attribute (`unit`), in Julia `units(tab)`:
 
 | quantity | monochromatic | binned |
 |---|---|---|
