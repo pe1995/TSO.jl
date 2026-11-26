@@ -1,6 +1,6 @@
-function adiabat(star_point, end_point, eos_in::SqEoS;
+function adiabat(star_point, end_point, eos_in::EquationOfState;
                     nz=440, n_iter=30, dlnd=0.05, padding=0.05, ee_min=nothing)
-    eos = @axed eos_in
+    eos = eos_in
 
     zbottom = first(star_point.z)
     ztop = first(end_point.z)
@@ -16,7 +16,7 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
 
         ee_min, ee_max
     else
-        eemin,ee_max = exp(minimum(eos.eos.lnEi)), exp(maximum(eos.eos.lnEi))
+        eemin,ee_max = exp(minimum(eos[:lnEi])), exp(maximum(eos[:lnEi]))
 
         ee_min = if isnothing(ee_min)
             eemin
@@ -120,7 +120,7 @@ function adiabat(star_point, end_point, eos_in::SqEoS;
     Model1D(z=z, lnρ=log.(d), lnT=log.(t), lnEi=log.(ee), logg=star_point.logg)
 end
 
-function adiabat(model_in, eos::SqEoS; kwargs...)
+function adiabat(model_in, eos::EquationOfState; kwargs...)
     model = flip(model_in)
 
     start_point = pick_point(model, 1)
@@ -133,7 +133,7 @@ end
 # Adiabatic extrapolation
 # ============================================================================
 
-function adiabatDown(start_point, eos_in::SqEoS; kwargs...)
+function adiabatDown(start_point, eos_in::EquationOfState; kwargs...)
     t0  = exp(first(start_point.lnT))
     ρ0  = exp(first(start_point.lnρ))
     g0  = exp10(start_point.logg)
@@ -142,13 +142,13 @@ function adiabatDown(start_point, eos_in::SqEoS; kwargs...)
     adiabatDown(t0, ρ0, z0, start_point.logg, eos_in; kwargs...)
 end
 
-adiabatDown(t0, ρ0, z0, logg, eos_in::SqEoS; kwargs...) = is_internal_energy(@axed(eos_in)) ?
+adiabatDown(t0, ρ0, z0, logg, eos_in::EquationOfState; kwargs...) = is_internal_energy(eos_in) ?
     adiabatDown_ee(t0, ρ0, z0, logg, eos_in; kwargs...) :
     adiabatDown_t(t0, ρ0, z0, logg, eos_in; kwargs...)
 
-function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
+function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::EquationOfState;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
-    eos = @axed eos_in
+    eos = eos_in
 
     @assert is_internal_energy(eos)
     eemin,ee_max,_,_ = exp.(limits(eos))
@@ -209,12 +209,12 @@ function adiabatDown_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
     Model1D(z=z, lnρ=log.(d), lnT=log.(t), lnEi=log.(ee), logg=logg)
 end
 
-function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
+function adiabatDown_t(t0, ρ0, z0, logg, eos_in::EquationOfState;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=-Inf)
-    eos = @axed eos_in
+    eos = eos_in
 
     @assert !is_internal_energy(eos)
-    eemin,ee_max = exp(minimum(eos.eos.lnEi)), exp(maximum(eos.eos.lnEi))
+    eemin,ee_max = exp(minimum(eos[:lnEi])), exp(maximum(eos[:lnEi]))
 
     ee_min = if isnothing(ee_min)
         eemin
@@ -272,7 +272,7 @@ function adiabatDown_t(t0, ρ0, z0, logg, eos_in::SqEoS;
     Model1D(z=z, lnρ=log.(d), lnT=log.(t), lnEi=log.(ee), logg=logg)
 end
 
-function adiabatUp(start_point, eos_in::SqEoS; kwargs...)
+function adiabatUp(start_point, eos_in::EquationOfState; kwargs...)
     t0  = exp(first(start_point.lnT))
     ρ0  = exp(first(start_point.lnρ))
     g0  = exp10(start_point.logg)
@@ -281,13 +281,13 @@ function adiabatUp(start_point, eos_in::SqEoS; kwargs...)
     adiabatUp(t0, ρ0, z0, start_point.logg, eos_in; kwargs...)
 end
 
-adiabatUp(t0, ρ0, z0, logg, eos_in::SqEoS; kwargs...) = is_internal_energy(@axed(eos_in)) ?
+adiabatUp(t0, ρ0, z0, logg, eos_in::EquationOfState; kwargs...) = is_internal_energy(eos_in) ?
     adiabatUp_ee(t0, ρ0, z0, logg, eos_in; kwargs...) :
     adiabatUp_t(t0, ρ0, z0, logg, eos_in; kwargs...)
 
-function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
+function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::EquationOfState;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=Inf)
-    eos = @axed eos_in
+    eos = eos_in
 
     @assert is_internal_energy(eos)
     eemin,ee_max,_,_ = exp.(limits(eos))
@@ -348,12 +348,12 @@ function adiabatUp_ee(t0, ρ0, z0, logg, eos_in::SqEoS;
     Model1D(z=z, lnρ=log.(d), lnT=log.(t), lnEi=log.(ee), logg=logg)
 end
 
-function adiabatUp_t(t0, ρ0, z0, logg, eos_in::SqEoS;
+function adiabatUp_t(t0, ρ0, z0, logg, eos_in::EquationOfState;
                     nz=10000, n_iter=30, dlnd=0.075, ee_min=nothing, z_end=Inf)
-    eos = @axed eos_in
+    eos = eos_in
 
     @assert !is_internal_energy(eos)
-    eemin,ee_max = exp(minimum(eos.eos.lnEi)), exp(maximum(eos.eos.lnEi))
+    eemin,ee_max = exp(minimum(eos[:lnEi])), exp(maximum(eos[:lnEi]))
 
     ee_min = if isnothing(ee_min)
         eemin

@@ -1,61 +1,12 @@
 # ============================================================================
-# Extended EoS -- Flexible extension of the EoS for arbitrary quantities
+# Sampling of EquationOfState tables
 # ============================================================================
-@kwdef struct ExtendedEoS{E<:AxedEoS}
-	eos::E
-	extensions::Dict = Dict()
-end
-
-@kwdef struct ExtendedOpacity
-	opa
-	extensions::Dict = Dict()
-	binned::Bool = all(diff(opa.λ) .== 1) ? true : false
-	weights = binned ? ones(eltype(opa.κ), length(opa.λ)) : ω_midpoint(opa)
-end
-
-# ============================================================================
-# Access functions
-# ============================================================================
-
-opacity(opa::ExtendedOpacity) = opa.opa
-wavelength(opa::ExtendedOpacity) = wavelength(opa.opa)
-extended(opa::RegularOpacityTable; kwargs...) = ExtendedOpacity(;opa=opa, kwargs...)
-extended(eos::RegularEoSTable; kwargs...) = ExtendedEoS(;eos=@axed(eos), kwargs...)
-extended(eos::AxedEoS; kwargs...) = ExtendedEoS(;eos=eos, kwargs...)
-table(eos::ExtendedEoS) = table(eos.eos)
-table(opa::ExtendedOpacity) = opa.opa
-
-get_data(eos::ExtendedEoS, var::Symbol) = begin
-    Typ = eltype(eos.eos.eos.lnPg)
-    if var in fieldnames(typeof(eos.eos.eos))
-        return getfield(eos.eos.eos, var)::AbstractArray{Typ}
-    elseif var in keys(eos.extensions)
-        return eos.extensions[var]::AbstractArray{Typ}
-    else
-        error("Variable $var not found in EoS tables")
-    end
-end
-
-get_data(eos::ExtendedEoS, opa::ExtendedOpacity, var::Symbol) = begin
-    Typ = eltype(eos.eos.eos.lnPg)
-    if var in fieldnames(typeof(eos.eos.eos))
-        return getfield(eos.eos.eos, var)::AbstractArray{Typ}
-    elseif var in keys(eos.extensions)
-        return eos.extensions[var]::AbstractArray{Typ}
-    elseif var in fieldnames(typeof(opa.opa))
-        return getfield(opa.opa, var)::AbstractArray{Typ}
-    elseif var in keys(opa.extensions)
-        return opa.extensions[var]::AbstractArray{Typ}
-    else
-        error("Variable $var not found in tables")
-    end
-end
 
 # ============================================================================
 # Bilinear interpolation coefficients
 # ============================================================================
 
-global LOG_INTERPOLATED_VARS = [:κ, :κ_ross, :src]
+global LOG_INTERPOLATED_VARS = [:κ, :src]
 struct InterpCoefs{T<:AbstractFloat}
     idx::Int
     w_low::T
@@ -65,9 +16,9 @@ end
 _is_log_interpolated(var::Symbol) = var in LOG_INTERPOLATED_VARS
 add_log_interpolated!(var::Symbol, to=LOG_INTERPOLATED_VARS) = push!(to, var)
 
-weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) = begin
-    grid_T = EnergyAxis(eos.eos).values
-    grid_Rho = DensityAxis(eos.eos).values
+weights(eos::EquationOfState, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) = begin
+    grid_T = eos.energy_axis.values
+    grid_Rho = eos.density_axis.values
 
     coefs_T = weights_axis(lnT, grid_T, extrapolate)
     coefs_Rho = weights_axis(lnrho, grid_Rho, extrapolate)
@@ -75,16 +26,13 @@ weights(eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=
     return coefs_Rho, coefs_T
 end
 
-weights(eos::RegularEoSTable, args...; kwargs...) = weights(extended(eos), args...; kwargs...)
-weights(eos::AxedEoS, args...; kwargs...) = weights(extended(eos), args...; kwargs...)
-
 """
     weights(eos; coordinates...)
 
 Keyword version, accepting the same named (and possibly linear) coordinates as [`sample`](@ref),
 e.g. `weights(eos, rho=rho, T=T)`.
 """
-weights(eos::ExtendedEoS; extrapolate=false, kwargs...) = begin
+weights(eos::EquationOfState; extrapolate=false, kwargs...) = begin
     given, _ = _coord_kwargs(kwargs)
     weights(eos, _grid_coords(eos, given; extrapolate=extrapolate)...; extrapolate=extrapolate)
 end
@@ -114,16 +62,11 @@ say -- where the two coefficient arrays would otherwise be allocated and
 discarded on every call.
 """
 weights!(coefs_Rho::AbstractArray{InterpCoefs{T}}, coefs_T::AbstractArray{InterpCoefs{T}},
-         eos::ExtendedEoS, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) where {T<:AbstractFloat} = begin
-    weights_axis!(coefs_T, lnT, EnergyAxis(eos.eos).values, extrapolate)
-    weights_axis!(coefs_Rho, lnrho, DensityAxis(eos.eos).values, extrapolate)
+         eos::EquationOfState, lnrho::AbstractArray, lnT::AbstractArray; extrapolate=false) where {T<:AbstractFloat} = begin
+    weights_axis!(coefs_T, lnT, eos.energy_axis.values, extrapolate)
+    weights_axis!(coefs_Rho, lnrho, eos.density_axis.values, extrapolate)
     return coefs_Rho, coefs_T
 end
-
-weights!(coefs_Rho, coefs_T, eos::RegularEoSTable, args...; kwargs...) =
-    weights!(coefs_Rho, coefs_T, extended(eos), args...; kwargs...)
-weights!(coefs_Rho, coefs_T, eos::AxedEoS, args...; kwargs...) =
-    weights!(coefs_Rho, coefs_T, extended(eos), args...; kwargs...)
 
 function linear_interpolation_weights(grid_nodes, val, extrapolate=false)
     T = eltype(val)
@@ -156,133 +99,53 @@ end
 # Fast lookup function for multiple quantities
 # ============================================================================
 
-sample(eos::RegularEoSTable, args...; kwargs...) =  sample(extended(eos), args...; kwargs...)
-sample(eos::AxedEoS, args...; kwargs...) = sample(extended(eos), args...; kwargs...)
-sample(eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample(eos, extended(opa), args...; kwargs...)
+get_data(eos::EquationOfState, var::Symbol) = eos[var]
 
-sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...; kwargs...) = begin
+sample(eos::EquationOfState, opa::EquationOfState, args...; kwargs...) = sample(merge(eos, opa), args...; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::EquationOfState, opa::EquationOfState, args...; kwargs...) = sample!(results, merge(eos, opa), args...; kwargs...)
+
+sample(eos::EquationOfState, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...; kwargs...) = begin
     res = sample(eos, variables, [coord1], [coord2], args...; kwargs...)
-    return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
-end
-sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::Number, coord2::Number, args...; kwargs...) = begin
-    res = sample(eos, opa, variables, [coord1], [coord2], args...; kwargs...)
-    return map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
+    map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), res)
 end
 
-function sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat}
-    lnrho = coord1
-    lnT   = coord2
-
-    results = _allocate_results(eos, variables, lnrho)
-
-    sample!(results, eos, variables, lnrho, lnT, args...; extrapolate=extrapolate)
+function sample(eos::EquationOfState, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat}
+    results = _allocate_results(eos, variables, coord1, args...)
+    sample!(results, eos, variables, coord1, coord2, args...; extrapolate=extrapolate)
     results
 end
 
-function sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat}
-    lnrho = coord1
-    lnT   = coord2
-
-    results = _allocate_results(eos, opa, variables, lnrho, args...)
-    sample!(results, eos, opa, variables, lnrho, lnT, args...; extrapolate=extrapolate)
-    results
-end
-
-_allocate_results(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, lnrho) = map(var -> similar(lnrho, eltype(lnrho)), variables)
-
-function _allocate_results(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, lnrho, args...)
+function _allocate_results(eos::EquationOfState, variables::Union{Tuple, AbstractArray}, lnrho, args...)
     map(variables) do var
-        if var == :lnRho || (var == energy_variable(eos.eos))
+        if var == :lnRho || var == energy_variable(eos) || ndims(get_data(eos, var)) == 2
             similar(lnrho, eltype(lnrho))
+        elseif length(args) > 0
+            k = args[1]
+            k isa Integer ? similar(lnrho, eltype(lnrho)) : similar(lnrho, eltype(lnrho), (length(k), size(lnrho)...))
         else
-            data = get_data(eos, opa, var)
-            if ndims(data) == 2
-                similar(lnrho, eltype(lnrho))
-            else
-                if length(args) > 0
-                    k = args[1]
-                    if k isa Integer
-                        similar(lnrho, eltype(lnrho))
-                    else
-                        similar(lnrho, eltype(lnrho), (length(k), size(lnrho)...))
-                    end
-                else
-                    similar(lnrho, eltype(lnrho), (size(data, 3), size(lnrho)...))
-                end
-            end
+            similar(lnrho, eltype(lnrho), (size(get_data(eos, var), 3), size(lnrho)...))
         end
     end
 end
 
-sample!(results::Union{Tuple, AbstractArray}, eos::RegularEoSTable, args...; kwargs...) = sample!(results, extended(eos), args...; kwargs...)
-sample!(results::Union{Tuple, AbstractArray}, eos::AxedEoS, args...; kwargs...) = sample!(results, extended(eos), args...; kwargs...)
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::RegularOpacityTable, args...; kwargs...) = sample!(results, eos, extended(opa), args...; kwargs...)
-
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat} = begin
+sample!(results::Union{Tuple, AbstractArray}, eos::EquationOfState, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat} = begin
     lnrho, lnT = _invert_axis(eos, variables, coord1, coord2; extrapolate=extrapolate)
     coefs_Rho, coefs_T = weights(eos, lnrho, lnT; extrapolate=extrapolate)
     sample!(results, eos, variables, coefs_Rho, coefs_T, args...)
-
-    results
-end
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coord1::AbstractArray{T}, coord2::AbstractArray{T}, args...; extrapolate=false) where {T<:AbstractFloat} = begin
-    lnrho, lnT = _invert_axis(eos, variables, coord1, coord2; extrapolate=extrapolate)
-    coefs_Rho, coefs_T = weights(eos, lnrho, lnT; extrapolate=extrapolate)
-    sample!(results, eos, opa, variables, coefs_Rho, coefs_T, args...)
     results
 end
 
-function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}) where {T2<:AbstractFloat}
+function sample!(results::Union{Tuple, AbstractArray}, eos::EquationOfState, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}, k...) where {T2<:AbstractFloat}
     for (i, var) in enumerate(variables)
         if var == :lnRho
-            grid = DensityAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_Rho, false)
-        elseif var == energy_variable(eos.eos)
-            grid = EnergyAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_T, false)
+            _interpolate_var!(results[i], eos.density_axis.values, coefs_Rho, false)
+        elseif var == energy_variable(eos)
+            _interpolate_var!(results[i], eos.energy_axis.values, coefs_T, false)
         else
-            data = get_data(eos, var)
-            is_log = _is_log_interpolated(var)
-            _interpolate_var!(results[i], data, coefs_Rho, coefs_T, is_log)
+            _interpolate_var!(results[i], get_data(eos, var), coefs_Rho, coefs_T, k..., _is_log_interpolated(var))
         end
     end
-    return results
-end
-
-function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}) where {T2<:AbstractFloat}
-    for (i, var) in enumerate(variables)
-        if var == :lnRho
-            grid = DensityAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_Rho, false)
-        elseif var == energy_variable(eos.eos)
-            grid = EnergyAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_T, false)
-        else
-            data = get_data(eos, opa, var)
-            is_log = _is_log_interpolated(var)
-            _interpolate_var!(results[i], data, coefs_Rho, coefs_T, is_log)
-        end
-    end
-
-    return results
-end
-
-function sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}, coefs_Rho::AbstractArray{InterpCoefs{T2}}, coefs_T::AbstractArray{InterpCoefs{T2}}, k::Union{Integer, AbstractUnitRange}) where {T2<:AbstractFloat}
-    for (i, var) in enumerate(variables)
-        if var == :lnRho
-            grid = DensityAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_Rho, false)
-        elseif var == energy_variable(eos.eos)
-            grid = EnergyAxis(eos.eos).values
-            _interpolate_var!(results[i], grid, coefs_T, false)
-        else
-            data = get_data(eos, opa, var)
-            is_log = _is_log_interpolated(var)
-            _interpolate_var!(results[i], data, coefs_Rho, coefs_T, k, is_log)
-        end
-    end
-
-    return results
+    results
 end
 
 # ============================================================================
@@ -298,57 +161,38 @@ const COORDINATE_KWARGS = Dict(
 
 _needs_log(name::Symbol) = !startswith(String(name), "ln")
 
-sample(eos::ExtendedEoS, variables::Symbol...; kwargs...) = begin
-    res = _sample_kwargs(eos, nothing, variables; kwargs...)
+sample(eos::EquationOfState, variables::Symbol...; kwargs...) = begin
+    res = _sample_kwargs(eos, variables; kwargs...)
     length(variables) == 1 ? first(res) : res
 end
-sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Symbol...; kwargs...) = begin
-    res = _sample_kwargs(eos, opa, variables; kwargs...)
-    length(variables) == 1 ? first(res) : res
-end
+sample(eos::EquationOfState, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs(eos, variables; kwargs...)
 
-sample(eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs(eos, nothing, variables; kwargs...)
-sample(eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs(eos, opa, variables; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::EquationOfState, variables::Symbol...; kwargs...) = _sample_kwargs!(results, eos, variables; kwargs...)
+sample!(results::Union{Tuple, AbstractArray}, eos::EquationOfState, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, variables; kwargs...)
 
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Symbol...; kwargs...) = _sample_kwargs!(results, eos, nothing, variables; kwargs...)
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Symbol...; kwargs...) = _sample_kwargs!(results, eos, opa, variables; kwargs...)
-
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, nothing, variables; kwargs...)
-sample!(results::Union{Tuple, AbstractArray}, eos::ExtendedEoS, opa::ExtendedOpacity, variables::Union{Tuple, AbstractArray}; kwargs...) = _sample_kwargs!(results, eos, opa, variables; kwargs...)
-
-function _sample_kwargs(eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
-    _check_wavelength_index(opa, k)
+function _sample_kwargs(eos::EquationOfState, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
+    _check_wavelength_index(eos, k)
     cRho, cT, scalar = _resolve_coefs(eos, coefs_Rho, coefs_T; extrapolate=extrapolate, kwargs...)
     kargs = isnothing(k) ? () : (k,)
 
     template = similar(cRho, _coef_eltype(cRho))
-    results = isnothing(opa) ? _allocate_results(eos, variables, template) : _allocate_results(eos, opa, variables, template, kargs...)
-    if isnothing(opa)
-        sample!(results, eos, variables, cRho, cT)
-    else
-        sample!(results, eos, opa, variables, cRho, cT, kargs...)
-    end
+    results = _allocate_results(eos, variables, template, kargs...)
+    sample!(results, eos, variables, cRho, cT, kargs...)
 
     scalar ? map(r -> ndims(r) == 1 ? r[1] : vec(r[:, 1]), results) : results
 end
 
-function _sample_kwargs!(results, eos::ExtendedEoS, opa, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
-    _check_wavelength_index(opa, k)
+function _sample_kwargs!(results, eos::EquationOfState, variables; k=nothing, coefs_Rho=nothing, coefs_T=nothing, extrapolate=false, kwargs...)
+    _check_wavelength_index(eos, k)
     cRho, cT, _ = _resolve_coefs(eos, coefs_Rho, coefs_T; extrapolate=extrapolate, kwargs...)
-
-    if isnothing(opa)
-        sample!(results, eos, variables, cRho, cT)
-    else
-        isnothing(k) ? sample!(results, eos, opa, variables, cRho, cT) : sample!(results, eos, opa, variables, cRho, cT, k)
-    end
-
+    sample!(results, eos, variables, cRho, cT, (isnothing(k) ? () : (k,))...)
     results
 end
 
-_check_wavelength_index(opa, k) = (isnothing(opa) && !isnothing(k)) && error("The wavelength index `k` needs an opacity table, the EoS alone has no wavelength axis.")
+_check_wavelength_index(eos, k) = (!has_opacity(eos) && !isnothing(k)) && error("The wavelength index `k` needs an opacity table, this table has no opacity.")
 _coef_eltype(coefs::AbstractArray{InterpCoefs{T}}) where {T<:AbstractFloat} = T
 
-function _resolve_coefs(eos::ExtendedEoS, coefs_Rho, coefs_T; extrapolate=false, kwargs...)
+function _resolve_coefs(eos::EquationOfState, coefs_Rho, coefs_T; extrapolate=false, kwargs...)
     if !isnothing(coefs_Rho) || !isnothing(coefs_T)
         (isnothing(coefs_Rho) || isnothing(coefs_T)) && error("Precomputed weights need both `coefs_Rho` and `coefs_T`.")
         isempty(kwargs) || error("Got coordinates $(Tuple(keys(kwargs))) together with precomputed weights, give either one or the other.")
@@ -388,9 +232,9 @@ function _coord_kwargs(kwargs)
     given, scalar
 end
 
-function _grid_coords(eos::ExtendedEoS, given; extrapolate=false)
-    grid_energy_var = energy_variable(eos.eos)
-    dependent_energy_var = dependent_energy_variable(eos.eos)
+function _grid_coords(eos::EquationOfState, given; extrapolate=false)
+    grid_energy_var = energy_variable(eos)
+    dependent_energy_var = dependent_energy_variable(eos)
 
     lnrho = get(given, :lnRho, nothing)
     lnT = get(given, grid_energy_var, nothing)
@@ -414,10 +258,10 @@ end
 # Inverse lookup for EoS coordinates
 # ============================================================================
 
-_invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::AbstractArray{T}; extrapolate=false) where {T<:AbstractFloat} = begin
+_invert_axis(eos::EquationOfState, variables, coord1::AbstractArray{T}, coord2::AbstractArray{T}; extrapolate=false) where {T<:AbstractFloat} = begin
     has_target_rho = :lnRho in variables
-    grid_energy_var = energy_variable(eos.eos)
-    dependent_energy_var = dependent_energy_variable(eos.eos)
+    grid_energy_var = energy_variable(eos)
+    dependent_energy_var = dependent_energy_variable(eos)
     has_target_energy = grid_energy_var in variables
 
     lnrho, lnT = if has_target_rho
@@ -430,9 +274,9 @@ _invert_axis(eos::ExtendedEoS, variables, coord1::AbstractArray{T}, coord2::Abst
     return lnrho, lnT
 end
 
-function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=200, tol=1e-6, extrapolate=false) where {T}
+function _invert(eos::EquationOfState, target_var::Symbol, known_var::Symbol, target_array::AbstractArray{T}, known_array::AbstractArray{T}; maxiter=200, tol=1e-6, extrapolate=false) where {T}
     result_array = similar(target_array)
-    grid = getfield(eos.eos.eos, target_var)
+    grid = eos[target_var]
     pad = extrapolate ? 0.2 * (maximum(grid) - minimum(grid)) : zero(eltype(grid))
     val_min_global = minimum(grid) - pad
     val_max_global = maximum(grid) + pad
@@ -462,7 +306,7 @@ function _invert(eos::ExtendedEoS, target_var::Symbol, known_var::Symbol, target
     calc_fallback(v_min, v_max, f_min, f_max, target_val) = begin
         if is_finding_rho
             lnP_val = target_val
-            if energy_variable(eos.eos) == :lnT
+            if energy_variable(eos) == :lnT
                 lnT_val = known_val_arr[1]
             else
                 a_rad = 7.5657e-15
@@ -722,9 +566,9 @@ sample!
 Perform highly optimized interpolation on extended EOS and opacity tables.
 
 # Arguments
-- `eos`: An `ExtendedEoS` table.
-- `opa`: An `ExtendedOpacity` table.
-- `variables`: A collection (e.g., `Tuple` or `AbstractArray`) of symbols measuring what to interpolate (e.g., `[:κ, :κ_ross]`). In the keyword form the variables may also be passed as plain arguments (e.g. `:κ, :κ_ross`).
+- `eos`: An `EquationOfState`, with its opacity if opacities are sampled.
+- `opa`: (optional) A second `EquationOfState` holding the opacity, which is merged with `eos`.
+- `variables`: A collection (e.g., `Tuple` or `AbstractArray`) of symbols measuring what to interpolate (e.g., `[:κ, :src]`). In the keyword form the variables may also be passed as plain arguments (e.g. `:κ, :src`).
 - `lnrho`, `lnT`: Logarithm values of the density and temperature. Can be a scalar `Number` or an `AbstractArray{<:AbstractFloat}`.
 - `k` (optional): An `Integer` index or `AbstractUnitRange` of indices to slice the 3rd dimension (e.g., wavelength) of 3D opacity arrays. If omitted, interpolates all wavelengths.
 
@@ -741,7 +585,7 @@ When exactly one variable is requested as a plain argument, its result is return
 # Examples
 ```julia
 # Scalar point lookup
-κ, κ_ross = sample(eos, opa, (:κ, :κ_ross), -10.0, 8.5)
+κ, S = sample(eos, opa, (:κ, :src), -10.0, 8.5)
 
 # Array lookup
 κ_arr, = sample(eos, opa, [:κ], lnrho_array, lnt_array)
@@ -776,83 +620,96 @@ end
 # Table gradients for pre-computation
 # ============================================================================
 
-function gradients!(eos, opa_extended::ExtendedOpacity)
-	aos = @axed eos
-	@assert !is_internal_energy(aos)
-	opa = opa_extended.opa
+"""
+    source_gradient!(tab)
 
-	nT, nRho = size(eos)
-	dS_dT = similar(opa.src)
+Temperature derivative of the source function, stored as `:dS_dT` in the opacity of `tab`.
+"""
+function source_gradient!(tab::EquationOfState)
+	@assert !is_internal_energy(tab)
+	src = tab[:src]
+	lnT = tab[:lnT]
 
-	Threads.@threads for k in axes(opa.src, 3)
-		@inbounds for j in eachindex(eos.lnRho)
-			@inbounds for i in eachindex(eos.lnT)
+	nT, nRho = size(tab)
+	dS_dT = similar(src)
+
+	Threads.@threads for k in axes(src, 3)
+		@inbounds for j in 1:nRho
+			@inbounds for i in 1:nT
 				dS, dT = if (i>1) &&(i<nT)
-					log(opa.src[i+1, j, k]) - log(opa.src[i-1, j, k]),
-					eos.lnT[i+1] - eos.lnT[i-1]
+					log(src[i+1, j, k]) - log(src[i-1, j, k]),
+					lnT[i+1] - lnT[i-1]
 				elseif i==1
-					log(opa.src[i+1, j, k]) - log(opa.src[i, j, k]),
-					eos.lnT[i+1] - eos.lnT[i]
+					log(src[i+1, j, k]) - log(src[i, j, k]),
+					lnT[i+1] - lnT[i]
 				elseif i==nT
-					log(opa.src[i, j, k]) - log(opa.src[i-1, j, k]),
-					eos.lnT[i] - eos.lnT[i-1]
+					log(src[i, j, k]) - log(src[i-1, j, k]),
+					lnT[i] - lnT[i-1]
 				end
-				dS_dT[i, j, k] = exp(log(opa.src[i, j, k]) - eos.lnT[i]) * dS / dT
+				dS_dT[i, j, k] = exp(log(src[i, j, k]) - lnT[i]) * dS / dT
 			end
 		end
 	end
 
-	opa_extended.extensions[:dS_dT] = dS_dT
+	tab.opacity[:dS_dT] = dS_dT
 
 	dS_dT
 end
 
-function gradients!(eos_extended::ExtendedEoS)
-	eos = eos_extended.eos.eos
-	aos = eos_extended.eos
-	@assert !is_internal_energy(aos)
+function gradients!(eos::EquationOfState)
+	@assert !is_internal_energy(eos)
+	χₜ, χᵨ, cᵥ, dlnRoss_dlnT = _gradients(eos[:lnT], eos[:lnRho], eos[:lnEi], eos[:lnPg], eos[:lnRoss])
 
-	nT, nRho = size(eos)
-	χₜ = similar(eos.lnPg)
-	χᵨ = similar(eos.lnPg)
-	cᵥ = similar(eos.lnPg)
-	dlnRoss_dlnT = similar(eos.lnPg)
-	dlnRoss_dlnRho = similar(eos.lnPg)
+	eos.eos[:χₜ] = χₜ
+	eos.eos[:χᵨ] = χᵨ
+	eos.eos[:cᵥ] = cᵥ
+	eos.eos[:dlnκ_dlnT] = dlnRoss_dlnT
 
-	@inbounds for j in eachindex(eos.lnRho)
-		@inbounds for i in eachindex(eos.lnT)
+	χₜ, χᵨ, cᵥ
+end
+
+function _gradients(lnT, lnRho, lnEi, lnPg, lnRoss)
+	nT, nRho = length(lnT), length(lnRho)
+	χₜ = similar(lnPg)
+	χᵨ = similar(lnPg)
+	cᵥ = similar(lnPg)
+	dlnRoss_dlnT = similar(lnPg)
+	dlnRoss_dlnRho = similar(lnPg)
+
+	@inbounds for j in eachindex(lnRho)
+		@inbounds for i in eachindex(lnT)
 			dE, dT, dP, dRoss = if (i>1) &&(i<nT)
-				eos.lnEi[i+1, j] - eos.lnEi[i-1, j],
-				eos.lnT[i+1    ] - eos.lnT[i-1],
-				eos.lnPg[i+1, j] - eos.lnPg[i-1, j],
-				eos.lnRoss[i+1, j] - eos.lnRoss[i-1, j]
+				lnEi[i+1, j] - lnEi[i-1, j],
+				lnT[i+1    ] - lnT[i-1],
+				lnPg[i+1, j] - lnPg[i-1, j],
+				lnRoss[i+1, j] - lnRoss[i-1, j]
 			elseif i==1
-				eos.lnEi[i+1, j] - eos.lnEi[i, j],
-				eos.lnT[i+1]     - eos.lnT[i],
-				eos.lnPg[i+1, j] - eos.lnPg[i, j],
-				eos.lnRoss[i+1, j] - eos.lnRoss[i, j]
+				lnEi[i+1, j] - lnEi[i, j],
+				lnT[i+1]     - lnT[i],
+				lnPg[i+1, j] - lnPg[i, j],
+				lnRoss[i+1, j] - lnRoss[i, j]
 			elseif i==nT
-				eos.lnEi[i, j] - eos.lnEi[i-1, j],
-				eos.lnT[i]     - eos.lnT[i-1],
-				eos.lnPg[i, j] - eos.lnPg[i-1, j],
-				eos.lnRoss[i, j] - eos.lnRoss[i-1, j]
+				lnEi[i, j] - lnEi[i-1, j],
+				lnT[i]     - lnT[i-1],
+				lnPg[i, j] - lnPg[i-1, j],
+				lnRoss[i, j] - lnRoss[i-1, j]
 			end
-			cᵥ[i, j] = max(dE/dT * exp(eos.lnEi[i, j] - eos.lnT[i]), 1e-12)
+			cᵥ[i, j] = max(dE/dT * exp(lnEi[i, j] - lnT[i]), 1e-12)
 			χₜ[i, j] = max(dP/dT, 1e-12)
 			dlnRoss_dlnT[i, j] = dRoss / dT
 
 			dR, dP, dRoss = if (j>1) &&(j<nRho)
-				eos.lnRho[j+1] - eos.lnRho[j-1],
-				eos.lnPg[i, j+1] - eos.lnPg[i, j-1],
-				eos.lnRoss[i, j+1] - eos.lnRoss[i, j-1]
+				lnRho[j+1] - lnRho[j-1],
+				lnPg[i, j+1] - lnPg[i, j-1],
+				lnRoss[i, j+1] - lnRoss[i, j-1]
 			elseif j==1
-				eos.lnRho[j+1] - eos.lnRho[j],
-				eos.lnPg[i, j+1] - eos.lnPg[i, j],
-				eos.lnRoss[i, j+1] - eos.lnRoss[i, j]
+				lnRho[j+1] - lnRho[j],
+				lnPg[i, j+1] - lnPg[i, j],
+				lnRoss[i, j+1] - lnRoss[i, j]
 			elseif j==nRho
-				eos.lnRho[j] - eos.lnRho[j-1],
-				eos.lnPg[i, j] - eos.lnPg[i, j-1],
-				eos.lnRoss[i, j] - eos.lnRoss[i, j-1]
+				lnRho[j] - lnRho[j-1],
+				lnPg[i, j] - lnPg[i, j-1],
+				lnRoss[i, j] - lnRoss[i, j-1]
 			end
 			χᵨ[i, j] = max(dP/dR, 1e-12)
 			dlnRoss_dlnRho[i, j] = dRoss / dR
@@ -860,61 +717,61 @@ function gradients!(eos_extended::ExtendedEoS)
 		end
 	end
 
-	eos_extended.extensions[:χₜ] = χₜ
-	eos_extended.extensions[:χᵨ] = χᵨ
-	eos_extended.extensions[:cᵥ] = cᵥ
-	eos_extended.extensions[:dlnκ_dlnT] = dlnRoss_dlnT
-
-	χₜ, χᵨ, cᵥ
+	χₜ, χᵨ, cᵥ, dlnRoss_dlnT
 end
 
 # ============================================================================
 # Thermodynamic quantities for pre-computation
 # ============================================================================
 
-function add_thermodynamics!(eos_extended::ExtendedEoS)
-	eos = eos_extended.eos.eos
-	χₜ, χᵨ, cᵥ = gradients!(eos_extended)
+function add_thermodynamics!(eos::EquationOfState)
+	χₜ, χᵨ, cᵥ = gradients!(eos)
+	Q, cₚ, ∇ₐ, μ, S = _thermodynamics(χₜ, χᵨ, cᵥ, eos[:lnT], eos[:lnRho], eos[:lnEi], eos[:lnPg])
+	eos.eos[:Q] = Q
+	eos.eos[:cₚ] = cₚ
+	eos.eos[:∇ₐ] = ∇ₐ
+	eos.eos[:μ] = μ
+	eos.eos[:S] = S
 
+	nothing
+end
+
+function _thermodynamics(χₜ, χᵨ, cᵥ, lnT, lnRho, lnEi, lnPg)
 	Q = χₜ ./ χᵨ
 
 	cₚ = similar(cᵥ)
 	∇ₐ = similar(cᵥ)
 	μ = similar(cᵥ)
 	S = zeros(size(cᵥ))
-	for j in eachindex(eos.lnRho)
-		for i in eachindex(eos.lnT)
-			P = exp(eos.lnPg[i, j])
-			ρ = exp(eos.lnRho[j])
-			T = exp(eos.lnT[i])
+	for j in eachindex(lnRho)
+		for i in eachindex(lnT)
+			P = exp(lnPg[i, j])
+			ρ = exp(lnRho[j])
+			T = exp(lnT[i])
 			cₚ[i, j] = min(1e12, max(1e-12, cᵥ[i, j] + P/(ρ*T) * χₜ[i, j]^2 / χᵨ[i, j]))
 			∇ₐ[i, j] = min(1, max(1e-12, P/(ρ*T) .* Q[i, j] ./ cₚ[i, j]))
 			μ[i, j] = min(1e12, max(1e-12, ρ * KBoltzmann * T / (P * m_u)))
 		end
 	end
-	eos_extended.extensions[:Q] = Q
-	eos_extended.extensions[:cₚ] = cₚ
-	eos_extended.extensions[:∇ₐ] = ∇ₐ
-	eos_extended.extensions[:μ] = μ
 
-	S[1, 1] = ideal_entropy(exp(eos.lnT[1]), exp(eos.lnRho[1]), μ[1, 1])
+	S[1, 1] = ideal_entropy(exp(lnT[1]), exp(lnRho[1]), μ[1, 1])
 	for i in 2:size(S, 1)
-		dE = eos.lnEi[i, 1] - eos.lnEi[i-1, 1]
-		T = (exp(eos.lnT[i]) +  exp(eos.lnT[i-1])) / 2
-		E = (exp(eos.lnEi[i, 1]) +  exp(eos.lnEi[i-1, 1])) / 2
+		dE = lnEi[i, 1] - lnEi[i-1, 1]
+		T = (exp(lnT[i]) +  exp(lnT[i-1])) / 2
+		E = (exp(lnEi[i, 1]) +  exp(lnEi[i-1, 1])) / 2
 
 		dS = E / T * dE
 		S[i, 1] = S[i-1, 1] + dS
 	end
 
-	T = exp.(eos.lnT)
+	T = exp.(lnT)
 	for j in 2:size(S, 2)
-		dE = eos.lnEi[:, j] - eos.lnEi[:, j-1]
-		dRho = eos.lnRho[j] - eos.lnRho[j-1]
+		dE = lnEi[:, j] - lnEi[:, j-1]
+		dRho = lnRho[j] - lnRho[j-1]
 
-		rho = (exp(eos.lnRho[j]) + exp(eos.lnRho[j-1])) / 2
-		P = (exp.(eos.lnPg[:, j]) + exp.(eos.lnPg[:, j-1])) / 2
-		E = (exp.(eos.lnEi[:, j]) + exp.(eos.lnEi[:, j-1])) / 2
+		rho = (exp(lnRho[j]) + exp(lnRho[j-1])) / 2
+		P = (exp.(lnPg[:, j]) + exp.(lnPg[:, j-1])) / 2
+		E = (exp.(lnEi[:, j]) + exp.(lnEi[:, j-1])) / 2
 
 		t1 = E ./ T .* dE
 		t2 = P ./ (rho .* T) .* dRho
@@ -922,7 +779,6 @@ function add_thermodynamics!(eos_extended::ExtendedEoS)
 		dS = t1 - t2
 		S[:, j] = S[:, j-1] .+ dS
 	end
-	eos_extended.extensions[:S] = S
 
-	nothing
+	Q, cₚ, ∇ₐ, μ, S
 end

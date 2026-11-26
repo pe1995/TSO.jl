@@ -27,81 +27,16 @@ import Base.length
 # ============================================================================
 # Abstract Interface
 # ============================================================================
-abstract type AbstractTable end
-abstract type AbstractRegularTable <:AbstractTable end
-abstract type AbstractIrregularTable <:AbstractTable end
-abstract type AbstractBinnedOpacities end
 abstract type AbstractModel end
-abstract type RadiativeTransferSolver end
-abstract type AbstractRadiationField end
 
 # ============================================================================
-# User Interface (TBD)
+# User interface
 # ============================================================================
-export OpacityTable, EoSTable, SqOpacity, SqEoS
-export for_dispatch
-export for_dispatch_T
-export @axed, limits, EnergyAxis, DensityAxis, AxedEoS, is_internal_energy
-
-# ============================================================================
-# fast lookup and extended tables interfac
-# ============================================================================
-export opacity, wavelength, extended, sample, sample!, weights, weights!, table
-export dispatch_eos_reader, dispatch_lookup_generator
-
-# ============================================================================
-# Aux
-# ============================================================================
-export save, reload, meshgrid
-
-# ============================================================================
-# Table Info
-# ============================================================================
-export TableInfo, has_table_info, find_table_info, matches
-export composition_to_string
-
-# ============================================================================
-# Binning
-# ============================================================================
-export ω_midpoint
-export @binned, @binned!
-
-# ============================================================================
-# EoS
-# ============================================================================
-export rosseland_opacity!, rosseland_opacity, transfer_rosseland!, upsample
-export formation_height, optical_depth
-
-# ============================================================================
-# MARCS
-# ============================================================================
-export MARCSOS, MARCSOpacity
-
-# ============================================================================
-# Intpolations
-# ============================================================================
-export gridded, uniform, complement, switch_energy, set_limits!
-
-# ============================================================================
-# Turbospectrum
-# ============================================================================
-export load_wrapper, load_TS, move_output, import_wrapper, inTS, inWrapper
-export babsma!, bsyn!
-
-# ============================================================================
-# Aesopus
-# ============================================================================
-export AesopusEoS, AesopusOpacity
-
-# ============================================================================
-# Models
-# ============================================================================
-export Model1D, Average3D, @optical
-
-# ============================================================================
-# Transfer
-# ============================================================================
-export Solver, Jν, Qr
+export EquationOfState, availableGrids, migrateTable, scattering, units
+export sample, sample!, weights, weights!
+export TableInfo, find_table_info, show_composition
+export binning, for_dispatch, for_dispatch_T
+export rosseland_optical_depth, optical_depth
 
 # ============================================================================
 # Python libs
@@ -117,23 +52,17 @@ const generalTimer = TimerOutput()
 # ============================================================================
 include("_aux.jl")
 include("_eos_info.jl")
-include("_communication.jl")
+include("_equation_of_state.jl")
 include("_tables.jl")
-include("_mini_eos.jl")
+include("_sampling.jl")
+include("_planck.jl")
 include("_models.jl")
 include("_eos.jl")
-include("_smooth.jl")
-include("_transfer.jl")
-include("_heating.jl")
 include("_binning.jl")
-include("_legacy_tables.jl")
-include("_aesopus.jl")
-include("_marcs.jl")
 include("_adiabat.jl")
 include("_from_m3d.jl")
 include("_temp2eint.jl")
 include("_extend.jl")
-include("_extended_eos.jl")
 include("_dispatch_hooks.jl")
 
 # ============================================================================

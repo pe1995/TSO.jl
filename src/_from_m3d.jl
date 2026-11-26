@@ -193,17 +193,7 @@ function get_eos(run)
 end
 
 # ============================================================================
-# Add Opacities from multiple tables
-# ============================================================================
-
-function add_opacities!(opa1, opa...)
-	for i in eachindex(opa)
-		opa1.κ .+= opa[i].κ
-	end
-end
-
-# ============================================================================
-# Convert Opacity and EoS from TUMULT to RegularOpacityTable
+# Convert Opacity and EoS from TUMULT to EquationOfState
 # ============================================================================
 
 function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
@@ -219,11 +209,18 @@ function collect_opacity(run; compute_ross=true, mini=false, mmap=true)
 	assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=compute_ross, mini=mini, mmap=mmap)
 end
 
+"""
+    assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
+
+Monochromatic table from the M3D output. NaNs are filled (`nan_mask`, `nan_mask500` mark
+where), the source function is the Planck function and the Rosseland opacity is integrated.
+With `mini=true` no source function is stored.
+"""
 function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ross=true, mini=false, mmap=true)
 	ross = fill!(similar(pg), 1.0)
 
     S = if mini
-        fill!(similar(pg, 1, 1, 1), 1.0)
+        nothing
     elseif mmap
         tmpfile_S = tempname(pwd(), suffix=".bin")
         S = Mmap.mmap(open(tmpfile_S, "w+"), Array{eltype(chi), ndims(chi)}, size(chi))
@@ -233,57 +230,41 @@ function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ros
 	    fill!(similar(chi), 1.0)
     end
 
-	eos = TSO.SqEoS(
-		rho, temp, E, pg, log.(ross), ne
+	tab = EquationOfState(rho, temp, E, pg, log.(ross), ne;
+		opacity=OpacityData(chi, S, l, false),
+		scattering=isnothing(scat) ? nothing : OpacityData(scat, S, l, false),
+		meta=Dict{Symbol, Any}(:kind => "monochromatic")
 	)
-	eos500 = TSO.SqEoS(
-		rho, temp, E, pg, χ500, ne
-	)
-    aos = @axed eos
-    aos500 = @axed eos500
+	tab.eos[:lnK500] = χ500
 
-	chi = TSO.SqOpacity(
-		chi, ross, S, l, false
-	)
-	scat = if !isnothing(scat)
-		TSO.SqOpacity(
-			scat, ross, S, l, false
-		)
-	else
-		nothing
-	end
+	tab.eos[:nan_mask] = fill_nan!(tab; eos_fields=(:lnEi, :lnPg, :lnNe, :lnRoss))
+	tab.eos[:nan_mask500] = fill_nan!(tab; eos_fields=(:lnEi, :lnPg, :lnNe, :lnK500), opacities=false)
 
-	nan_mask_ross = fill_nan!(aos, chi, scat)
-	nan_mask_500 = fill_nan!(aos500)
+	set_limits!(tab, small=1e-30, large=1e30)
 
-	set_limits!(aos, chi, small=1e-30, large=1e30)
-	set_limits!(aos, scat, small=1e-30, large=1e30)
-	set_limits!(aos500, small=1e-30, large=1e30)
+	add_radiation_quantities!(tab, compute_ross=compute_ross)
 
-	add_radiation_quantities!(eos, chi, scat, compute_ross=compute_ross)
-
-	eos, eos500, chi, scat, nan_mask_ross, nan_mask_500
+	tab
 end
 
-function add_radiation_quantities!(eos, opa, scat=nothing; compute_ross=false)
-	if size(opa.src) != (1, 1, 1)
-		T = exp.(eos.lnT)
-		for k in axes(opa.src, 3)
-			for j in axes(opa.src, 2)
-				for i in axes(opa.src, 1)
-					opa.src[i, j, k] = TSO.Bλ_fast(opa.λ[k], T[i])
-				end
-			end
-		end
+function add_radiation_quantities!(tab::EquationOfState; compute_ross=false)
+	if haskey(tab.opacity, :src)
+		_planck_source!(tab.opacity[:src], tab.opacity.λ, exp.(tab.lnT))
 	end
 
 	if compute_ross
-		rosseland_opacity!(eos.lnRoss, @axed(eos), opa)
-		transfer_rosseland!(@axed(eos), opa)
-		if !isnothing(scat)
-			transfer_rosseland!(@axed(eos), scat)
-		end
+		rosseland_opacity!(tab.eos[:lnRoss], tab)
 	end
 
-	eos, opa, scat
+	tab
+end
+
+function _planck_source!(src, λ, T)
+	for k in axes(src, 3)
+		for j in axes(src, 2)
+			for i in axes(src, 1)
+				src[i, j, k] = TSO.Bλ_fast(λ[k], T[i])
+			end
+		end
+	end
 end

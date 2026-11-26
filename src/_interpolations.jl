@@ -2,588 +2,105 @@
 # Interpolate tables
 # ============================================================================
 
-is_scattered(ax::EoSAxis) = ax.dimension > 1
-is_gridded(ax::EoSAxis)   = !is_scattered(ax)
-is_gridded(aos::AxedEoS)  = is_gridded(DensityAxis(aos)) & is_gridded(EnergyAxis(aos))
+_float_fields(d) = isnothing(d) ? Symbol[] : sort([k for k in keys(d) if eltype(d[k]) <: AbstractFloat])
+_eos_fields(tab::EquationOfState) = _float_fields(tab.eos)
 
 """
-    gridded(eos, opacities...)
+    switch_energy(tab; upsample=-1, newE=nothing)
 
-Interpolate a random eos, opacity table to a grid. Will depending on the input
-decide what interpolation is needed to save time. If switch=true, additionally the energy axis will be switched.
+Switch the energy axis of `tab` (temperature <-> internal energy). All quantities
+are interpolated column by column, opacities in log.
 """
-function gridded(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
-    if is_gridded(aos) & !switch
-        return (aos.eos, opacities...)
-    end
+function switch_energy(tab::EquationOfState; upsample=-1, newE=nothing)
+    newname = dependent_energy_variable(tab)
+    oldname = energy_variable(tab)
+    newE = isnothing(newE) ? pick_axis(tab; upsample=upsample) : newE
 
-    density_gridded = is_gridded(DensityAxis(aos))
-    energy_gridded  = is_gridded(EnergyAxis(aos))
+    nE, nρ = length(newE), tab.density_axis.length
+    nOld = tab.energy_axis.length
+    T = eltype(tab.density_axis.values)
+    newAxisOldE = tab[newname]
 
-    newE2, newRho2 = pick_axis(aos, conservative=conservative, upsample=upsample, switch=switch)
-    newE   = isnothing(newE)   ? newE2   : newE
-    newRho = isnothing(newRho) ? newRho2 : newRho
+    eos_in = Dict{Symbol, AbstractArray}(f => tab.eos[f] for f in _eos_fields(tab) if f != newname)
+    oldaxis = similar(newAxisOldE)
+    puff_up!(oldaxis, tab.energy_axis.values, 1)
+    eos_in[oldname] = oldaxis
+    eos_out = Dict{Symbol, AbstractArray}(f => zeros(T, nE, nρ) for f in keys(eos_in))
 
-    @assert is_uniform(newE)
-    @assert is_uniform(newRho)
+    parts = [p for p in (:opacity, :scattering) if !isnothing(getfield(tab, p))]
+    opa_out = Dict(p => Dict{Symbol, AbstractArray}(f => zeros(T, nE, nρ, size(getfield(tab, p)[f])[3:end]...) for f in _float_fields(getfield(tab, p))) for p in parts)
 
-    ename = switch ? dependent_energy_variable(aos) : energy_variable(aos)
+    x = zeros(nOld)
+    y = zeros(nOld)
+    mask = zeros(Int, nOld)
 
-    eos_new, opacities_new = if density_gridded
-        interpolate_at_density(aos, opacities...; (ename=>newE,)...)
-    elseif energy_gridded
-        interpolate_at_energy(aos, opacities...; lnRho=newRho)
-    else
-        interpolate_2D(aos, opacities...; lnRho=newRho, (ename=>newE,)...)
-    end
-
-    (eos_new, opacities_new...)
-end
-
-"""
-    uniform(eos, opacities...)
-
-Make the EoS uniform in both Axes. Checks if it is gridded before.
-"""
-function uniform(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=false, newE=nothing, newRho=nothing) where {A<:AxedEoS}
-    if is_uniform(aos) & !switch
-        return (aos.eos, opacities...)
-    end
-
-    density_gridded = is_gridded(DensityAxis(aos))
-    energy_gridded  = is_gridded(EnergyAxis(aos))
-    density_uniform = is_uniform(DensityAxis(aos))
-    energy_uniform  = is_uniform(EnergyAxis(aos))
-
-    newE2, newRho2 = pick_axis(aos, conservative=conservative, upsample=upsample, switch=switch)
-    newE   = isnothing(newE)   ? newE2   : newE
-    newRho = isnothing(newRho) ? newRho2 : newRho
-
-    @assert is_uniform(newE)
-    @assert is_uniform(newRho)
-
-    ename = switch ? dependent_energy_variable(aos) : energy_variable(aos)
-
-    @show density_gridded
-    @show energy_gridded
-    @show density_uniform
-    @show energy_uniform
-    @show size(newE)
-
-    return if density_uniform
-        aos_puff = if energy_gridded
-            puff_up(aos, :energy)
-        else
-            aos
-        end
-        interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
-
-    elseif energy_uniform
-        aos_puff = if density_gridded
-            puff_up(aos, :density)
-        else
-            aos
-        end
-        interpolate_at_energy(aos_puff, opacities...; lnRho=newRho)
-
-    else
-        if energy_gridded
-            aos_puff = if density_gridded
-                puff_up(aos, :density)
-            else
-                aos
-            end
-            aos, opacities... = interpolate_at_energy(aos_puff, opacities...; lnRho=newRho)
-
-            aos_puff = puff_up(AxedEoS(aos), :energy)
-            interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
-        elseif density_gridded
-            aos_puff = if energy_gridded
-                puff_up(aos, :energy)
-            else
-                aos
-            end
-            aos, opacities... = interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
-
-            aos_puff = puff_up(AxedEoS(aos), :density)
-            interpolate_at_energy(aos_puff, opacities...; lnRho=newRho)
-        else
-            interpolate_2D(aos, opacities...; lnRho=newRho, (ename=>newE,)...)
-        end
-    end
-end
-
-"""
-    complement(eos_old, eos_new, opacities...)
-
-Switch out the EoS from all opacities with the new one.
-"""
-function complement(aos_old::E, aos_new::E2, opacities::OpacityTable...) where {E<:AxedEoS, E2<:AxedEoS}
-    @assert is_gridded(aos_new)
-
-    ename_new = EnergyAxis(aos_new).name
-    evals_new = EnergyAxis(aos_new).values
-
-    density_gridded = is_gridded(DensityAxis(aos_old))
-    energy_gridded  = is_gridded(EnergyAxis(aos_old))
-
-    aos_old_mod = if is_internal_energy(aos_new)
-        ee, rr      = meshgrid(EnergyAxis(aos_old).values, DensityAxis(aos_old).values)
-        told        = is_internal_energy(aos_old) ? aos_old.eos.lnT : ee
-        newEOldGrid = sample(aos_new, (:lnEi,), rr, told; extrapolate=true)[1]
-
-        rho_mod = if is_internal_energy(aos_old)
-            rr
-        else
-            deepcopy(aos_old.eos.lnRho)
-        end
-
-        e_old_mod = RegularEoSTable(rho_mod, aos_old.eos.lnT, newEOldGrid,
-                                    aos_old.eos.lnPg, aos_old.eos.lnRoss, aos_old.eos.lnNe)
-
-        eaxis = if is_internal_energy(aos_old)
-            EnergyAxis(e_old_mod, axis=:lnEi)
-        else
-            aos_old.energy_axes
-        end
-
-        daxis = if is_internal_energy(aos_old)
-            DensityAxis(e_old_mod)
-        else
-            aos_old.density_axes
-        end
-
-        AxedEoS(e_old_mod, eaxis, daxis)
-    else
-        aos_old
-    end
-
-    e = aos_new.eos
-
-    density_gridded = is_gridded(DensityAxis(aos_old_mod))
-    energy_gridded  = is_gridded(EnergyAxis(aos_old_mod))
-
-    efinal, ofinal... = interpolate_2D(aos_old_mod, opacities...; lnRho=deepcopy(e.lnRho), (ename_new=>evals_new,)...)
-    return if length(ofinal) == 1
-        first(ofinal)
-    else
-        ofinal
-    end
-end
-
-"""
-    switch_energy(eos, opacities; kwargs...)
-
-Switch out the Energy axis of the given tables. It is required that the tables are gridded.
-"""
-function switch_energy(aos::A, opacities::OpacityTable...; conservative=false, upsample=-1, switch=true, newE=nothing, newRho=nothing) where {A<:AxedEoS}
-    @assert is_gridded(aos)
-
-    newE2,_ = pick_axis(aos, conservative=conservative, upsample=upsample, switch=true)
-    newE = isnothing(newE) ? newE2 : newE
-
-    ename = dependent_energy_variable(aos)
-
-    aos_puff = puff_up(aos, :energy)
-    interpolate_at_density(aos_puff, opacities...; (ename=>newE,)...)
-end
-
-gridded(eos::A, args...; kwargs...) where {A<:RegularEoSTable} = gridded(AxedEoS(eos), args...; kwargs...)
-uniform(eos::A, args...; kwargs...) where {A<:RegularEoSTable} = uniform(AxedEoS(eos), args...; kwargs...)
-complement(eos_old::E, eos_new::E2, opacities::OpacityTable...) where {E<:RegularEoSTable, E2<:RegularEoSTable} = complement(AxedEoS(eos_old), AxedEoS(eos_new), opacities...)
-switch_energy(eos::A, args...; kwargs...) where {A<:RegularEoSTable} = switch_energy(AxedEoS(eos), args...; kwargs...)
-
-# ============================================================================
-# Interpolation functions
-# ============================================================================
-
-function interpolate_at_density(aos::E, opacities...; newE...) where {E<:AxedEoS}
-    @assert !is_gridded(EnergyAxis(aos)) & is_gridded(DensityAxis(aos))
-
-    eos = aos.eos
-    newAxis_name = first(keys(newE))
-    newAxis_val  = newE[newAxis_name]
-
-    oldVname = newAxis_name == :lnEi ? :lnT : :lnEi
-
-    nEBin   = length(newAxis_val)
-    nRhoBin = length(eos.lnRho)
-
-    T = eltype(eos.lnRho)
-
-    lnV2     = zeros(T, nEBin, nRhoBin)
-    lnNe2    = zeros(T, nEBin, nRhoBin)
-    lnRoss2  = zeros(T, nEBin, nRhoBin)
-    lnPg2    = zeros(T, nEBin, nRhoBin)
-
-    refo     = first(opacities)
-    lnKross2 = zeros(T, nEBin, nRhoBin, length(opacities))
-    lnkappa2 = zeros(T, nEBin, nRhoBin, length(refo.λ), length(opacities))
-    lnSrc2   = zeros(T, nEBin, nRhoBin, length(refo.λ), length(opacities))
-
-    x = zeros(size(eos.lnPg, 1))
-    y = zeros(size(eos.lnPg, 1))
-    mask = zeros(Int, size(eos.lnPg, 1))
-
-    newAxisOldE = getfield(aos.eos, newAxis_name)
-    oldlnV      = getfield(aos.eos, oldVname)
-
-    @inbounds for i in 1:nRhoBin
+    @inbounds for i in 1:nρ
         mask .= sortperm(view(newAxisOldE, :, i))
-        x    .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i], move_knots=true)
-        y    .= @view(oldlnV[mask, i])
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnV2[:, i] .= ip.(newAxis_val)
+        x .= Interpolations.deduplicate_knots!(newAxisOldE[mask, i], move_knots=true)
 
-        y    .= @view(eos.lnPg[mask, i])
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnPg2[:, i] .= ip.(newAxis_val)
+        for (f, v) in eos_in
+            y .= @view(v[mask, i])
+            ip = linear_interpolation(x, y, extrapolation_bc=Line())
+            eos_out[f][:, i] .= ip.(newE)
+        end
 
-        y    .= @view(eos.lnNe[mask, i])
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnNe2[:, i] .= ip.(newAxis_val)
-
-        y    .= @view(eos.lnRoss[mask, i])
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnRoss2[:, i] .= ip.(newAxis_val)
-
-        for m in eachindex(opacities)
-            opa   = opacities[m]
-            y    .= log.(@view(opa.κ_ross[mask, i]))
-            ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-            lnKross2[:, i, m] .= ip.(newAxis_val)
-
-            @inbounds for j in eachindex(opa.λ)
-                y    .= log.(@view(opa.κ[mask, i, j]))
-                ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-                lnkappa2[:, i, j, m] .= ip.(newAxis_val)
-
-                y    .= log.(@view(opa.src[mask, i, j]))
-                ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-                lnSrc2[:, i, j, m] .= ip.(newAxis_val)
+        for p in parts, (f, out) in opa_out[p]
+            v = getfield(tab, p)[f]
+            for j in axes(out, 3)
+                y .= log.(@view(v[mask, i, j]))
+                ip = linear_interpolation(x, y, extrapolation_bc=Line())
+                out[:, i, j] .= ip.(newE)
             end
         end
     end
 
-    return if newAxis_name == :lnEi
-        (RegularEoSTable(deepcopy(eos.lnRho), lnV2, newAxis_val, lnPg2, lnRoss2, lnNe2),
-        (RegularOpacityTable(exp.(lnkappa2[:, :, :, i]), exp.(lnKross2[:, :, i]), exp.(lnSrc2[:, :, :, i]), deepcopy(opacities[i].λ), opacities[i].optical_depth) for i in eachindex(opacities))...)
-    else
-        (RegularEoSTable(deepcopy(eos.lnRho), newAxis_val, lnV2, lnPg2, lnRoss2, lnNe2),
-        (RegularOpacityTable(exp.(lnkappa2[:, :, :, i]), exp.(lnKross2[:, :, i]), exp.(lnSrc2[:, :, :, i]), deepcopy(opacities[i].λ), opacities[i].optical_depth) for i in eachindex(opacities))...)
+    _new_opacity(p) = begin
+        o = getfield(tab, p)
+        OpacityData(Dict{Symbol, AbstractArray}(f => exp.(v) for (f, v) in opa_out[p]), deepcopy(o.λ), deepcopy(o.weights), o.binned, o.optical_depth)
     end
+
+    EquationOfState(deepcopy(tab.density_axis.values), newname => newE;
+        eos=eos_out,
+        opacity=has_opacity(tab) ? _new_opacity(:opacity) : nothing,
+        scattering=has_scattering(tab) ? _new_opacity(:scattering) : nothing,
+        meta=tab.meta
+    )
 end
 
-function interpolate_at_energy(aos::E, opacities...; lnRho) where {E<:AxedEoS}
-    @assert is_gridded(EnergyAxis(aos)) & !is_gridded(DensityAxis(aos))
+"""
+    interpolate_2D(tab; lnRho, lnT/lnEi)
 
-    eos = aos.eos
+Interpolate (and extrapolate) all quantities of `tab` to new values of its axes.
+"""
+function interpolate_2D(tab::EquationOfState; lnRho, newE...)
+    name = only(keys(newE))
+    name == energy_variable(tab) || error("interpolate_2D only changes the values of the axes, $(name) is not the energy axis of the table.")
+    newAxis = newE[name]
+    ee, rr = meshgrid(newAxis, lnRho)
 
-    nEBin   = EnergyAxis(aos).length
-    nRhoBin = length(lnRho)
+    resample(f) = sample(tab, (f,), rr, ee; extrapolate=true)[1]
+    eos = Dict{Symbol, AbstractArray}(f => resample(f) for f in _eos_fields(tab))
 
-    T = eltype(eos.lnPg)
-
-    lnV2     = zeros(T, nEBin, nRhoBin)
-    lnNe2    = zeros(T, nEBin, nRhoBin)
-    lnRoss2  = zeros(T, nEBin, nRhoBin)
-    lnPg2    = zeros(T, nEBin, nRhoBin)
-
-    refo     = first(opacities)
-    lnKross2 = zeros(T, nEBin, nRhoBin, length(opacities))
-    lnkappa2 = zeros(T, nEBin, nRhoBin, length(refo.λ), length(opacities))
-    lnSrc2   = zeros(T, nEBin, nRhoBin, length(refo.λ), length(opacities))
-
-    x = zeros(size(eos.lnPg, 2))
-    y = zeros(size(eos.lnPg, 2))
-    mask = zeros(Int, size(eos.lnPg, 2))
-
-    r_old  = eos.lnRho
-    oldlnV = getfield(eos, dependent_energy_variable(aos))
-
-    @inbounds for i in 1:nEBin
-        mask .= sortperm(view(r_old, i, :))
-        x    .= Interpolations.deduplicate_knots!(r_old[i, mask])
-        y    .= @view oldlnV[i, mask]
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnV2[i, :] .= ip.(lnRho)
-
-        y    .= @view eos.lnPg[i, mask]
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnPg2[i, :] .= ip.(lnRho)
-
-        y    .= @view eos.lnNe[i, mask]
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnNe2[i, :] .= ip.(lnRho)
-
-        y    .= @view eos.lnRoss[i, mask]
-        ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-        lnRoss2[i, :] .= ip.(lnRho)
-
-        for m in eachindex(opacities)
-            opa   = opacities[m]
-            y    .= log.(@view(opa.κ_ross[i, mask]))
-            ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-            lnKross2[i, :, m] .= ip.(lnRho)
-
-            @inbounds for j in eachindex(opa.λ)
-                y    .= log.(@view(opa.κ[i, mask, j]))
-                ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-                lnkappa2[i, :, j, m] .= ip.(lnRho)
-
-                y    .= log.(@view(opa.src[i, mask, j]))
-                ip    = linear_interpolation(x, y, extrapolation_bc=Line())
-                lnSrc2[i, :, j, m] .= ip.(lnRho)
-            end
-        end
+    _new_opacity(p) = begin
+        o = getfield(tab, p)
+        t = EquationOfState(tab; opacity=o)
+        OpacityData(Dict{Symbol, AbstractArray}(f => permutedims(sample(t, (f,), rr, ee; extrapolate=true)[1], ndims(o[f]) == 3 ? (2, 3, 1) : (1, 2)) for f in _float_fields(o)),
+                    deepcopy(o.λ), deepcopy(o.weights), o.binned, o.optical_depth)
     end
 
-    return if energy_variable(aos) == :lnEi
-        (RegularEoSTable(lnRho, lnV2, deepcopy(EnergyAxis(aos).values), lnPg2, lnRoss2, lnNe2),
-        (RegularOpacityTable(exp.(lnkappa2[:, :, :, i]), exp.(lnKross2[:, :, i]), exp.(lnSrc2[:, :, :, i]), deepcopy(opacities[i].λ), opacities[i].optical_depth) for i in eachindex(opacities))...)
-    else
-        (RegularEoSTable(lnRho, deepcopy(EnergyAxis(aos).values), lnV2, lnPg2, lnRoss2, lnNe2),
-        (RegularOpacityTable(exp.(lnkappa2[:, :, :, i]), exp.(lnKross2[:, :, i]), exp.(lnSrc2[:, :, :, i]), deepcopy(opacities[i].λ), opacities[i].optical_depth) for i in eachindex(opacities))...)
-    end
+    new = EquationOfState(collect(lnRho), name => collect(newAxis);
+        eos=eos,
+        opacity=has_opacity(tab) ? _new_opacity(:opacity) : nothing,
+        scattering=has_scattering(tab) ? _new_opacity(:scattering) : nothing,
+        meta=tab.meta
+    )
+    fill_nan!(new)
+    new
 end
 
-function interpolate_2D(aos::E, opacities...; lnRho, newE...) where {E<:AxedEoS}
-    skip_opacities = length(opacities) == 0
-    eos = aos.eos
-    newAxis_name = first(keys(newE))
-    newAxis      = newE[newAxis_name]
-    newRho       = lnRho
-
-    @assert is_uniform(newAxis)
-    @assert is_uniform(newRho)
-
-    eos = aos.eos
-    iseaxis  = is_internal_energy(aos)
-    var_name = dependent_energy_variable(aos)
-
-    newVar  = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newPg   = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newNe   = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-    newRoss = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-
-    PgLook      = _table_interpolator(aos, :lnPg)
-    NeLook      = _table_interpolator(aos, :lnNe)
-    RossLook    = _table_interpolator(aos, :lnRoss)
-    VarLook     = _table_interpolator(aos, var_name)
-    oldAxisLook = _table_interpolator(aos, aos.energy_axes.name)
-
-    old_is_new = newAxis_name == energy_variable(aos)
-
-    oldAxisNewGrid = zeros(eltype(eos.lnPg), length(newAxis), length(newRho))
-
-    @inbounds for j in eachindex(newRho)
-        @inbounds for i in eachindex(newAxis)
-            oldAxisNewGrid[i, j] = old_is_new ? newAxis[i] : oldAxisLook(newRho[j], newAxis[i])
-            newPg[i, j]          = PgLook(newRho[j], oldAxisNewGrid[i, j])
-            newNe[i, j]          = NeLook(newRho[j], oldAxisNewGrid[i, j])
-            newRoss[i, j]        = RossLook(newRho[j], oldAxisNewGrid[i, j])
-            newVar[i, j]         = VarLook(newRho[j], oldAxisNewGrid[i, j])
-        end
-    end
-
-    κ_all, s_all, κ_rall = if !skip_opacities
-        ee, rr = meshgrid(newAxis, newRho)
-
-        ref_o  = first(opacities)
-        κ_all  = zeros(eltype(ref_o.κ), length(newAxis), length(newRho), length(ref_o.λ), length(opacities))
-        s_all  = zeros(eltype(ref_o.κ), length(newAxis), length(newRho), length(ref_o.λ), length(opacities))
-        κ_rall = zeros(eltype(ref_o.κ), length(newAxis), length(newRho), length(opacities))
-
-        kLF = [_table_interpolator(aos, opacities[m], :κ_ross) for m in eachindex(opacities)]
-
-        for m in eachindex(opacities)
-            κ_rall[:, :, m] = kLF[m](rr, oldAxisNewGrid)
-        end
-
-        κLF = [_table_interpolator(aos, opacities[m], :κ)   for m in eachindex(opacities)]
-        sLF = [_table_interpolator(aos, opacities[m], :src) for m in eachindex(opacities)]
-        for k in eachindex(ref_o.λ)
-            for m in eachindex(opacities)
-                κ_all[:, :, k, m] .= κLF[m](rr, oldAxisNewGrid, k)
-                s_all[:, :, k, m] .= sLF[m](rr, oldAxisNewGrid, k)
-            end
-        end
-
-        κ_all, s_all, κ_rall
-    else
-        nothing, nothing, nothing
-    end
-
-    newT = if iseaxis & old_is_new
-        newVar
-    elseif iseaxis & !old_is_new
-        newAxis
-    elseif !iseaxis & old_is_new
-        newAxis
-    else
-        oldAxisNewGrid
-    end
-
-    newE = if iseaxis & old_is_new
-        newAxis
-    elseif iseaxis & !old_is_new
-        oldAxisNewGrid
-    elseif !iseaxis & old_is_new
-        newVar
-    else
-        newAxis
-    end
-
-    return if !skip_opacities
-        eos, opacities... = (RegularEoSTable(newRho, newT, newE, newPg, newRoss, newNe), (RegularOpacityTable(κ_all[:, :, :, m], κ_rall[:, :, m], s_all[:, :, :, m], opacities[m].λ, opacities[m].optical_depth) for m in eachindex(opacities))...)
-        fill_nan!(AxedEoS(eos), opacities...)
-
-        (eos, opacities...)
-    else
-        eos = RegularEoSTable(newRho, newT, newE, newPg, newRoss, newNe)
-        fill_nan!(eos)
-
-        eos
-    end
-end
-
-# ============================================================================
-# EoS manipulation functions
-# ============================================================================
-
-function upsample(eos, axis, N)
-    a = getfield(eos, axis)
-    new_axis = range(minimum(a), maximum(a), length=N) |> collect
-
-    replace_axis(eos; (axis=>new_axis,)...)
-end
-
-function replace_axis(aos::E; axis...) where {E<:AxedEoS}
-    eos   = aos.eos
-    eaxis = aos.energy_axes
-    daxis = aos.density_axes
-
-    new_size = [eaxis.length, daxis.length]
-    for axis_name in keys(axis)
-        if !((axis_name == eaxis.name) | (axis_name == daxis.name))
-            error("Given new axis is not an axis of the given EoS.")
-        end
-
-        if axis_name == eaxis.name
-            new_size[1] = length(axis[axis_name])
-        elseif axis_name == daxis.name
-            new_size[2] = length(axis[axis_name])
-        end
-    end
-
-    lnRho_new = zeros(eltype(aos.eos.lnPg), new_size[2])
-    lnAxi_new = zeros(eltype(aos.eos.lnPg), new_size[1])
-
-    for axis_name in keys(axis)
-        if axis_name == eaxis.name
-            lnAxi_new .= axis[axis_name]
-        elseif axis_name == daxis.name
-            lnRho_new .= axis[axis_name]
-        end
-    end
-
-    if all(i->i==0, lnRho_new)
-        lnRho_new .= daxis.values
-    end
-    if all(i->i==0, lnAxi_new)
-        lnAxi_new .= eaxis.values
-    end
-
-    iseaxis  = is_internal_energy(aos)
-    var_name = iseaxis ? :lnT : :lnEi
-
-    newVar  = zeros(eltype(eos.lnRho), length(lnAxi_new), length(lnRho_new))
-    newPg   = zeros(eltype(eos.lnRho), length(lnAxi_new), length(lnRho_new))
-    newNe   = zeros(eltype(eos.lnRho), length(lnAxi_new), length(lnRho_new))
-    newRoss = zeros(eltype(eos.lnRho), length(lnAxi_new), length(lnRho_new))
-
-    PgLook   = _table_interpolator(aos, :lnPg)
-    NeLook   = _table_interpolator(aos, :lnNe)
-    RossLook = _table_interpolator(aos, :lnRoss)
-    VarLook  = _table_interpolator(aos, var_name)
-
-    for j in eachindex(lnRho_new)
-        for i in eachindex(lnAxi_new)
-            newPg[i, j]   = PgLook(lnRho_new[j], lnAxi_new[i])
-            newNe[i, j]   = NeLook(lnRho_new[j], lnAxi_new[i])
-            newRoss[i, j] = RossLook(lnRho_new[j], lnAxi_new[i])
-            newVar[i, j]  = VarLook(lnRho_new[j], lnAxi_new[i])
-        end
-    end
-
-    iseaxis ? RegularEoSTable(lnRho_new, newVar, lnAxi_new, newPg, newRoss, newNe) :
-              RegularEoSTable(lnRho_new, lnAxi_new, newVar, newPg, newRoss, newNe)
-end
-
-replace_axis(eos::E; kwargs...) where {E<:RegularEoSTable} = replace_axis(AxedEoS(eos); kwargs...)
-
-# ============================================================================
-# Utilities
-# ============================================================================
-
-conservative_axis(mat::Vector) = default_axis(mat)
-conservative_axis(mat::Matrix) = begin
-    mirow = zeros(eltype(mat), size(mat, 1))
-    marow = zeros(eltype(mat), size(mat, 1))
-
-    for j in axes(mat, 1)
-        mirow[j] = minimum(view(mat, j, :))
-        marow[j] = maximum(view(mat, j, :))
-    end
-
-    micol = zeros(eltype(mat), size(mat, 2))
-    macol = zeros(eltype(mat), size(mat, 2))
-
-    for j in axes(mat, 2)
-        micol[j] = minimum(view(mat, :, j))
-        macol[j] = maximum(view(mat, :, j))
-    end
-
-    sort([max(maximum(mirow),maximum(micol)), min(minimum(marow), minimum(macol))])
-end
-
-default_axis(mat) = (minimum(mat), maximum(mat))
-
-pick_axis(eos; conservative=false, upsample=-1, switch=true) = begin
-    switch_values = if switch
-        is_internal_energy(eos) ? getfield(eos.eos, :lnT) : getfield(eos.eos, :lnEi)
-    else
-        EnergyAxis(eos).values
-    end
-
-    newAxis = if conservative
-        upsample==-1 ? range(conservative_axis(switch_values)..., length=EnergyAxis(eos).length) :
-                       range(conservative_axis(switch_values)..., length=upsample)
-    else
-        upsample==-1 ? range(default_axis(switch_values)..., length=EnergyAxis(eos).length) :
-                       range(default_axis(switch_values)..., length=upsample)
-    end
-
-    newRho = if conservative & !is_uniform(DensityAxis(eos))
-        range(conservative_axis(DensityAxis(eos).values)..., length=DensityAxis(eos).length)
-    elseif !is_uniform(DensityAxis(eos))
-        range(default_axis(DensityAxis(eos).values)..., length=DensityAxis(eos).length)
-    else
-        deepcopy(DensityAxis(eos).values)
-    end
-
-    sort(collect(newAxis)), sort(collect(newRho))
-end
-
-function puff_up(eos::RegularEoSTable)
-    if ndims(eos.lnT) == 2
-        return deepcopy(eos)
-    end
-
-    T = similar(eos.lnPg)
-    puff_up!(T, eos.lnT, 1)
-
-    RegularEoSTable(deepcopy(eos.lnRho), T, deepcopy(eos.lnEi), deepcopy(eos.lnPg), deepcopy(eos.lnRoss), deepcopy(eos.lnNe))
+pick_axis(tab::EquationOfState; upsample=-1) = begin
+    values = tab[dependent_energy_variable(tab)]
+    sort(collect(range(minimum(values), maximum(values), length=upsample == -1 ? tab.energy_axis.length : upsample)))
 end
 
 function puff_up!(Tnew::AbstractArray{T,2}, Told::Vector, dim=1) where {T}
@@ -592,32 +109,7 @@ function puff_up!(Tnew::AbstractArray{T,2}, Told::Vector, dim=1) where {T}
             Tnew[i, j] = dim==1 ? Told[i] : Told[j]
         end
     end
-end
-
-puff_up(aos::AxedEoS, which::Symbol) = begin
-    return if which == :energy
-        puff_up_energy(aos)
-    elseif which == :density
-        puff_up_density(aos)
-    else
-        error("Pick energy or density.")
-    end
-end
-
-puff_up_energy(aos::AxedEoS) = begin
-    E_puff = similar(aos.eos.lnPg)
-    puff_up!(E_puff, EnergyAxis(aos).values, 1)
-
-    newEi = is_internal_energy(aos) ? E_puff      : deepcopy(aos.eos.lnEi)
-    newT  = is_internal_energy(aos) ? deepcopy(aos.eos.lnT) : E_puff
-
-    @axed RegularEoSTable(deepcopy(aos.eos.lnRho), newT, newEi, deepcopy(aos.eos.lnPg), deepcopy(aos.eos.lnRoss), deepcopy(aos.eos.lnNe))
-end
-
-puff_up_density(aos::AxedEoS) = begin
-    d_puff = similar(aos.eos.lnPg)
-    puff_up!(d_puff, DensityAxis(aos).values, 2)
-    @axed RegularEoSTable(d_puff, deepcopy(aos.eos.lnT), deepcopy(aos.eos.lnEi), deepcopy(aos.eos.lnPg), deepcopy(aos.eos.lnRoss), deepcopy(aos.eos.lnNe))
+    Tnew
 end
 
 # ============================================================================
@@ -685,48 +177,70 @@ function _interpolate_at!(y_slice, x_coords, row_mask, buf_x, buf_y;
     return true
 end
 
-function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {A<:AxedEoS}
-    eos   = aos.eos
-    x_rho = DensityAxis(aos).values
-    x_e   = EnergyAxis(aos).values
+"""
+    nan_mask(tab; eos_fields=all, opacities=true)
+
+Cells where any of the given quantities is NaN, infinite (or not positive for opacities).
+"""
+function nan_mask(tab::EquationOfState; eos_fields=_eos_fields(tab), opacities=true)
+    mask = falses(size(tab)...)
+    for f in eos_fields
+        mask .|= nan_or_inf.(tab.eos[f])
+    end
+    if opacities
+        for p in (:opacity, :scattering), o in (getfield(tab, p),)
+            isnothing(o) && continue
+            for f in _float_fields(o)
+                bad = x -> nan_or_inf(x) || x <= 0
+                v = o[f]
+                mask .|= ndims(v) == 2 ? bad.(v) : dropdims(any(bad, v, dims=3), dims=3)
+            end
+        end
+    end
+    Base.convert(Array{Bool, 2}, mask)
+end
+
+"""
+    fill_nan!(tab; eos_fields=all, opacities=true, fallback=1f-30)
+
+Replace NaN and Inf in the table by interpolating along the energy axis, then
+along the density axis. Returns the mask of the cells that were replaced.
+"""
+function fill_nan!(tab::EquationOfState; eos_fields=_eos_fields(tab), opacities=true, fallback=1.0f-30)
+    x_rho = tab.density_axis.values
+    x_e   = tab.energy_axis.values
     nE    = length(x_e)
     nρ    = length(x_rho)
 
     nan_mask = falses(nE, nρ)
-    var      = getfield(eos, dependent_energy_variable(aos))
     lfallback = log(fallback)
 
-    has_opacities = length(opacities) > 0
+    eos_arrays = [tab.eos[f] for f in eos_fields]
+    opa_arrays = AbstractArray[]
+    if opacities
+        for p in (:opacity, :scattering)
+            o = getfield(tab, p)
+            isnothing(o) && continue
+            append!(opa_arrays, [o[f] for f in _float_fields(o)])
+        end
+    end
 
     col_mask = Vector{Bool}(undef, nE)
     buf_xe   = similar(x_e)
     buf_ye   = similar(x_e)
 
     @inbounds for j in 1:nρ
-        for field in (view(var, :, j), view(eos.lnPg, :, j),
-                      view(eos.lnNe, :, j), view(eos.lnRoss, :, j))
-            had = _interpolate_at!(field, x_e, col_mask, buf_xe, buf_ye;
+        for v in eos_arrays
+            had = _interpolate_at!(view(v, :, j), x_e, col_mask, buf_xe, buf_ye;
                                     is_log=false, fallback=lfallback)
             had && (view(nan_mask, :, j) .|= col_mask)
         end
 
-        if has_opacities
-            for opa in opacities
-                had = _interpolate_at!(view(opa.κ_ross, :, j), x_e, col_mask,
+        for v in opa_arrays
+            for k in CartesianIndices(size(v)[3:end])
+                had = _interpolate_at!(view(v, :, j, k), x_e, col_mask,
                                        buf_xe, buf_ye; is_log=true, fallback=fallback)
                 had && (view(nan_mask, :, j) .|= col_mask)
-
-                @inbounds for k in eachindex(opa.λ)
-                    had = _interpolate_at!(view(opa.κ, :, j, k), x_e, col_mask,
-                                           buf_xe, buf_ye; is_log=true, fallback=fallback)
-                    had && (view(nan_mask, :, j) .|= col_mask)
-
-                    if size(opa.src) != (1, 1, 1)
-                        had = _interpolate_at!(view(opa.src, :, j, k), x_e, col_mask,
-                                               buf_xe, buf_ye; is_log=true, fallback=fallback)
-                        had && (view(nan_mask, :, j) .|= col_mask)
-                    end
-                end
             end
         end
     end
@@ -736,26 +250,15 @@ function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {
     buf_y    = similar(x_rho)
 
     @inbounds for i in 1:nE
-        for field in (view(var, i, :), view(eos.lnPg, i, :),
-                      view(eos.lnNe, i, :), view(eos.lnRoss, i, :))
-            _interpolate_at!(field, x_rho, row_mask, buf_x, buf_y;
+        for v in eos_arrays
+            _interpolate_at!(view(v, i, :), x_rho, row_mask, buf_x, buf_y;
                               is_log=false, fallback=lfallback)
         end
 
-        if has_opacities
-            for opa in opacities
-                _interpolate_at!(view(opa.κ_ross, i, :), x_rho, row_mask,
+        for v in opa_arrays
+            for k in CartesianIndices(size(v)[3:end])
+                _interpolate_at!(view(v, i, :, k), x_rho, row_mask,
                                   buf_x, buf_y; is_log=true, fallback=fallback)
-
-                @inbounds for k in eachindex(opa.λ)
-                    _interpolate_at!(view(opa.κ, i, :, k), x_rho, row_mask,
-                                      buf_x, buf_y; is_log=true, fallback=fallback)
-
-                    if size(opa.src) != (1, 1, 1)
-                        _interpolate_at!(view(opa.src, i, :, k), x_rho, row_mask,
-                                          buf_x, buf_y; is_log=true, fallback=fallback)
-                    end
-                end
             end
         end
     end
@@ -763,74 +266,58 @@ function fill_nan!(aos::A, opacities::OpacityTable...; fallback=1.0f-30) where {
     return Base.convert(Array{Bool, 2}, nan_mask)
 end
 
-fill_nan!(eos::RegularEoSTable, args...; kwargs...) = fill_nan!(AxedEoS(eos), args...; kwargs...)
+"""
+    set_limits!(tab; small=1e-30, large=1e30)
 
-function set_small!(aos, opa, small=1e-30)
-    otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
-    lsmall = log(small)
-    @inbounds for j in eachindex(aos.density_axes.values)
-        @inbounds for i in eachindex(aos.energy_axes.values)
-            otherV[i, j]         = check(otherV[i, j], lsmall) ? otherV[i, j] : lsmall
-            aos.eos.lnPg[i, j]   = check(aos.eos.lnPg[i, j],   lsmall) ? aos.eos.lnPg[i, j]   : lsmall
-            aos.eos.lnNe[i, j]   = check(aos.eos.lnNe[i, j],   lsmall) ? aos.eos.lnNe[i, j]   : lsmall
-            aos.eos.lnRoss[i, j] = check(aos.eos.lnRoss[i, j], lsmall) ? aos.eos.lnRoss[i, j] : lsmall
-
-            if !isnothing(opa)
-                opa.κ_ross[i, j]     = check(opa.κ_ross[i, j],     small)  ? opa.κ_ross[i, j]     : small
-                has_src = size(opa.src) != (1, 1, 1)
-                @inbounds for k in eachindex(opa.λ)
-                    opa.κ[i, j, k]     = check(opa.κ[i, j, k],   small)  ? opa.κ[i, j, k]    : small
-                    if has_src
-                        opa.src[i, j, k]   = check(opa.src[i, j, k], small)  ? opa.src[i, j, k]  : small
-                    end
-                end
+Clamp all quantities of the table to [small, large] (the EoS in log), NaN is set to `small`.
+"""
+function set_limits!(tab::EquationOfState; small=1e-30, large=1e30)
+    lsmall, llarge = log(small), log(large)
+    for f in _eos_fields(tab)
+        v = tab.eos[f]
+        @inbounds for i in eachindex(v)
+            v[i] = check(v[i], lsmall) ? v[i] : lsmall
+        end
+        @inbounds for i in eachindex(v)
+            v[i] = check_large(v[i], llarge) ? v[i] : llarge
+        end
+    end
+    for p in (:opacity, :scattering)
+        o = getfield(tab, p)
+        isnothing(o) && continue
+        for f in _float_fields(o)
+            v = o[f]
+            @inbounds for i in eachindex(v)
+                v[i] = check(v[i], small) ? v[i] : small
+            end
+            @inbounds for i in eachindex(v)
+                v[i] = check_large(v[i], large) ? v[i] : large
             end
         end
     end
+    tab
 end
 
-function set_large!(aos, opa, large=1e30)
-    otherV = view(getfield(aos.eos, dependent_energy_variable(aos)), :, :)
-    llarge = log(large)
-    @inbounds for j in eachindex(aos.density_axes.values)
-        @inbounds for i in eachindex(aos.energy_axes.values)
-            otherV[i, j]         = check_large(otherV[i, j], llarge) ? otherV[i, j] : llarge
-            aos.eos.lnPg[i, j]   = check_large(aos.eos.lnPg[i, j],   llarge) ? aos.eos.lnPg[i, j]   : llarge
-            aos.eos.lnNe[i, j]   = check_large(aos.eos.lnNe[i, j],   llarge) ? aos.eos.lnNe[i, j]   : llarge
-            aos.eos.lnRoss[i, j] = check_large(aos.eos.lnRoss[i, j], llarge) ? aos.eos.lnRoss[i, j] : llarge
+"""
+    smoothAccumulate!(tab; spline=true)
 
-            if !isnothing(opa)
-                opa.κ_ross[i, j]     = check_large(opa.κ_ross[i, j],     large)  ? opa.κ_ross[i, j]     : large
-                has_src = size(opa.src) != (1, 1, 1)
-                @inbounds for k in eachindex(opa.λ)
-                    opa.κ[i, j, k]     = check_large(opa.κ[i, j, k],   large)  ? opa.κ[i, j, k]    : large
-                    if has_src
-                        opa.src[i, j, k]   = check_large(opa.src[i, j, k], large)  ? opa.src[i, j, k]  : large
-                    end
-                end
-            end
-        end
-    end
+Make the internal energy monotonic in temperature (on the temperature grid).
+"""
+smoothAccumulate!(tab::EquationOfState; spline=true) = begin
+    @assert !is_internal_energy(tab)
+    _smooth_accumulate!(tab[:lnEi], tab[:lnT], spline)
+    tab
 end
 
-set_limits!(aos, opa=nothing; small=1e-30, large=1e30) = begin
-    set_small!(aos, opa, small)
-    set_large!(aos, opa, large)
-end
+function _smooth_accumulate!(lnEi, lnT, spline)
+    x = copy(lnT)
+	y = similar(lnT)
 
-smoothAccumulate!(aos; spline=true) = begin
-    @assert !is_internal_energy(aos)
-
-    eos = aos.eos
-
-    x = copy(eos.lnT)
-	y = similar(eos.lnT)
-
-    for i in axes(eos.lnEi, 2)
-        y .= reverse(eos.lnEi[:, i])
+    for i in axes(lnEi, 2)
+        y .= reverse(lnEi[:, i])
         y .= reverse(accumulate(min, y))
 
-        eos.lnEi[:, i] .= if spline
+        lnEi[:, i] .= if spline
             ip = Interpolations.extrapolate(
                 Interpolations.interpolate(
                     Interpolations.deduplicate_knots!(
@@ -847,50 +334,9 @@ smoothAccumulate!(aos; spline=true) = begin
             y
         end
     end
-
-    aos
 end
-smoothAccumulate!(eos::EoSTable, args...; kwargs...) = smoothAccumulate!(@axed(eos), args...; kwargs...)
 
 check(v, small) = !isnan(v) & (v >= small)
 check_small = check
 check_large(v, large) = !isnan(v) & (v < large)
 
-_puffed_axes(aos::AxedEoS) = begin
-    F = eltype(aos.eos.lnPg)
-    ea, da = EnergyAxis(aos), DensityAxis(aos)
-    e = ea.dimension > 1 ? ea.values : puff_up!(zeros(F, size(aos.eos.lnPg)...), ea.values, 1)
-    r = da.dimension > 1 ? da.values : puff_up!(zeros(F, size(aos.eos.lnPg)...), da.values, 2)
-    e, r
-end
-
-function _scattered_interpolator(x, y, values; in_log=false)
-    scipy_loaded[] || load_scipy_interpolate!()
-    F = eltype(values)
-    ip = scipy_interpolate.LinearNDInterpolator(stretch(x, y, in_log ? log.(values) : values)...)
-    f(a, b) = (v = pyconvert(Array{F}, ip(a, b)); in_log ? exp.(v) : v)
-    (a, b) -> a isa Number ? first(f([a], [b])) : f(a, b)
-end
-
-function _table_interpolator(aos::AxedEoS, var::Symbol)
-    if is_gridded(aos)
-        eosx = extended(aos)
-        return (r, e) -> sample(eosx, (var,), r, e; extrapolate=true)[1]
-    end
-    e2, r2 = _puffed_axes(aos)
-    ip = if var == energy_variable(aos)
-        _scattered_interpolator(getfield(aos.eos, dependent_energy_variable(aos)), r2, e2)
-    else
-        _scattered_interpolator(e2, r2, getfield(aos.eos, var))
-    end
-    (r, e) -> ip(e, r)
-end
-
-function _table_interpolator(aos::AxedEoS, opa::OpacityTable, var::Symbol)
-    if is_gridded(aos)
-        eosx, opax = extended(aos), extended(opa)
-        return (r, e, k...) -> sample(eosx, opax, (var,), r, e, k...; extrapolate=true)[1]
-    end
-    e2, r2 = _puffed_axes(aos)
-    (r, e, k...) -> _scattered_interpolator(e2, r2, view(getfield(opa, var), :, :, k...); in_log=true)(e, r)
-end

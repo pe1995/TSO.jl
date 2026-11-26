@@ -8,16 +8,13 @@ const dispatch_eos_variables = Dict(:T=>:lnT, :kr=>:lnRoss, :Pg=>:lnPg, :Ne=>:ln
 """
     dispatch_eos_reader(eos_path; quantities=dispatch_eos_quantities)
 
-`eos_reader` for `MUST.snapshotBox`, loading the energy based TSO EoS at
-`eos_path` (a table directory or the `eos.hdf5` itself).
+`eos_reader` for `MUST.snapshotBox`, loading the internal energy grid of the
+TSO table at `eos_path` (a table folder or file).
 """
 dispatch_eos_reader(eos_path; quantities=dispatch_eos_quantities) = (run) -> begin
-    path = isdir(eos_path) ? joinpath(eos_path, "eos.hdf5") : eos_path
-    isfile(path) || error("No TSO EoS at $(path).")
-
-    eos = extended(reload(SqEoS, path))
-    energy_variable(eos.eos) == :lnEi || error(
-        "$(path) is not an energy based table, the conversion looks up in (lnRho, lnEi)."
+    eos = EquationOfState(eos_path; grid=:energy, parts=(:eos,))
+    energy_variable(eos) == :lnEi || error(
+        "$(eos_path) is not an energy based table, the conversion looks up in (lnRho, lnEi)."
     )
 
     eos, quantities
@@ -29,7 +26,7 @@ end
 `lookup_generator` for `MUST.snapshotBox`. Returns the payload for quantity `q`
 and the shared kernel that fills it in.
 """
-function dispatch_lookup_generator(eos::ExtendedEoS, q)
+function dispatch_lookup_generator(eos::EquationOfState, q)
     coefs = Ref{Any}(nothing)
 
     lkp!(res, payload, lnRho, lnEi) = begin
@@ -41,9 +38,6 @@ function dispatch_lookup_generator(eos::ExtendedEoS, q)
 
     (dispatch_eos_variables[q], q == first(dispatch_eos_quantities)), lkp!
 end
-
-dispatch_lookup_generator(eos::Union{RegularEoSTable,AxedEoS}, q) =
-    dispatch_lookup_generator(extended(eos), q)
 
 _dispatch_sample!(res, eos, var, cRho, cT) = begin
     sample!((res,), eos, (var,), cRho, cT)

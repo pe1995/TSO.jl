@@ -60,15 +60,6 @@ Average3D(path; logg=log10(2.75e4)) = begin
     Model1D(z=z, lnρ=lnρ, lnT=lnT, lnEi=zeros(length(z)), logg=logg, τ=τ)
 end
 
-macro optical(model, eos, opacities)
-    m = esc(model)
-    e = esc(eos)
-    o = esc(opacities)
-    quote
-        OpticalModel1D(Base.convert(typeof(getfield($m, :z)), rosseland_optical_depth($e, $o, $m)), (getfield($m, p) for p in fieldnames(typeof($m)))...)
-    end
-end
-
 macro optical(model, eos)
     m = esc(model)
     e = esc(eos)
@@ -133,7 +124,7 @@ end
 # Model conversions
 # ============================================================================
 
-lnT_to_lnEi(eos::Union{AxedEoS, RegularEoSTable}, lnρ, lnT) = sample(eos, :lnEi; lnRho=lnρ, lnT=lnT, extrapolate=true)
+lnT_to_lnEi(eos::EquationOfState, lnρ, lnT) = sample(eos, :lnEi; lnRho=lnρ, lnT=lnT, extrapolate=true)
 
 # ============================================================================
 # optics

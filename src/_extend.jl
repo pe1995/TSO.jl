@@ -1,10 +1,10 @@
 
-function extend(aos::AxedEoS, opacities...; downD=0.1, upD=0.0, downE=0.1, upE=0.0)
-    ename = EnergyAxis(aos).name
-    evals = EnergyAxis(aos).values
+function extend(tab::EquationOfState; downD=0.1, upD=0.0, downE=0.1, upE=0.0)
+    ename = EnergyAxis(tab).name
+    evals = EnergyAxis(tab).values
 
-    dname = DensityAxis(aos).name
-    dvals = DensityAxis(aos).values
+    dname = DensityAxis(tab).name
+    dvals = DensityAxis(tab).values
 
     de = abs(maximum(evals) - minimum(evals))
     frac = abs((maximum(evals)+upE*de) - (minimum(evals)-downE*de)) / de
@@ -16,7 +16,6 @@ function extend(aos::AxedEoS, opacities...; downD=0.1, upD=0.0, downE=0.1, upE=0
 
     evals_new = Base.convert.(eltype(evals), evals_new)
     dvals_new = Base.convert.(eltype(dvals), dvals_new)
-    interpolate_2D(aos, opacities...; lnRho=dvals_new, (ename=>evals_new,)...)
+    interpolate_2D(tab; lnRho=dvals_new, (ename=>evals_new,)...)
 end
 
-extend(eos::RegularEoSTable, args...; kwargs...) = extend(@axed(eos), args...; kwargs...)
