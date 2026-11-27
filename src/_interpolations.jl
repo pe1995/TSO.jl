@@ -209,10 +209,8 @@ along the density axis. Returns the mask of the cells that were replaced.
 function fill_nan!(tab::EquationOfState; eos_fields=_eos_fields(tab), opacities=true, fallback=1.0f-30)
     x_rho = tab.density_axis.values
     x_e   = tab.energy_axis.values
-    nE    = length(x_e)
-    nρ    = length(x_rho)
 
-    nan_mask = falses(nE, nρ)
+    nan_mask = falses(length(x_e), length(x_rho))
     lfallback = log(fallback)
 
     eos_arrays = [tab.eos[f] for f in eos_fields]
@@ -225,45 +223,36 @@ function fill_nan!(tab::EquationOfState; eos_fields=_eos_fields(tab), opacities=
         end
     end
 
-    col_mask = Vector{Bool}(undef, nE)
-    buf_xe   = similar(x_e)
-    buf_ye   = similar(x_e)
-
-    @inbounds for j in 1:nρ
-        for v in eos_arrays
-            had = _interpolate_at!(view(v, :, j), x_e, col_mask, buf_xe, buf_ye;
-                                    is_log=false, fallback=lfallback)
-            had && (view(nan_mask, :, j) .|= col_mask)
-        end
-
-        for v in opa_arrays
-            for k in CartesianIndices(size(v)[3:end])
-                had = _interpolate_at!(view(v, :, j, k), x_e, col_mask,
-                                       buf_xe, buf_ye; is_log=true, fallback=fallback)
-                had && (view(nan_mask, :, j) .|= col_mask)
-            end
-        end
+    for v in eos_arrays
+        _fill_nan!(nan_mask, v, x_e, x_rho, false, lfallback)
     end
-
-    row_mask = Vector{Bool}(undef, nρ)
-    buf_x    = similar(x_rho)
-    buf_y    = similar(x_rho)
-
-    @inbounds for i in 1:nE
-        for v in eos_arrays
-            _interpolate_at!(view(v, i, :), x_rho, row_mask, buf_x, buf_y;
-                              is_log=false, fallback=lfallback)
-        end
-
-        for v in opa_arrays
-            for k in CartesianIndices(size(v)[3:end])
-                _interpolate_at!(view(v, i, :, k), x_rho, row_mask,
-                                  buf_x, buf_y; is_log=true, fallback=fallback)
-            end
-        end
+    for v in opa_arrays
+        _fill_nan!(nan_mask, v, x_e, x_rho, true, fallback)
     end
 
     return Base.convert(Array{Bool, 2}, nan_mask)
+end
+
+function _fill_nan!(nan_mask, v, x_e, x_rho, is_log, fallback)
+    col_mask = Vector{Bool}(undef, length(x_e))
+    buf_xe   = similar(x_e)
+    buf_ye   = similar(x_e)
+    row_mask = Vector{Bool}(undef, length(x_rho))
+    buf_x    = similar(x_rho)
+    buf_y    = similar(x_rho)
+
+    @inbounds for k in CartesianIndices(size(v)[3:end])
+        for j in axes(v, 2)
+            had = _interpolate_at!(view(v, :, j, k), x_e, col_mask, buf_xe, buf_ye;
+                                   is_log=is_log, fallback=fallback)
+            had && (view(nan_mask, :, j) .|= col_mask)
+        end
+        for i in axes(v, 1)
+            _interpolate_at!(view(v, i, :, k), x_rho, row_mask, buf_x, buf_y;
+                             is_log=is_log, fallback=fallback)
+        end
+    end
+    v
 end
 
 """
