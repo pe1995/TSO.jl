@@ -232,7 +232,7 @@ function assemble_opacity(rho, temp, E, pg, ne, χ500, l, chi, scat; compute_ros
 
 	tab = EquationOfState(rho, temp, E, pg, log.(ross), ne;
 		opacity=OpacityData(chi, S, l, false),
-		scattering=isnothing(scat) ? nothing : OpacityData(scat, S, l, false),
+		scattering=isnothing(scat) ? nothing : OpacityData(scat, nothing, l, false),
 		meta=Dict{Symbol, Any}(:kind => "monochromatic")
 	)
 	tab.eos[:lnK500] = χ500
