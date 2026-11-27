@@ -269,9 +269,12 @@ _optical_depthX!(τ, z, λ, lnρ, lnE, eos, binned) = begin
     end
 end
 
-_optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, binned) = begin
-    τ = zeros(eltype(eos[:κ]), length(z), length(chunk))
-    ρκ = zeros(eltype(eos[:κ]), length(z))
+_optical_depth_chunk!(chunk, z, λ, lnρ, lnE, eos, binned) = _optical_depth_chunk!(
+    zeros(eltype(eos[:κ]), length(z), length(chunk)), zeros(eltype(eos[:κ]), length(z)),
+    chunk, z, λ, lnρ, lnE, eos, binned
+)
+
+_optical_depth_chunk!(τ, ρκ, chunk, z, λ, lnρ, lnE, eos, binned) = begin
     ρ = exp.(lnρ)
     cRho, cE = weights(eos, lnρ, lnE; extrapolate=true)
 

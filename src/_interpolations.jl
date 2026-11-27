@@ -274,28 +274,24 @@ Clamp all quantities of the table to [small, large] (the EoS in log), NaN is set
 function set_limits!(tab::EquationOfState; small=1e-30, large=1e30)
     lsmall, llarge = log(small), log(large)
     for f in _eos_fields(tab)
-        v = tab.eos[f]
-        @inbounds for i in eachindex(v)
-            v[i] = check(v[i], lsmall) ? v[i] : lsmall
-        end
-        @inbounds for i in eachindex(v)
-            v[i] = check_large(v[i], llarge) ? v[i] : llarge
-        end
+        _set_limits!(tab.eos[f], lsmall, llarge)
     end
     for p in (:opacity, :scattering)
         o = getfield(tab, p)
         isnothing(o) && continue
         for f in _float_fields(o)
-            v = o[f]
-            @inbounds for i in eachindex(v)
-                v[i] = check(v[i], small) ? v[i] : small
-            end
-            @inbounds for i in eachindex(v)
-                v[i] = check_large(v[i], large) ? v[i] : large
-            end
+            _set_limits!(o[f], small, large)
         end
     end
     tab
+end
+
+function _set_limits!(v, small, large)
+    @inbounds for i in eachindex(v)
+        v[i] = check(v[i], small) ? v[i] : small
+        v[i] = check_large(v[i], large) ? v[i] : large
+    end
+    v
 end
 
 """

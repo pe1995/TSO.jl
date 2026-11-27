@@ -627,10 +627,14 @@ Temperature derivative of the source function, stored as `:dS_dT` in the opacity
 """
 function source_gradient!(tab::EquationOfState)
 	@assert !is_internal_energy(tab)
-	src = tab[:src]
-	lnT = tab[:lnT]
+	dS_dT = _source_gradient(tab[:src], tab[:lnT])
+	tab.opacity[:dS_dT] = dS_dT
 
-	nT, nRho = size(tab)
+	dS_dT
+end
+
+function _source_gradient(src, lnT)
+	nT, nRho = size(src, 1), size(src, 2)
 	dS_dT = similar(src)
 
 	Threads.@threads for k in axes(src, 3)
@@ -650,8 +654,6 @@ function source_gradient!(tab::EquationOfState)
 			end
 		end
 	end
-
-	tab.opacity[:dS_dT] = dS_dT
 
 	dS_dT
 end
